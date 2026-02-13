@@ -95,7 +95,7 @@ class LacunaModelConfig:
     learn_temperature: bool = False   # Learn temperature as parameter
     
     # === Aggregation ===
-    class_aggregation: str = "sum"   # "mean", "sum", or "learned"
+    class_aggregation: str = "mean"   # "mean", "sum", or "learned"
     
     # === Regularization ===
     load_balance_weight: float = 0.0  # MoE load balancing loss weight
@@ -549,7 +549,7 @@ def create_lacuna_model(
     use_expert_heads: bool = False,
     temperature: float = 1.0,
     learn_temperature: bool = False,
-    class_aggregation: str = "sum",
+    class_aggregation: str = "mean",
     load_balance_weight: float = 0.0,
     loss_matrix: Optional[List[float]] = None,
     dropout: float = 0.1,
@@ -649,7 +649,7 @@ def create_lacuna_mini(
         gate_n_layers=1,
         use_reconstruction_errors=True,
         use_expert_heads=False,
-        class_aggregation="sum",
+        class_aggregation="mean",
         dropout=0.1,
     )
 
@@ -680,7 +680,7 @@ def create_lacuna_base(
         use_expert_heads=False,
         temperature=1.0,
         learn_temperature=False,
-        class_aggregation="sum",
+        class_aggregation="mean",
         dropout=0.1,
     )
 
@@ -711,7 +711,7 @@ def create_lacuna_large(
         use_expert_heads=True,
         temperature=1.0,
         learn_temperature=True,
-        class_aggregation="sum",
+        class_aggregation="mean",
         load_balance_weight=0.01,
         dropout=0.1,
     )
