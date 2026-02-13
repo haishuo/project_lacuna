@@ -97,9 +97,9 @@ class TestTrainingLoop:
 
         # Train
         trainer_config = TrainerConfig(
-            lr=1e-3,
-            epochs=3,
-            warmup_steps=10,
+            lr=3e-3,
+            epochs=5,
+            warmup_steps=5,
             grad_clip=1.0,
         )
         trainer = Trainer(model, trainer_config, device="cpu")
@@ -231,15 +231,15 @@ class TestCheckpointIntegrity:
                 step=42,
                 epoch=3,
                 best_val_loss=0.5,
-                metadata={"test_key": "test_value"},
+                metrics={"test_key": "test_value"},
             )
             save_checkpoint(data, ckpt_path)
-            
+
             # Load
             loaded = load_checkpoint(ckpt_path)
-        
+
         assert loaded.step == 42
         assert loaded.epoch == 3
         assert loaded.best_val_loss == 0.5
-        assert loaded.metadata["test_key"] == "test_value"
+        assert loaded.metrics["test_key"] == "test_value"
         assert loaded.optimizer_state is not None
