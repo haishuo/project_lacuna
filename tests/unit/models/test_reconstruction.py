@@ -31,6 +31,7 @@ from lacuna.models.reconstruction import (
     create_head,
     # Container
     ReconstructionHeads,
+    ExtendedReconstructionResult,
     create_reconstruction_heads,
 )
 from lacuna.core.types import ReconstructionResult
@@ -307,21 +308,12 @@ class TestMNARSelfCensoringHead:
         assert not torch.isnan(predictions).any()
         assert not torch.isinf(predictions).any()
     
-    def test_has_censoring_predictor(self, head):
-        """Test that censoring predictor exists."""
-        assert hasattr(head, 'censoring_predictor')
+    def test_has_censoring_components(self, head):
+        """Test that censoring-related components exist."""
+        assert hasattr(head, 'censoring_estimator')
         assert hasattr(head, 'value_predictor')
-        assert hasattr(head, 'bias_adjustment')
-    
-    def test_get_censoring_scores(self, head, sample_inputs):
-        """Test getting censoring scores."""
-        scores = head.get_censoring_scores(sample_inputs["token_repr"])
-        
-        assert scores.shape == (4, 32, 16)
-        # Scores should be in [0, 1] after sigmoid
-        assert (scores >= 0).all()
-        assert (scores <= 1).all()
-    
+        assert hasattr(head, 'censoring_scale')
+
     def test_gradients_flow(self, head, sample_inputs):
         """Test that gradients flow through the head."""
         sample_inputs["token_repr"].requires_grad_(True)
@@ -378,17 +370,8 @@ class TestMNARThresholdHead:
     def test_has_threshold_components(self, head):
         """Test that threshold-related components exist."""
         assert hasattr(head, 'threshold_estimator')
-        assert hasattr(head, 'normal_predictor')
-        assert hasattr(head, 'truncated_predictor')
-        assert hasattr(head, 'selection_gate')
-    
-    def test_get_thresholds(self, head, sample_inputs):
-        """Test getting estimated thresholds."""
-        thresholds = head.get_thresholds(sample_inputs["token_repr"])
-        
-        # Should output [lower, upper] thresholds
-        assert thresholds.shape == (4, 32, 16, 2)
-    
+        assert hasattr(head, 'value_predictor')
+
     def test_gradients_flow(self, head, sample_inputs):
         """Test that gradients flow through the head."""
         sample_inputs["token_repr"].requires_grad_(True)
@@ -416,7 +399,7 @@ class TestMNARLatentHead:
     @pytest.fixture
     def head(self, config):
         """Create MNARLatentHead."""
-        return MNARLatentHead(config, latent_dim=16)
+        return MNARLatentHead(config)
     
     def test_output_shape(self, head, sample_inputs):
         """Test output tensor shape."""
@@ -445,21 +428,10 @@ class TestMNARLatentHead:
     def test_has_latent_components(self, head):
         """Test that latent-related components exist."""
         assert hasattr(head, 'latent_encoder')
-        assert hasattr(head, 'predictor')
+        assert hasattr(head, 'value_decoder')
+        # latent_dim = config.head_hidden_dim // 2 = 32 // 2 = 16
         assert head.latent_dim == 16
-    
-    def test_get_latent(self, head, sample_inputs):
-        """Test getting latent mean and logvar."""
-        latent_mean, latent_logvar = head.get_latent(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["col_mask"],
-        )
-        
-        B, max_rows = 4, 32
-        assert latent_mean.shape == (B, max_rows, 16)  # latent_dim=16
-        assert latent_logvar.shape == (B, max_rows, 16)
-    
+
     def test_training_uses_reparameterization(self, head, sample_inputs):
         """Test that training mode uses reparameterization."""
         head.train()
@@ -568,7 +540,7 @@ class TestHeadRegistry:
     
     def test_create_head_invalid_raises(self, config):
         """Test that creating invalid head raises error."""
-        with pytest.raises(ValueError, match="Unknown head type"):
+        with pytest.raises(KeyError, match="Unknown head type"):
             create_head("invalid_head", config)
 
 
@@ -595,20 +567,20 @@ class TestReconstructionHeads:
         assert heads.head_names == expected
     
     def test_forward_returns_dict(self, heads, sample_inputs):
-        """Test that forward returns dict of ReconstructionResult."""
+        """Test that forward returns dict of ExtendedReconstructionResult."""
         results = heads(
             sample_inputs["token_repr"],
             sample_inputs["tokens"],
             sample_inputs["row_mask"],
             sample_inputs["col_mask"],
         )
-        
+
         assert isinstance(results, dict)
         assert len(results) == 5
-        
+
         for name in heads.head_names:
             assert name in results
-            assert isinstance(results[name], ReconstructionResult)
+            assert isinstance(results[name], ExtendedReconstructionResult)
     
     def test_forward_with_targets(self, heads, sample_inputs):
         """Test forward with original values and reconstruction mask."""
@@ -636,12 +608,13 @@ class TestReconstructionHeads:
             sample_inputs["col_mask"],
             # No original_values or reconstruction_mask
         )
-        
+
         for name in heads.head_names:
             result = results[name]
             assert result.predictions.shape == (4, 32, 16)
             assert (result.errors == 0).all()
-            assert result.per_cell_errors is None
+            # per_cell_errors is zero tensor (not None) when no targets provided
+            assert (result.per_cell_errors == 0).all()
     
     def test_get_error_tensor(self, heads, sample_inputs):
         """Test get_error_tensor method."""

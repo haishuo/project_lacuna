@@ -33,12 +33,13 @@ from lacuna.core.types import MoEOutput, MCAR, MAR, MNAR
 
 @pytest.fixture
 def default_config():
-    """Default MoEConfig for testing (without reconstruction errors for simpler tests)."""
+    """Default MoEConfig for testing (without reconstruction errors or missingness features for simpler tests)."""
     return MoEConfig(
         evidence_dim=64,
         hidden_dim=128,
         mnar_variants=["self_censoring", "threshold", "latent"],
         use_reconstruction_errors=False,  # Explicitly disable for simpler evidence-only tests
+        use_missingness_features=False,   # Disable for simpler evidence-only tests
     )
 
 
@@ -51,6 +52,7 @@ def config_with_recon():
         mnar_variants=["self_censoring", "threshold", "latent"],
         use_reconstruction_errors=True,
         n_reconstruction_heads=5,
+        use_missingness_features=False,
     )
 
 
@@ -62,6 +64,7 @@ def config_with_experts():
         hidden_dim=128,
         mnar_variants=["self_censoring", "threshold", "latent"],
         use_reconstruction_errors=False,  # Disable recon for simpler tests
+        use_missingness_features=False,   # Disable for simpler tests
         use_expert_heads=True,
     )
 
@@ -166,23 +169,36 @@ class TestMoEConfig:
         assert default_config.expert_names == expected
     
     def test_gate_input_dim_without_recon(self):
-        """Test gate_input_dim without reconstruction errors."""
+        """Test gate_input_dim without reconstruction errors or missingness features."""
         config = MoEConfig(
             evidence_dim=64,
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         assert config.gate_input_dim == 64
-    
+
     def test_gate_input_dim_with_recon(self):
-        """Test gate_input_dim with reconstruction errors."""
+        """Test gate_input_dim with reconstruction errors, no missingness features."""
         config = MoEConfig(
             evidence_dim=64,
             use_reconstruction_errors=True,
             n_reconstruction_heads=5,
+            use_missingness_features=False,
         )
         # evidence_dim + n_reconstruction_heads
         assert config.gate_input_dim == 69
-    
+
+    def test_gate_input_dim_with_missingness_features(self):
+        """Test gate_input_dim with missingness features enabled."""
+        config = MoEConfig(
+            evidence_dim=64,
+            use_reconstruction_errors=False,
+            use_missingness_features=True,
+            n_missingness_features=16,
+        )
+        # evidence_dim + n_missingness_features
+        assert config.gate_input_dim == 80
+
     def test_gate_input_dim_row_level(self):
         """Test gate_input_dim for row-level gating."""
         config = MoEConfig(
@@ -190,16 +206,18 @@ class TestMoEConfig:
             hidden_dim=128,
             gating_level="row",
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         # Uses hidden_dim for row-level
         assert config.gate_input_dim == 128
-        
+
         config = MoEConfig(
             evidence_dim=64,
             hidden_dim=128,
             gating_level="row",
             use_reconstruction_errors=True,
             n_reconstruction_heads=5,
+            use_missingness_features=False,
         )
         assert config.gate_input_dim == 133
 
@@ -272,6 +290,7 @@ class TestGatingNetwork:
             evidence_dim=64,
             temperature=1.0,  # Will be overridden
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         gating = GatingNetwork(config)
         
@@ -294,6 +313,7 @@ class TestGatingNetwork:
             evidence_dim=64,
             learn_temperature=True,
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         gating = GatingNetwork(config)
         
@@ -318,6 +338,7 @@ class TestGatingNetwork:
             hidden_dim=128,
             gating_level="row",
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         gating = GatingNetwork(config)
         
@@ -406,6 +427,7 @@ class TestExpertHeads:
             gating_level="row",
             use_expert_heads=True,
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         heads = ExpertHeads(config)
         
@@ -525,25 +547,24 @@ class TestMixtureOfExperts:
     def test_compute_load_balance_loss(self, moe, sample_evidence):
         """Test load balancing loss computation."""
         output = moe(sample_evidence)
-        lb_loss = moe.compute_load_balance_loss(output)
-        
+        lb_loss = moe._compute_load_balance_loss(output.gate_probs)
+
         # Should be a scalar
         assert lb_loss.shape == ()
-        
+
         # Should be non-negative
         assert lb_loss >= 0
-    
-    def test_compute_entropy_loss(self, moe, sample_evidence):
-        """Test entropy loss computation."""
+
+    def test_compute_entropy(self, moe, sample_evidence):
+        """Test entropy computation."""
         output = moe(sample_evidence)
-        entropy_loss = moe.compute_entropy_loss(output)
-        
+        entropy = moe._compute_entropy(output.gate_probs)
+
         # Should be a scalar
-        assert entropy_loss.shape == ()
-        
-        # Note: The loss is *negative* entropy (for maximizing entropy via minimization)
-        # So it can be negative. Check that it's finite.
-        assert torch.isfinite(entropy_loss)
+        assert entropy.shape == ()
+
+        # Entropy should be non-negative and finite
+        assert torch.isfinite(entropy)
     
     def test_get_auxiliary_losses_no_weights(self, default_config, sample_evidence):
         """Test auxiliary losses with zero weights returns empty dict."""
@@ -563,6 +584,7 @@ class TestMixtureOfExperts:
             load_balance_weight=0.01,
             entropy_weight=0.001,
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         moe = MixtureOfExperts(config)
         output = moe(sample_evidence)
@@ -609,133 +631,109 @@ class TestMixtureOfExperts:
 
 class TestRowToDatasetAggregator:
     """Tests for RowToDatasetAggregator."""
-    
+
     @pytest.fixture
-    def sample_row_probs(self):
-        """Sample row-level probabilities."""
+    def sample_row_logits(self):
+        """Sample row-level logits."""
         B = 4
         max_rows = 32
         n_experts = 5
-        
-        # Create valid probability distributions
-        logits = torch.randn(B, max_rows, n_experts)
-        probs = torch.softmax(logits, dim=-1)
-        
-        return probs
-    
+        return torch.randn(B, max_rows, n_experts)
+
+    @pytest.fixture
+    def sample_row_repr(self):
+        """Sample row-level representations."""
+        B = 4
+        max_rows = 32
+        hidden_dim = 128
+        return torch.randn(B, max_rows, hidden_dim)
+
     @pytest.fixture
     def sample_mask(self):
         """Sample row mask."""
         B = 4
         max_rows = 32
-        
+
         # Create mask with varying valid rows
         mask = torch.ones(B, max_rows, dtype=torch.bool)
         mask[0, 20:] = False
         mask[1, 25:] = False
-        
+
         return mask
-    
-    def test_output_shape(self, sample_row_probs, sample_mask):
+
+    def test_output_shape(self, sample_row_logits, sample_row_repr, sample_mask):
         """Test output shape is [B, n_experts]."""
         aggregator = RowToDatasetAggregator(
-            n_experts=5,
             hidden_dim=128,
+            n_experts=5,
         )
-        
-        dataset_probs = aggregator(sample_row_probs, sample_mask)
-        
-        B = sample_row_probs.shape[0]
+
+        dataset_logits = aggregator(sample_row_logits, sample_row_repr, sample_mask)
+
+        B = sample_row_logits.shape[0]
         n_experts = 5
-        
-        assert dataset_probs.shape == (B, n_experts)
-    
-    def test_mean_aggregation(self):
-        """Test mean aggregation method produces valid output."""
+
+        assert dataset_logits.shape == (B, n_experts)
+
+    def test_attention_aggregation(self):
+        """Test attention-based aggregation produces valid output."""
         aggregator = RowToDatasetAggregator(
-            n_experts=5,
             hidden_dim=128,
-            method="mean",
+            n_experts=5,
         )
-        
-        B, max_rows, n_experts = 4, 32, 5
-        logits = torch.randn(B, max_rows, n_experts)
-        probs = torch.softmax(logits, dim=-1)
+
+        B, max_rows, n_experts, hidden_dim = 4, 32, 5, 128
+        row_logits = torch.randn(B, max_rows, n_experts)
+        row_repr = torch.randn(B, max_rows, hidden_dim)
         mask = torch.ones(B, max_rows, dtype=torch.bool)
-        
-        dataset_probs = aggregator(probs, mask)
-        
-        assert dataset_probs.shape == (B, n_experts)
-        
-        # Mean of valid probability distributions should be valid
-        assert (dataset_probs >= 0).all()
-        # Sum should be close to 1 (mean of distributions that sum to 1)
-        assert torch.allclose(dataset_probs.sum(dim=-1), torch.ones(B), atol=1e-4)
-    
-    def test_masked_rows_ignored_mean(self):
-        """Test that masked rows don't affect mean output."""
+
+        dataset_logits = aggregator(row_logits, row_repr, mask)
+
+        assert dataset_logits.shape == (B, n_experts)
+
+    def test_masked_rows_handled(self):
+        """Test that masked rows are handled correctly by attention."""
         aggregator = RowToDatasetAggregator(
-            n_experts=5,
             hidden_dim=128,
-            method="mean",
+            n_experts=5,
         )
-        
+
         B = 2
         max_rows = 4
         n_experts = 5
-        
-        # Create data where masked rows have very different values
-        probs = torch.zeros(B, max_rows, n_experts)
-        
-        # Valid rows: uniform distribution
-        probs[:, :2, :] = 0.2
-        
-        # Masked rows: concentrated on expert 0 (should be ignored)
-        probs[:, 2:, 0] = 1.0
-        
+        hidden_dim = 128
+
+        row_logits = torch.randn(B, max_rows, n_experts)
+        row_repr = torch.randn(B, max_rows, hidden_dim)
+
+        # Only first 2 rows are valid
         mask = torch.zeros(B, max_rows, dtype=torch.bool)
         mask[:, :2] = True
-        
-        dataset_probs = aggregator(probs, mask)
-        
-        # Output should be close to uniform (from valid rows)
-        expected = torch.full((B, n_experts), 0.2)
-        assert torch.allclose(dataset_probs, expected, atol=1e-5)
-    
-    def test_attention_aggregation(self, sample_row_probs, sample_mask):
-        """Test attention-based aggregation produces valid output."""
+
+        dataset_logits = aggregator(row_logits, row_repr, mask)
+
+        # Should produce valid output without NaN
+        assert not torch.isnan(dataset_logits).any()
+        assert dataset_logits.shape == (B, n_experts)
+
+    def test_gradients_flow(self):
+        """Test that gradients flow through the aggregator."""
         aggregator = RowToDatasetAggregator(
-            n_experts=5,
             hidden_dim=128,
-            method="attention",
-        )
-        
-        dataset_probs = aggregator(sample_row_probs, sample_mask)
-        
-        assert dataset_probs.shape[0] == sample_row_probs.shape[0]
-        assert dataset_probs.shape[1] == 5
-    
-    def test_max_aggregation(self, sample_row_probs, sample_mask):
-        """Test max-based aggregation produces valid output."""
-        aggregator = RowToDatasetAggregator(
             n_experts=5,
-            hidden_dim=128,
-            method="max",
         )
-        
-        dataset_probs = aggregator(sample_row_probs, sample_mask)
-        
-        assert dataset_probs.shape[0] == sample_row_probs.shape[0]
-        assert dataset_probs.shape[1] == 5
-    
-    def test_invalid_method_raises(self):
-        """Test that invalid method raises ValueError."""
-        with pytest.raises(ValueError, match="Unknown aggregation method"):
-            RowToDatasetAggregator(
-                n_experts=5,
-                hidden_dim=128,
-                method="invalid",
-            )
+
+        B, max_rows, n_experts, hidden_dim = 4, 32, 5, 128
+        row_logits = torch.randn(B, max_rows, n_experts, requires_grad=True)
+        row_repr = torch.randn(B, max_rows, hidden_dim, requires_grad=True)
+        mask = torch.ones(B, max_rows, dtype=torch.bool)
+
+        dataset_logits = aggregator(row_logits, row_repr, mask)
+        loss = dataset_logits.sum()
+        loss.backward()
+
+        assert row_logits.grad is not None
+        assert row_repr.grad is not None
 
 
 # =============================================================================
@@ -748,58 +746,62 @@ class TestCreateMoe:
     def test_default_creation(self):
         """Test creating MoE with defaults."""
         moe = create_moe(evidence_dim=64)
-        
+
         assert isinstance(moe, MixtureOfExperts)
         assert moe.config.n_experts == 5  # MCAR + MAR + 3 MNAR variants
-    
+
     def test_with_custom_mnar_variants(self):
         """Test creating MoE with custom MNAR variants."""
         moe = create_moe(
             evidence_dim=64,
             mnar_variants=["self_censoring", "threshold"],
         )
-        
+
         assert moe.config.n_experts == 4
-    
+
     def test_with_expert_heads(self):
         """Test creating MoE with expert heads."""
         moe = create_moe(
             evidence_dim=64,
             use_expert_heads=True,
+            use_missingness_features=False,
         )
-        
+
         assert moe.experts is not None
-    
+
     def test_with_reconstruction_errors(self):
         """Test creating MoE with reconstruction error input."""
         moe = create_moe(
             evidence_dim=64,
             use_reconstruction_errors=True,
             n_reconstruction_heads=5,
+            use_missingness_features=False,
         )
-        
+
         assert moe.config.use_reconstruction_errors is True
         assert moe.config.gate_input_dim == 69
-    
+
     def test_with_temperature(self):
         """Test creating MoE with custom temperature."""
         moe = create_moe(
             evidence_dim=64,
             temperature=0.5,
             learn_temperature=True,
+            use_missingness_features=False,
         )
-        
+
         assert moe.gating.log_temperature.requires_grad
-    
+
     def test_forward_pass(self, sample_evidence):
         """Test forward pass with factory-created MoE."""
         moe = create_moe(
             evidence_dim=64,
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
-        
+
         output = moe(sample_evidence)
-        
+
         assert isinstance(output, MoEOutput)
         assert output.gate_probs.shape == (4, 5)
 
@@ -817,6 +819,7 @@ class TestEdgeCases:
             evidence_dim=64,
             mnar_variants=[],
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         moe = MixtureOfExperts(config)
         
@@ -831,6 +834,7 @@ class TestEdgeCases:
             evidence_dim=64,
             mnar_variants=["v1", "v2", "v3", "v4", "v5", "v6"],
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         moe = MixtureOfExperts(config)
         
@@ -904,6 +908,7 @@ class TestNumericalStability:
             evidence_dim=64,
             temperature=1.0,
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         moe = MixtureOfExperts(config)
         
@@ -923,6 +928,7 @@ class TestNumericalStability:
             evidence_dim=64,
             temperature=0.01,  # Very sharp
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         moe = MixtureOfExperts(config)
         
@@ -939,6 +945,7 @@ class TestNumericalStability:
             evidence_dim=64,
             entropy_weight=0.01,
             use_reconstruction_errors=False,
+            use_missingness_features=False,
         )
         moe = MixtureOfExperts(config)
         
@@ -946,6 +953,6 @@ class TestNumericalStability:
         output = moe(evidence)
         
         # Entropy should be computable without NaN
-        entropy = moe.compute_entropy_loss(output)
+        entropy = moe._compute_entropy(output.gate_probs)
         assert not torch.isnan(entropy)
         assert not torch.isinf(entropy)

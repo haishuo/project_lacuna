@@ -22,9 +22,10 @@ from lacuna.models.assembly import (
     create_lacuna_mini,
     create_lacuna_base,
     create_lacuna_large,
+    Decision as AssemblyDecision,
 )
 from lacuna.models.encoder import EncoderConfig
-from lacuna.models.reconstruction import ReconstructionConfig
+from lacuna.models.reconstruction import ReconstructionConfig, ExtendedReconstructionResult
 from lacuna.models.moe import MoEConfig
 from lacuna.core.types import (
     TokenBatch,
@@ -250,16 +251,17 @@ class TestLacunaModelConfig:
     def test_mnar_variants(self, default_config):
         """Test MNAR variants configuration."""
         assert default_config.mnar_variants == ["self_censoring", "threshold"]
-        assert default_config.n_experts == 4  # MCAR + MAR + 2 MNAR
-    
+        assert default_config.get_moe_config().n_experts == 4  # MCAR + MAR + 2 MNAR
+
     def test_n_experts_property(self):
         """Test n_experts is computed correctly."""
         config = LacunaModelConfig(mnar_variants=["sc", "th", "lat"])
-        assert config.n_experts == 5  # MCAR + MAR + 3 MNAR
-    
+        assert config.get_moe_config().n_experts == 5  # MCAR + MAR + 3 MNAR
+
     def test_n_reconstruction_heads_property(self, default_config):
         """Test n_reconstruction_heads equals n_experts."""
-        assert default_config.n_reconstruction_heads == default_config.n_experts
+        moe_config = default_config.get_moe_config()
+        assert moe_config.n_reconstruction_heads == moe_config.n_experts
     
     def test_get_encoder_config(self, default_config):
         """Test encoder config generation."""
@@ -288,7 +290,7 @@ class TestLacunaModelConfig:
         
         assert isinstance(moe_config, MoEConfig)
         assert moe_config.evidence_dim == default_config.evidence_dim
-        assert moe_config.n_experts == default_config.n_experts
+        assert moe_config.n_experts == 4  # MCAR + MAR + 2 MNAR variants
     
     def test_loss_matrix_default(self):
         """Test default loss matrix structure."""
@@ -347,8 +349,8 @@ class TestBayesOptimalDecision:
     
     def test_action_names(self, decision_rule):
         """Test action names."""
-        # action_names is a tuple, not a list
-        assert decision_rule.action_names == ("Green", "Yellow", "Red")
+        # ACTION_NAMES is a class constant on the Decision class defined in assembly.py
+        assert AssemblyDecision.ACTION_NAMES == ["Green", "Yellow", "Red"]
     
     def test_forward_certain_mcar(self, decision_rule):
         """Test decision with certain MCAR posterior."""
@@ -425,10 +427,10 @@ class TestBayesOptimalDecision:
         """Test that output is Decision type."""
         p_class = torch.rand(4, 3)
         p_class = p_class / p_class.sum(dim=-1, keepdim=True)
-        
+
         decision = decision_rule(p_class)
-        
-        assert isinstance(decision, Decision)
+
+        assert isinstance(decision, AssemblyDecision)
 
 
 # =============================================================================
@@ -475,12 +477,13 @@ class TestComputeEntropy:
         assert (entropy >= 0).all()
     
     def test_custom_dim(self):
-        """Test entropy computation along custom dimension."""
+        """Test entropy computation along last dimension (always dim=-1)."""
         B, T, n_classes = 4, 10, 3
-        
+
         probs = torch.softmax(torch.randn(B, T, n_classes), dim=-1)
-        entropy = compute_entropy(probs, dim=-1)
-        
+        # compute_entropy always sums along dim=-1, no dim parameter
+        entropy = compute_entropy(probs)
+
         assert entropy.shape == (B, T)
     
     def test_handles_near_zero_probs(self):
@@ -541,9 +544,9 @@ class TestLacunaModel:
     def test_output_has_decision(self, model_mini, sample_batch_mini):
         """Test that output contains decision."""
         output = model_mini(sample_batch_mini)
-        
+
         assert output.decision is not None
-        assert isinstance(output.decision, Decision)
+        assert isinstance(output.decision, AssemblyDecision)
         assert output.decision.action_ids.shape == (2,)  # [B]
     
     def test_output_has_evidence(self, model_mini, sample_batch_mini):
@@ -564,15 +567,15 @@ class TestLacunaModel:
     def test_output_has_reconstruction(self, model, sample_batch):
         """Test that output contains reconstruction results."""
         output = model(sample_batch, compute_reconstruction=True)
-        
+
         assert output.reconstruction is not None
         assert isinstance(output.reconstruction, dict)
-        
+
         # Should have one result per head
         expected_heads = ["mcar", "mar", "self_censoring", "threshold"]
         for head_name in expected_heads:
             assert head_name in output.reconstruction
-            assert isinstance(output.reconstruction[head_name], ReconstructionResult)
+            assert isinstance(output.reconstruction[head_name], ExtendedReconstructionResult)
     
     def test_skip_reconstruction(self, model_mini, sample_batch_mini):
         """Test that reconstruction can be skipped."""
@@ -792,7 +795,7 @@ class TestCreateLacunaMini:
         model = create_lacuna_mini(mnar_variants=["self_censoring"])
         
         assert model.config.mnar_variants == ["self_censoring"]
-        assert model.config.n_experts == 3  # MCAR + MAR + 1 MNAR
+        assert model.config.get_moe_config().n_experts == 3  # MCAR + MAR + 1 MNAR
 
 
 class TestCreateLacunaBase:

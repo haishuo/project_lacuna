@@ -11,10 +11,9 @@ import pytest
 import torch
 
 from lacuna.core.rng import RNGState
-from lacuna.config.schema import LacunaConfig
 from lacuna.generators import load_registry_from_config
-from lacuna.data.batching import tokenize_and_batch
-from lacuna.models.assembly import LacunaModel
+from lacuna.data.tokenization import tokenize_and_batch
+from lacuna.models.assembly import create_lacuna_mini
 from lacuna.training.trainer import Trainer, TrainerConfig
 
 
@@ -41,6 +40,7 @@ def generate_batch(registry, batch_size: int, seed: int):
     
     return tokenize_and_batch(
         datasets=datasets,
+        max_rows=64,
         max_cols=16,
         generator_ids=gen_ids,
         class_mapping=registry.get_class_mapping(),
@@ -80,14 +80,11 @@ class TestModelDeterminism:
     
     def test_same_seed_same_init(self, registry):
         """Same seed should produce identical model initialization."""
-        cfg = LacunaConfig.minimal()
-        class_mapping = registry.get_class_mapping()
-        
         seed_torch(42)
-        model1 = LacunaModel.from_config(cfg, class_mapping)
-        
+        model1 = create_lacuna_mini(max_cols=16)
+
         seed_torch(42)
-        model2 = LacunaModel.from_config(cfg, class_mapping)
+        model2 = create_lacuna_mini(max_cols=16)
         
         # All parameters should match
         for (n1, p1), (n2, p2) in zip(model1.named_parameters(), model2.named_parameters()):
@@ -96,11 +93,8 @@ class TestModelDeterminism:
     
     def test_same_input_same_output(self, registry):
         """Same model + same input should produce same output."""
-        cfg = LacunaConfig.minimal()
-        class_mapping = registry.get_class_mapping()
-        
         seed_torch(42)
-        model = LacunaModel.from_config(cfg, class_mapping)
+        model = create_lacuna_mini(max_cols=16)
         model.eval()
         
         batch = generate_batch(registry, batch_size=4, seed=99)
@@ -109,8 +103,7 @@ class TestModelDeterminism:
             out1 = model(batch)
             out2 = model(batch)
         
-        assert torch.equal(out1.logits_generator, out2.logits_generator)
-        assert torch.equal(out1.p_class, out2.p_class)
+        assert torch.equal(out1.posterior.p_class, out2.posterior.p_class)
 
 
 class TestTrainingDeterminism:
@@ -118,12 +111,9 @@ class TestTrainingDeterminism:
     
     def test_same_seed_same_trajectory(self, registry):
         """Same seed should produce identical training trajectory."""
-        cfg = LacunaConfig.minimal()
-        class_mapping = registry.get_class_mapping()
-        
         def train_model(seed):
             seed_torch(seed)
-            model = LacunaModel.from_config(cfg, class_mapping)
+            model = create_lacuna_mini(max_cols=16)
             
             trainer_config = TrainerConfig(
                 lr=1e-3,
