@@ -191,18 +191,25 @@ def generate_semisynthetic_batch(
     
     for raw in raw_datasets:
         for i in range(samples_per_dataset):
-            # Sample a generator
-            gen_id = prior.sample(rng.spawn())
-            generator = registry[gen_id]
-            
-            # Apply missingness
-            ss_dataset = apply_missingness(
-                raw=raw,
-                generator=generator,
-                rng=rng.spawn(),
-                dataset_id=f"{raw.name}_gen{gen_id}_sample{i}",
-            )
-            results.append(ss_dataset)
+            # Sample a compatible generator (retry if d is too small)
+            for attempt in range(20):
+                gen_id = prior.sample(rng.spawn())
+                generator = registry[gen_id]
+                try:
+                    ss_dataset = apply_missingness(
+                        raw=raw,
+                        generator=generator,
+                        rng=rng.spawn(),
+                        dataset_id=f"{raw.name}_gen{gen_id}_sample{i}",
+                    )
+                    results.append(ss_dataset)
+                    break
+                except ValueError:
+                    if attempt == 19:
+                        raise RuntimeError(
+                            f"Could not find compatible generator for "
+                            f"dataset '{raw.name}' (d={raw.d}) after 20 attempts"
+                        )
     
     return results
 
@@ -288,18 +295,28 @@ class SemiSyntheticDataLoader:
                 # Pick a random raw dataset
                 ds_idx = batch_rng.randint(0, n_datasets, (1,)).item()
                 raw = self.raw_datasets[ds_idx]
-                
-                # Sample a generator
-                gen_id = self.prior.sample(batch_rng.spawn())
-                generator = self.registry[gen_id]
-                
-                # Apply missingness (using fixed apply_missingness)
-                ss = apply_missingness(
-                    raw=raw,
-                    generator=generator,
-                    rng=batch_rng.spawn(),
-                    dataset_id=f"batch{batch_idx}_item{i}",
-                )
+
+                # Sample a compatible generator (retry if d is too small)
+                max_retries = 20
+                for attempt in range(max_retries):
+                    gen_id = self.prior.sample(batch_rng.spawn())
+                    generator = self.registry[gen_id]
+                    try:
+                        ss = apply_missingness(
+                            raw=raw,
+                            generator=generator,
+                            rng=batch_rng.spawn(),
+                            dataset_id=f"batch{batch_idx}_item{i}",
+                        )
+                        break
+                    except ValueError:
+                        # Generator incompatible with this dataset's d
+                        if attempt == max_retries - 1:
+                            raise RuntimeError(
+                                f"Could not find compatible generator for "
+                                f"dataset '{raw.name}' (d={raw.d}) after "
+                                f"{max_retries} attempts"
+                            )
                 
                 # Subsample rows if needed
                 observed = subsample_rows(
