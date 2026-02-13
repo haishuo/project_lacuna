@@ -23,7 +23,7 @@ from lacuna.training.trainer import Trainer, TrainerConfig
 from lacuna.training.checkpoint import (
     save_checkpoint,
     load_checkpoint,
-    load_model_from_checkpoint,
+    load_model_weights,
     CheckpointData,
 )
 
@@ -152,7 +152,7 @@ class TestTrainingLoop:
             save_checkpoint(data, ckpt_path)
             
             # Load into model2
-            load_model_from_checkpoint(model2, ckpt_path)
+            load_model_weights(model2, ckpt_path)
         
         # Models should produce identical outputs
         rng = RNGState(seed=123)
