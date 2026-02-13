@@ -102,8 +102,8 @@ class TestTrainingLoop:
 
         result = trainer.fit(train_loader, val_loader)
 
-        # Training should complete all 5 epochs
-        assert result["final_epoch"] == 5
+        # Training should complete all 5 epochs (0-indexed, so final_epoch=4)
+        assert result["final_epoch"] == 4
 
         # Validation loss should be finite and reasonable (not diverged)
         assert result["best_val_loss"] < float("inf")
