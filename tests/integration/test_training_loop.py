@@ -18,7 +18,6 @@ from lacuna.core.rng import RNGState
 from lacuna.config.schema import LacunaConfig
 from lacuna.generators import load_registry_from_config
 from lacuna.data.batching import tokenize_and_batch
-from lacuna.data.features import FEATURE_DIM
 from lacuna.models.assembly import LacunaModel
 from lacuna.training.trainer import Trainer, TrainerConfig
 from lacuna.training.checkpoint import (
