@@ -1,0 +1,256 @@
+# Fingerprint Test Registry — sigmoid-style MNAR (OOD)
+# Out-of-distribution test set for the fingerprint experiment:
+#   - Sigmoid-based MNAR (logistic self-censoring) as target class
+#   - MCAR and MAR generators for contrastive comparison
+#
+# The MNAR generators here use SIGMOID/LOGISTIC mechanisms (smooth,
+# value-dependent). This is structurally distinct from the threshold-based
+# mechanisms in fingerprint_train.yaml, making it an OOD test.
+
+name: "fingerprint_test"
+description: "Fingerprint OOD test: sigmoid-style MNAR + MCAR/MAR comparison"
+
+generators:
+  # ============================================================
+  # MCAR baselines (4 generators)
+  # ============================================================
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-15
+    params:
+      miss_rate: 0.15
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-30
+    params:
+      miss_rate: 0.30
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-45
+    params:
+      miss_rate: 0.45
+
+  - family: mcar
+    variant: RowGaussian
+    name: MCAR-RowGauss
+    params:
+      mean_rate: 0.25
+      std_rate: 0.10
+
+  # ============================================================
+  # MAR baselines (4 generators)
+  # ============================================================
+
+  - family: mar
+    variant: Logistic
+    name: MAR-Logistic-Mod
+    params:
+      alpha0: -0.3
+      alpha1: 2.0
+
+  - family: mar
+    variant: Logistic
+    name: MAR-Logistic-Strong
+    params:
+      alpha0: -0.5
+      alpha1: 4.5
+
+  - family: mar
+    variant: MultiColumn
+    name: MAR-MultiCol
+    params:
+      alpha0: -0.5
+      alpha1: 3.0
+      target_frac: 0.4
+
+  - family: mar
+    variant: Probit
+    name: MAR-Probit
+    params:
+      alpha0: -0.3
+      alpha1: 2.5
+
+  # ============================================================
+  # MNAR — Sigmoid-style self-censoring (primary OOD targets)
+  # ============================================================
+
+  # SelfCensorHigh: high values self-censor via sigmoid
+  - family: mnar
+    variant: SelfCensorHigh
+    name: MNAR-SelfCensor-High-Weak
+    params:
+      beta0: -0.5
+      beta1: 1.5
+      affected_frac: 0.4
+
+  - family: mnar
+    variant: SelfCensorHigh
+    name: MNAR-SelfCensor-High-Mod
+    params:
+      beta0: -0.5
+      beta1: 2.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorHigh
+    name: MNAR-SelfCensor-High-Strong
+    params:
+      beta0: -0.5
+      beta1: 4.0
+      affected_frac: 0.5
+
+  # SelfCensorLow: low values self-censor via sigmoid (beta1 < 0)
+  - family: mnar
+    variant: SelfCensorLow
+    name: MNAR-SelfCensor-Low-Weak
+    params:
+      beta0: 0.5
+      beta1: -1.5
+      affected_frac: 0.4
+
+  - family: mnar
+    variant: SelfCensorLow
+    name: MNAR-SelfCensor-Low-Mod
+    params:
+      beta0: 0.5
+      beta1: -2.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorLow
+    name: MNAR-SelfCensor-Low-Strong
+    params:
+      beta0: 0.5
+      beta1: -4.0
+      affected_frac: 0.5
+
+  # SelfCensorExtreme: both extremes self-censor via quadratic + sigmoid
+  - family: mnar
+    variant: SelfCensorExtreme
+    name: MNAR-SelfCensor-Extreme-Mod
+    params:
+      beta0: -1.0
+      beta_quadratic: 1.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorExtreme
+    name: MNAR-SelfCensor-Extreme-Strong
+    params:
+      beta0: -1.5
+      beta_quadratic: 2.5
+      affected_frac: 0.5
+
+  # SelfCensorWeak: constrained to |beta1| <= 1.5
+  - family: mnar
+    variant: SelfCensorWeak
+    name: MNAR-SelfCensor-Weak-A
+    params:
+      beta0: -0.3
+      beta1: 0.8
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorWeak
+    name: MNAR-SelfCensor-Weak-B
+    params:
+      beta0: 0.0
+      beta1: 1.2
+      affected_frac: 0.5
+
+  # SelfCensorStrong: constrained to |beta1| >= 2.5
+  - family: mnar
+    variant: SelfCensorStrong
+    name: MNAR-SelfCensor-Strong-A
+    params:
+      beta0: -0.5
+      beta1: 3.0
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorStrong
+    name: MNAR-SelfCensor-Strong-B
+    params:
+      beta0: 0.0
+      beta1: 4.5
+      affected_frac: 0.5
+
+  # MNAR Logistic: sigmoid-based with both predictor and target dependence
+  - family: mnar
+    variant: Logistic
+    name: MNAR-Logistic-PureSelf
+    params:
+      beta0: -0.5
+      beta2: 2.5
+
+  - family: mnar
+    variant: Logistic
+    name: MNAR-Logistic-Mixed
+    params:
+      beta0: -0.5
+      beta1: 1.0
+      beta2: 2.0
+
+  - family: mnar
+    variant: Logistic
+    name: MNAR-Logistic-Strong
+    params:
+      beta0: -1.0
+      beta2: 4.0
+
+  # ValueDependentStrength: different sigmoid strength above/below median
+  - family: mnar
+    variant: ValueDependentStrength
+    name: MNAR-ValDep-AsymHigh
+    params:
+      beta0: -0.5
+      beta1_low: 0.5
+      beta1_high: 3.0
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ValueDependentStrength
+    name: MNAR-ValDep-AsymLow
+    params:
+      beta0: -0.5
+      beta1_low: 2.5
+      beta1_high: 0.5
+      affected_frac: 0.5
+
+  # ColumnSpecificCensor: per-column sigmoid parameters
+  - family: mnar
+    variant: ColumnSpecificCensor
+    name: MNAR-ColSpecCensor-Wide
+    params:
+      beta0_range: [-1.5, 1.0]
+      beta1_range: [0.5, 4.0]
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ColumnSpecificCensor
+    name: MNAR-ColSpecCensor-Narrow
+    params:
+      beta0_range: [-0.5, 0.5]
+      beta1_range: [1.5, 3.0]
+      affected_frac: 0.5
+
+  # DemographicDependent: per-group sigmoid parameters
+  - family: mnar
+    variant: DemographicDependent
+    name: MNAR-DemoDepend
+    params:
+      n_groups: 3
+      beta_per_group: [[-0.5, 1.5], [0.0, 2.5], [0.5, 3.5]]
+      affected_frac: 0.5
+
+  # OutcomeDependent: sigmoid-based outcome-driven missingness
+  - family: mnar
+    variant: OutcomeDependent
+    name: MNAR-OutcomeDep
+    params:
+      beta0: -0.5
+      beta1: 2.5
+      affected_frac: 0.5

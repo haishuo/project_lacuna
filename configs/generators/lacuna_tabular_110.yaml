@@ -1,0 +1,908 @@
+# Lacuna Full Tabular Registry (~110 generators)
+# All 108 generator classes with select multi-param variants to reach ~110
+# This is the main full config for comprehensive tabular experiments
+
+name: "lacuna_tabular_110"
+description: "Full registry: all 108 generator classes (~110 entries with param variants)"
+
+generators:
+  # ============================================================
+  # MCAR — bernoulli.py (1 class, 3 variants)
+  # ============================================================
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-10
+    params:
+      miss_rate: 0.10
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-30
+    params:
+      miss_rate: 0.30
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-50
+    params:
+      miss_rate: 0.50
+
+  # ============================================================
+  # MCAR — column_effects.py (6 classes)
+  # ============================================================
+
+  - family: mcar
+    variant: ColumnGaussian
+    name: MCAR-ColGauss
+    params:
+      miss_rate_range: [0.05, 0.40]
+
+  - family: mcar
+    variant: ColumnGamma
+    name: MCAR-ColGamma
+    params:
+      shape: 2.0
+      scale: 0.10
+
+  - family: mcar
+    variant: ColumnBeta
+    name: MCAR-ColBeta
+    params:
+      alpha: 2.0
+      beta: 5.0
+
+  - family: mcar
+    variant: ColumnMixture
+    name: MCAR-ColMixture
+    params:
+      rates: [0.05, 0.20, 0.50]
+      weights: [0.4, 0.4, 0.2]
+
+  - family: mcar
+    variant: ColumnOrdered
+    name: MCAR-ColOrdered
+    params:
+      min_rate: 0.05
+      max_rate: 0.40
+
+  - family: mcar
+    variant: ColumnClustered
+    name: MCAR-ColClustered
+    params:
+      n_clusters: 3
+      rates_per_cluster: [0.05, 0.20, 0.40]
+
+  # ============================================================
+  # MCAR — row_effects.py (6 classes)
+  # ============================================================
+
+  - family: mcar
+    variant: RowGaussian
+    name: MCAR-RowGauss
+    params:
+      mean_rate: 0.20
+      std_rate: 0.10
+
+  - family: mcar
+    variant: RowGamma
+    name: MCAR-RowGamma
+    params:
+      shape: 2.0
+      scale: 0.10
+
+  - family: mcar
+    variant: RowBeta
+    name: MCAR-RowBeta
+    params:
+      alpha: 2.0
+      beta: 5.0
+
+  - family: mcar
+    variant: RowMixture
+    name: MCAR-RowMixture
+    params:
+      rates: [0.05, 0.20, 0.50]
+      weights: [0.4, 0.4, 0.2]
+
+  - family: mcar
+    variant: RowExponential
+    name: MCAR-RowExp
+    params:
+      rate: 5.0
+
+  - family: mcar
+    variant: RowDiscrete
+    name: MCAR-RowDiscrete
+    params:
+      levels: [0.05, 0.15, 0.30, 0.50]
+
+  # ============================================================
+  # MCAR — blocks.py (5 classes)
+  # ============================================================
+
+  - family: mcar
+    variant: RandomBlocks
+    name: MCAR-RandBlocks
+    params:
+      block_size: 5
+      miss_prob: 0.30
+
+  - family: mcar
+    variant: Scattered
+    name: MCAR-Scattered
+    params:
+      n_blocks: 10
+      block_rows: 3
+      block_cols: 2
+
+  - family: mcar
+    variant: Clustered
+    name: MCAR-Clustered
+    params:
+      n_clusters: 5
+      cluster_radius: 3
+
+  - family: mcar
+    variant: Diagonal
+    name: MCAR-Diagonal
+    params:
+      bandwidth: 0.15
+      miss_prob: 0.70
+
+  - family: mcar
+    variant: Checkerboard
+    name: MCAR-Checkerboard
+    params:
+      block_size: 4
+      miss_prob: 0.60
+
+  # ============================================================
+  # MCAR — distributional.py (6 classes)
+  # ============================================================
+
+  - family: mcar
+    variant: Cauchy
+    name: MCAR-Cauchy
+    params:
+      location: 0.0
+      scale: 1.0
+
+  - family: mcar
+    variant: Pareto
+    name: MCAR-Pareto
+    params:
+      alpha: 3.0
+      scale: 0.10
+
+  - family: mcar
+    variant: LogNormal
+    name: MCAR-LogNormal
+    params:
+      mu: -1.0
+      sigma: 0.8
+
+  - family: mcar
+    variant: TDist
+    name: MCAR-TDist
+    params:
+      df: 3
+      scale: 0.8
+
+  - family: mcar
+    variant: MixtureGaussian
+    name: MCAR-MixGauss
+    params:
+      rates: [-2.0, 0.0, 2.0]
+      weights: [0.3, 0.4, 0.3]
+
+  - family: mcar
+    variant: SparseMixture
+    name: MCAR-SparseMix
+    params:
+      sparse_prob: 0.10
+      high_rate: 0.90
+
+  # ============================================================
+  # MCAR — multilevel.py (3 classes)
+  # ============================================================
+
+  - family: mcar
+    variant: RowColumnAdditive
+    name: MCAR-RowColAdd
+    params:
+      row_std: 0.10
+      col_std: 0.10
+      base_rate: 0.20
+
+  - family: mcar
+    variant: RowColumnInteraction
+    name: MCAR-RowColInt
+    params:
+      row_std: 0.50
+      col_std: 0.50
+
+  - family: mcar
+    variant: Nested
+    name: MCAR-Nested
+    params:
+      n_groups: 4
+      group_rate_std: 0.15
+
+  # ============================================================
+  # MCAR — conditional.py (3 classes)
+  # ============================================================
+
+  - family: mcar
+    variant: CovariateDependent
+    name: MCAR-CovDep
+    params:
+      n_groups: 3
+      group_rates: [0.10, 0.25, 0.50]
+
+  - family: mcar
+    variant: BatchEffects
+    name: MCAR-BatchFx
+    params:
+      n_batches: 4
+      batch_rate_range: [0.05, 0.40]
+
+  - family: mcar
+    variant: SubgroupSpecific
+    name: MCAR-Subgroup
+    params:
+      subgroup_frac: 0.30
+      subgroup_rate: 0.50
+      background_rate: 0.10
+
+  # ============================================================
+  # MAR — simple.py (6 classes)
+  # ============================================================
+
+  - family: mar
+    variant: Logistic
+    name: MAR-Logistic
+    params:
+      alpha0: -0.5
+      alpha1: 3.0
+
+  - family: mar
+    variant: Probit
+    name: MAR-Probit
+    params:
+      alpha0: -0.3
+      alpha1: 2.0
+
+  - family: mar
+    variant: Threshold
+    name: MAR-Threshold
+    params:
+      threshold: 0.0
+      miss_prob_above: 0.60
+      miss_prob_below: 0.10
+
+  - family: mar
+    variant: Polynomial
+    name: MAR-Polynomial
+    params:
+      alpha0: -0.5
+      alpha1: 1.5
+      alpha2: 1.0
+
+  - family: mar
+    variant: Spline
+    name: MAR-Spline
+    params:
+      knots: [-2.0, -0.5, 0.5, 2.0]
+      slopes: [0.5, 2.0, 0.5]
+
+  - family: mar
+    variant: StepFunction
+    name: MAR-StepFunc
+    params:
+      thresholds: [-1.5, -0.5, 0.5, 1.5]
+      rates: [0.10, 0.30, 0.60]
+
+  # ============================================================
+  # MAR — multiple.py (9 classes)
+  # ============================================================
+
+  - family: mar
+    variant: MultiColumn
+    name: MAR-MultiCol
+    params:
+      alpha0: -0.5
+      alpha1: 4.0
+      target_frac: 0.5
+
+  - family: mar
+    variant: MultiPredictor
+    name: MAR-MultiPred
+    params:
+      alpha0: -0.5
+      alphas: [2.0, 1.5]
+
+  - family: mar
+    variant: TwoPredictor
+    name: MAR-TwoPred
+    params:
+      alpha0: -0.5
+      alpha1: 2.0
+      alpha2: 1.5
+
+  - family: mar
+    variant: ThreePredictor
+    name: MAR-ThreePred
+    params:
+      alpha0: -0.5
+      alphas: [2.0, 1.5, 1.0]
+
+  - family: mar
+    variant: ManyPredictor
+    name: MAR-ManyPred
+    params:
+      alpha0: -0.5
+      alphas: [1.5, 1.2, 1.0, 0.8]
+
+  - family: mar
+    variant: WeightedPredictor
+    name: MAR-WeightPred
+    params:
+      alpha0: -0.5
+      alphas: [2.0, 1.5]
+      weights: [0.7, 0.3]
+
+  - family: mar
+    variant: Interactive
+    name: MAR-Interactive
+    params:
+      alpha0: -0.5
+      alpha1: 2.0
+      alpha2: 1.5
+      alpha12: 1.0
+
+  - family: mar
+    variant: ThreeWayInteraction
+    name: MAR-ThreeWay
+    params:
+      alpha0: -0.5
+      alphas: [1.5, 1.0, 0.8]
+      alpha_interactions: [0.5, 0.3, 0.3, 0.2]
+
+  - family: mar
+    variant: Conditional
+    name: MAR-Conditional
+    params:
+      condition_threshold: 0.0
+      alpha0: -0.5
+      alpha1: 3.0
+
+  # ============================================================
+  # MAR — strength.py (3 classes)
+  # ============================================================
+
+  - family: mar
+    variant: Weak
+    name: MAR-Weak
+    params:
+      alpha0: -0.5
+
+  - family: mar
+    variant: Moderate
+    name: MAR-Moderate
+    params:
+      alpha0: -0.5
+
+  - family: mar
+    variant: Strong
+    name: MAR-Strong
+    params:
+      alpha0: -0.5
+
+  # ============================================================
+  # MAR — predictor_types.py (4 classes)
+  # ============================================================
+
+  - family: mar
+    variant: ContinuousPredictor
+    name: MAR-ContPred
+    params:
+      alpha0: -0.5
+      alpha1: 3.0
+
+  - family: mar
+    variant: DiscretePredictor
+    name: MAR-DiscPred
+    params:
+      n_levels: 4
+      alpha_per_level: [0.05, 0.15, 0.35, 0.60]
+
+  - family: mar
+    variant: BinaryPredictor
+    name: MAR-BinaryPred
+    params:
+      miss_rate_high: 0.50
+      miss_rate_low: 0.10
+
+  - family: mar
+    variant: MixedPredictor
+    name: MAR-MixedPred
+    params:
+      alpha_continuous: 2.0
+      alpha_binary: 1.5
+
+  # ============================================================
+  # MAR — complex.py (5 classes)
+  # ============================================================
+
+  - family: mar
+    variant: PolynomialMulti
+    name: MAR-PolyMulti
+    params:
+      degree: 2
+      alpha0: -0.5
+      alphas: [[1.5, 0.5], [1.0, 0.3]]
+
+  - family: mar
+    variant: SplineMulti
+    name: MAR-SplineMulti
+    params:
+      knots: [-2.0, -0.5, 0.5, 2.0]
+      alphas: [[0.5, 2.0, 0.5], [1.0, 0.5, 1.0]]
+
+  - family: mar
+    variant: TreeRules
+    name: MAR-TreeRules
+    params:
+      rules:
+        - { col: 0, threshold: 0.5, rate: 0.6 }
+        - { col: 1, threshold: -0.5, rate: 0.4 }
+
+  - family: mar
+    variant: Kernel
+    name: MAR-Kernel
+    params:
+      reference_quantile: 0.5
+      bandwidth: 1.0
+      scale: 2.0
+
+  - family: mar
+    variant: Distance
+    name: MAR-Distance
+    params:
+      n_clusters: 3
+      scale: 1.0
+
+  # ============================================================
+  # MAR — structural.py (4 classes)
+  # ============================================================
+
+  - family: mar
+    variant: ColumnBlocks
+    name: MAR-ColBlocks
+    params:
+      n_blocks: 3
+      alpha_per_block: [1.0, 2.5, 4.0]
+
+  - family: mar
+    variant: RowBlocks
+    name: MAR-RowBlocks
+    params:
+      n_groups: 3
+      alpha_per_group: [1.0, 2.5, 4.0]
+
+  - family: mar
+    variant: Nested
+    name: MAR-Nested
+    params:
+      n_outer: 2
+      n_inner: 3
+      alpha_outer: 2.0
+      alpha_inner: 1.5
+
+  - family: mar
+    variant: CrossClassified
+    name: MAR-CrossClass
+    params:
+      n_row_groups: 3
+      n_col_groups: 2
+      base_alpha: 1.5
+
+  # ============================================================
+  # MAR — survey.py (5 classes)
+  # ============================================================
+
+  - family: mar
+    variant: SkipLogic
+    name: MAR-SkipLogic
+    params:
+      threshold: 0.0
+      conditional_rate: 0.60
+
+  - family: mar
+    variant: Branching
+    name: MAR-Branching
+    params:
+      n_branches: 3
+      branch_columns: [[1, 2, 3], [2, 4, 5], [1, 3, 5]]
+
+  - family: mar
+    variant: SectionLevel
+    name: MAR-Section
+    params:
+      n_sections: 3
+      section_sizes: [3, 3, 4]
+      gateway_threshold: 0.0
+
+  - family: mar
+    variant: RequiredOptional
+    name: MAR-ReqOpt
+    params:
+      required_frac: 0.40
+      required_rate: 0.50
+      optional_rate: 2.0
+
+  - family: mar
+    variant: QuotaBased
+    name: MAR-Quota
+    params:
+      quota_threshold: 50.0
+      post_quota_rate: 0.60
+
+  # ============================================================
+  # MNAR — self_censoring.py (9 classes)
+  # ============================================================
+
+  - family: mnar
+    variant: Logistic
+    name: MNAR-Logistic
+    params:
+      beta0: -0.5
+      beta2: 2.5
+
+  - family: mnar
+    variant: SelfCensorHigh
+    name: MNAR-SelfCensor-High
+    params:
+      beta0: -0.5
+      beta1: 2.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorLow
+    name: MNAR-SelfCensor-Low
+    params:
+      beta0: 0.5
+      beta1: -2.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorExtreme
+    name: MNAR-SelfCensor-Extreme
+    params:
+      beta0: -1.0
+      beta_quadratic: 1.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorWeak
+    name: MNAR-SelfCensor-Weak
+    params:
+      beta0: -0.5
+      beta1: 1.0
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SelfCensorStrong
+    name: MNAR-SelfCensor-Strong
+    params:
+      beta0: -0.5
+      beta1: 3.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ValueDependentStrength
+    name: MNAR-ValDepStr
+    params:
+      beta0: -0.5
+      beta1_low: 0.5
+      beta1_high: 3.0
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ColumnSpecificCensor
+    name: MNAR-ColSpecCensor
+    params:
+      beta0_range: [-1.0, 1.0]
+      beta1_range: [0.5, 3.0]
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: DemographicDependent
+    name: MNAR-DemoDepend
+    params:
+      n_groups: 3
+      beta_per_group: [[-0.5, 1.5], [0.0, 2.5], [0.5, 3.5]]
+      affected_frac: 0.5
+
+  # ============================================================
+  # MNAR — censoring.py (9 classes)
+  # ============================================================
+
+  - family: mnar
+    variant: ThresholdLeft
+    name: MNAR-ThreshLeft
+    params:
+      percentile: 70
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ThresholdRight
+    name: MNAR-ThreshRight
+    params:
+      percentile: 30
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ThresholdTwoSided
+    name: MNAR-ThreshTwoSided
+    params:
+      lower_percentile: 20
+      upper_percentile: 80
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SoftThreshold
+    name: MNAR-SoftThresh
+    params:
+      percentile: 70
+      steepness: 3.0
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: MultiThreshold
+    name: MNAR-MultiThresh
+    params:
+      percentiles: [50, 80]
+      miss_probs: [0.30, 0.70]
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Quantile70
+    name: MNAR-Q70
+    params:
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Quantile80
+    name: MNAR-Q80
+    params:
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Quantile90
+    name: MNAR-Q90
+    params:
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ColumnSpecificThreshold
+    name: MNAR-ColSpecThresh
+    params:
+      percentile_range: [60, 90]
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  # ============================================================
+  # MNAR — detection.py (3 classes)
+  # ============================================================
+
+  - family: mnar
+    variant: DetectionLower
+    name: MNAR-DetectLower
+    params:
+      detection_percentile: 15
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: DetectionUpper
+    name: MNAR-DetectUpper
+    params:
+      detection_percentile: 85
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: DetectionBoth
+    name: MNAR-DetectBoth
+    params:
+      lower_percentile: 10
+      upper_percentile: 90
+      affected_frac: 0.5
+
+  # ============================================================
+  # MNAR — social.py (3 classes)
+  # ============================================================
+
+  - family: mnar
+    variant: UnderReport
+    name: MNAR-UnderReport
+    params:
+      threshold_percentile: 75
+      under_report_prob: 0.60
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: OverReport
+    name: MNAR-OverReport
+    params:
+      threshold_percentile: 25
+      over_report_prob: 0.60
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: NonLinearSocial
+    name: MNAR-NonLinSocial
+    params:
+      center_value: 0.0
+      sensitivity: 1.0
+      affected_frac: 0.5
+
+  # ============================================================
+  # MNAR — strategic.py (3 classes)
+  # ============================================================
+
+  - family: mnar
+    variant: Gaming
+    name: MNAR-Gaming
+    params:
+      incentive_threshold: 0.0
+      gaming_radius: 0.5
+      miss_prob: 0.80
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Privacy
+    name: MNAR-Privacy
+    params:
+      privacy_threshold: 80
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Competitive
+    name: MNAR-Competitive
+    params:
+      benchmark_value: 0.0
+      competitive_radius: 0.5
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  # ============================================================
+  # MNAR — latent.py (6 classes)
+  # ============================================================
+
+  - family: mnar
+    variant: LatentHealth
+    name: MNAR-LatentHealth
+    params:
+      latent_strength: 1.5
+      obs_strength: 0.8
+
+  - family: mnar
+    variant: LatentSES
+    name: MNAR-LatentSES
+    params:
+      latent_strength: 1.5
+      obs_strength: 0.8
+
+  - family: mnar
+    variant: LatentMotivation
+    name: MNAR-LatentMotiv
+    params:
+      latent_strength: 1.5
+      obs_strength: 0.8
+
+  - family: mnar
+    variant: LatentMeasurementError
+    name: MNAR-LatentMeasErr
+    params:
+      latent_strength: 1.5
+      obs_strength: 0.8
+
+  - family: mnar
+    variant: LatentOrthogonal
+    name: MNAR-LatentOrtho
+    params:
+      n_factors: 3
+      strengths: [1.0, 0.8, 0.5]
+
+  - family: mnar
+    variant: LatentCorrelated
+    name: MNAR-LatentCorr
+    params:
+      n_factors: 3
+      correlation: 0.6
+      strengths: [1.0, 0.8, 0.5]
+
+  # ============================================================
+  # MNAR — selection.py (5 classes)
+  # ============================================================
+
+  - family: mnar
+    variant: Truncation
+    name: MNAR-Truncation
+    params:
+      selection_threshold: 40
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Berkson
+    name: MNAR-Berkson
+    params:
+      selection_strength: 0.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Volunteer
+    name: MNAR-Volunteer
+    params:
+      volunteer_tendency: 0.5
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Attrition
+    name: MNAR-Attrition
+    params:
+      attrition_rate: 0.30
+      value_dependence: 0.50
+
+  - family: mnar
+    variant: CompetingEvents
+    name: MNAR-CompEvents
+    params:
+      event_threshold: 80
+      event_prob: 0.60
+      affected_frac: 0.5
+
+  # ============================================================
+  # MNAR — informative.py (4 classes)
+  # ============================================================
+
+  - family: mnar
+    variant: SymptomTriggered
+    name: MNAR-SymptomTrig
+    params:
+      symptom_threshold: 75
+      trigger_prob: 0.60
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: RiskBasedMonitoring
+    name: MNAR-RiskMonitor
+    params:
+      risk_threshold: 70
+      monitoring_boost: 0.50
+      base_miss_prob: 0.50
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: AdaptiveSampling
+    name: MNAR-AdaptSamp
+    params:
+      adaptation_rate: 1.0
+      baseline_prob: 0.0
+
+  - family: mnar
+    variant: OutcomeDependent
+    name: MNAR-OutcomeDep
+    params:
+      beta0: -0.5
+      beta1: 2.5
+      affected_frac: 0.5

@@ -76,8 +76,13 @@ class TrainingConfig:
 
 @dataclass
 class GeneratorConfig:
-    """Generator configuration."""
-    n_generators: int = 6
+    """Generator configuration.
+
+    config_name: Named config under configs/generators/ (e.g. "lacuna_minimal_6")
+    config_path: Absolute path to a custom YAML file (overrides config_name)
+    """
+    config_name: str = "lacuna_minimal_6"
+    config_path: Optional[str] = None
 
 
 @dataclass
@@ -126,6 +131,6 @@ class LacunaConfig:
                 warmup_steps=10,
                 patience=3,
             ),
-            generator=GeneratorConfig(n_generators=6),
+            generator=GeneratorConfig(config_name="lacuna_minimal_6"),
             device="cpu",
         )

@@ -22,9 +22,9 @@ from lacuna.generators import (
     GeneratorRegistry,
     GeneratorParams,
     GeneratorPrior,
-    MCARUniform,
+    MCARBernoulli,
     MARLogistic,
-    MNARThreshold,
+    MNARThresholdLeft,
 )
 from lacuna.data.batching import SyntheticDataLoader, SyntheticDataLoaderConfig
 from lacuna.models.assembly import create_lacuna_model
@@ -35,12 +35,12 @@ from lacuna.training import save_checkpoint, CheckpointData
 def create_threshold_registry():
     """Registry with THRESHOLD MNAR only (no sigmoid!)."""
     return GeneratorRegistry([
-        MCARUniform(0, "mcar_low", GeneratorParams(miss_rate=0.15)),
-        MCARUniform(1, "mcar_high", GeneratorParams(miss_rate=0.35)),
+        MCARBernoulli(0, "mcar_low", GeneratorParams(miss_rate=0.15)),
+        MCARBernoulli(1, "mcar_high", GeneratorParams(miss_rate=0.35)),
         MARLogistic(2, "mar_weak", GeneratorParams(alpha0=-0.5, alpha1=2.0)),
         MARLogistic(3, "mar_strong", GeneratorParams(alpha0=-0.5, alpha1=4.0)),
-        MNARThreshold(4, "mnar_thresh_70", GeneratorParams(percentile=70, miss_prob=0.6)),
-        MNARThreshold(5, "mnar_thresh_80", GeneratorParams(percentile=80, miss_prob=0.7)),
+        MNARThresholdLeft(4, "mnar_thresh_70", GeneratorParams(percentile=70, miss_prob=0.6)),
+        MNARThresholdLeft(5, "mnar_thresh_80", GeneratorParams(percentile=80, miss_prob=0.7)),
     ])
 
 

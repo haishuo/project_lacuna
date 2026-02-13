@@ -8,7 +8,7 @@ from lacuna.core.rng import RNGState
 from lacuna.generators.priors import GeneratorPrior
 from lacuna.generators.registry import GeneratorRegistry
 from lacuna.generators.params import GeneratorParams
-from lacuna.generators.families.mcar import MCARUniform
+from lacuna.generators.families.mcar import MCARBernoulli
 from lacuna.generators.families.mar import MARLogistic
 from lacuna.generators.families.mnar import MNARLogistic
 
@@ -17,8 +17,8 @@ from lacuna.generators.families.mnar import MNARLogistic
 def registry():
     """Create test registry."""
     gens = (
-        MCARUniform(0, "mcar-0", GeneratorParams(miss_rate=0.1)),
-        MCARUniform(1, "mcar-1", GeneratorParams(miss_rate=0.2)),
+        MCARBernoulli(0, "mcar-0", GeneratorParams(miss_rate=0.1)),
+        MCARBernoulli(1, "mcar-1", GeneratorParams(miss_rate=0.2)),
         MARLogistic(2, "mar-0", GeneratorParams(alpha0=0, alpha1=1.0)),
         MNARLogistic(3, "mnar-0", GeneratorParams(beta0=0, beta2=1.0)),
     )

@@ -22,7 +22,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from lacuna.config.schema import LacunaConfig
 from lacuna.config.load import load_config, save_config
-from lacuna.generators import create_minimal_registry, GeneratorPrior
+from lacuna.generators import load_registry_from_config, GeneratorPrior
 from lacuna.data.batching import SyntheticDataLoader, SyntheticDataLoaderConfig
 from lacuna.models.assembly import LacunaModel, create_lacuna_model
 from lacuna.training.trainer import Trainer, TrainerConfig
@@ -37,6 +37,8 @@ def parse_args():
     parser.add_argument("--output-dir", type=str, default=None, help="Override output directory")
     parser.add_argument("--dry-run", action="store_true", help="Validate config without training")
     parser.add_argument("--name", type=str, default=None, help="Experiment name")
+    parser.add_argument("--generators", type=str, default=None,
+                        help="Generator config name or YAML path (overrides training config)")
     return parser.parse_args()
 
 
@@ -94,7 +96,8 @@ def main():
     print(f"  Training: epochs={config.training.epochs}, lr={config.training.lr}, batch={config.training.batch_size}")
     print(f"  Data: n_range={capped_n_range}, d_range={config.data.d_range}")
     print(f"  Data: max_rows={config.data.max_rows}, max_cols={config.data.max_cols}")
-    print(f"  Generators: K={config.generator.n_generators}")
+    generators_name = args.generators or config.generator.config_path or config.generator.config_name
+    print(f"  Generators: config={generators_name}")
     
     if args.dry_run:
         print("\n[DRY RUN] Config validated. Exiting.")
@@ -106,9 +109,9 @@ def main():
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(config.seed)
     
-    # Create registry
-    print("\nCreating generator registry...")
-    registry = create_minimal_registry()
+    # Create registry from config
+    print(f"\nLoading generator registry: {generators_name}")
+    registry = load_registry_from_config(generators_name)
     print(f"  Generators: {registry.K}")
     print(f"  Class distribution: {registry.class_counts()}")
     

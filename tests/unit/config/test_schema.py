@@ -74,7 +74,8 @@ class TestGeneratorConfig:
     
     def test_defaults(self):
         cfg = GeneratorConfig()
-        assert cfg.n_generators == 6
+        assert cfg.config_name == "lacuna_minimal_6"
+        assert cfg.config_path is None
 
 
 class TestLacunaConfig:

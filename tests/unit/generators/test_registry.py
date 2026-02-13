@@ -8,7 +8,7 @@ from lacuna.core.exceptions import RegistryError
 from lacuna.core.types import MCAR, MAR, MNAR
 from lacuna.generators.registry import GeneratorRegistry
 from lacuna.generators.params import GeneratorParams
-from lacuna.generators.families.mcar import MCARUniform
+from lacuna.generators.families.mcar import MCARBernoulli
 from lacuna.generators.families.mar import MARLogistic
 from lacuna.generators.families.mnar import MNARLogistic
 
@@ -16,8 +16,8 @@ from lacuna.generators.families.mnar import MNARLogistic
 def make_test_generators():
     """Create minimal test generator set."""
     return (
-        MCARUniform(0, "mcar-0", GeneratorParams(miss_rate=0.1)),
-        MCARUniform(1, "mcar-1", GeneratorParams(miss_rate=0.2)),
+        MCARBernoulli(0, "mcar-0", GeneratorParams(miss_rate=0.1)),
+        MCARBernoulli(1, "mcar-1", GeneratorParams(miss_rate=0.2)),
         MARLogistic(2, "mar-0", GeneratorParams(alpha0=0, alpha1=1.0)),
         MNARLogistic(3, "mnar-0", GeneratorParams(beta0=0, beta2=1.0)),
     )
@@ -39,16 +39,16 @@ class TestGeneratorRegistry:
     
     def test_duplicate_ids_raises(self):
         gens = (
-            MCARUniform(0, "a", GeneratorParams(miss_rate=0.1)),
-            MCARUniform(0, "b", GeneratorParams(miss_rate=0.2)),  # Duplicate ID
+            MCARBernoulli(0, "a", GeneratorParams(miss_rate=0.1)),
+            MCARBernoulli(0, "b", GeneratorParams(miss_rate=0.2)),  # Duplicate ID
         )
         with pytest.raises(RegistryError, match="Duplicate"):
             GeneratorRegistry(gens)
     
     def test_non_sequential_ids_raises(self):
         gens = (
-            MCARUniform(0, "a", GeneratorParams(miss_rate=0.1)),
-            MCARUniform(2, "b", GeneratorParams(miss_rate=0.2)),  # Skipped 1
+            MCARBernoulli(0, "a", GeneratorParams(miss_rate=0.1)),
+            MCARBernoulli(2, "b", GeneratorParams(miss_rate=0.2)),  # Skipped 1
         )
         with pytest.raises(RegistryError, match="must be 0"):
             GeneratorRegistry(gens)

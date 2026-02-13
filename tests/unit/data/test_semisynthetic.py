@@ -17,7 +17,7 @@ from lacuna.data.semisynthetic import (
     MixedDataLoader,
 )
 from lacuna.data.ingestion import RawDataset, load_sklearn_dataset
-from lacuna.generators import create_minimal_registry
+from lacuna.generators import load_registry_from_config
 from lacuna.generators.priors import GeneratorPrior
 from lacuna.core.rng import RNGState
 
@@ -45,7 +45,7 @@ def breast_cancer_raw():
 @pytest.fixture
 def minimal_registry():
     """Minimal generator registry."""
-    return create_minimal_registry()
+    return load_registry_from_config("lacuna_minimal_6")
 
 
 class TestApplyMissingness:

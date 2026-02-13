@@ -24,7 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from lacuna.config import LacunaConfig, load_config, save_config
 from lacuna.models import create_lacuna_model
-from lacuna.generators import create_minimal_registry
+from lacuna.generators import load_registry_from_config
 from lacuna.generators.priors import GeneratorPrior
 from lacuna.data import (
     create_default_catalog,
@@ -125,7 +125,7 @@ def main():
     
     # Create generator registry
     print("\nCreating generator registry...")
-    registry = create_minimal_registry()
+    registry = load_registry_from_config("lacuna_minimal_6")
     prior = GeneratorPrior.uniform(registry)
     print(f"  Generators: {registry.K}")
     print(f"  Class distribution: {registry.class_counts()}")

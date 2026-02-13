@@ -3,7 +3,7 @@ Tests for lacuna.generators.families.mnar
 
 Tests MNAR (Missing Not At Random) generators:
     - MNARLogistic: Logistic-based missingness depending on own value
-    - MNARSelfCensoring: Value-dependent self-censoring mechanism
+    - MNARSelfCensorHigh: Value-dependent self-censoring mechanism
 
 These generators produce missingness patterns where the probability of
 a value being missing depends on the (unobserved) value itself.
@@ -15,7 +15,7 @@ import torch
 
 from lacuna.generators.families.mnar import (
     MNARLogistic,
-    MNARSelfCensoring,
+    MNARSelfCensorHigh,
 )
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
@@ -253,13 +253,13 @@ class TestMNARLogistic:
 
 
 # =============================================================================
-# Test MNARSelfCensoring
+# Test MNARSelfCensorHigh
 # =============================================================================
 
-class TestMNARSelfCensoring:
-    """Tests for MNARSelfCensoring generator.
+class TestMNARSelfCensorHigh:
+    """Tests for MNARSelfCensorHigh generator.
     
-    MNARSelfCensoring applies column-wise self-censoring where each column's
+    MNARSelfCensorHigh applies column-wise self-censoring where each column's
     missingness depends on its own value via:
         P(R_j=0 | X_j) = sigmoid(beta0 + beta1 * X_j)
     
@@ -277,19 +277,19 @@ class TestMNARSelfCensoring:
     
     @pytest.fixture
     def generator(self):
-        """Create default MNARSelfCensoring generator."""
+        """Create default MNARSelfCensorHigh generator."""
         params = GeneratorParams(
             beta0=-1.0,   # Intercept (controls baseline missingness)
             beta1=1.5,    # Self-censoring strength (positive = high values more likely missing)
         )
-        return MNARSelfCensoring(
+        return MNARSelfCensorHigh(
             generator_id=1,
             name="mnar_self_censoring_test",
             params=params,
         )
     
     def test_inherits_from_generator(self, generator):
-        """Test that MNARSelfCensoring inherits from Generator."""
+        """Test that MNARSelfCensorHigh inherits from Generator."""
         assert isinstance(generator, Generator)
     
     def test_generator_id(self, generator):
@@ -342,7 +342,7 @@ class TestMNARSelfCensoring:
         params = GeneratorParams(beta1=1.0)  # Missing beta0
         
         with pytest.raises(ValueError, match="beta0"):
-            MNARSelfCensoring(
+            MNARSelfCensorHigh(
                 generator_id=1,
                 name="mnar_self_censoring_no_beta0",
                 params=params,
@@ -353,7 +353,7 @@ class TestMNARSelfCensoring:
         params = GeneratorParams(beta0=0.0)  # Missing beta1
         
         with pytest.raises(ValueError, match="beta1"):
-            MNARSelfCensoring(
+            MNARSelfCensorHigh(
                 generator_id=1,
                 name="mnar_self_censoring_no_beta1",
                 params=params,
@@ -364,7 +364,7 @@ class TestMNARSelfCensoring:
         params = GeneratorParams(beta0=0.0, beta1=0.0)
         
         with pytest.raises(ValueError, match="non-zero"):
-            MNARSelfCensoring(
+            MNARSelfCensorHigh(
                 generator_id=1,
                 name="mnar_self_censoring_zero_beta1",
                 params=params,
@@ -373,7 +373,7 @@ class TestMNARSelfCensoring:
     def test_reproducibility(self):
         """Test reproducibility with same seed."""
         params = GeneratorParams(beta0=-1.0, beta1=1.5)
-        generator = MNARSelfCensoring(
+        generator = MNARSelfCensorHigh(
             generator_id=1,
             name="mnar_self_censoring_repro",
             params=params,
@@ -391,7 +391,7 @@ class TestMNARSelfCensoring:
     def test_different_seeds_different_results(self):
         """Test that different seeds give different results."""
         params = GeneratorParams(beta0=-1.0, beta1=1.5)
-        generator = MNARSelfCensoring(
+        generator = MNARSelfCensorHigh(
             generator_id=1,
             name="mnar_self_censoring_diff_seeds",
             params=params,
@@ -409,7 +409,7 @@ class TestMNARSelfCensoring:
     def test_various_dimensions(self):
         """Test generator works with various dimensions."""
         params = GeneratorParams(beta0=-1.0, beta1=1.5)
-        generator = MNARSelfCensoring(
+        generator = MNARSelfCensorHigh(
             generator_id=1,
             name="mnar_self_censoring_dims",
             params=params,
@@ -442,7 +442,7 @@ class TestMNARGeneratorProperties:
             name="mnar_logistic_prop",
             params=GeneratorParams(beta0=0.0, beta2=1.0),
         ),
-        lambda: MNARSelfCensoring(
+        lambda: MNARSelfCensorHigh(
             generator_id=1,
             name="mnar_self_censoring_prop",
             params=GeneratorParams(beta0=-1.0, beta1=1.5),
