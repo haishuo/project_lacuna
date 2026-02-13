@@ -27,7 +27,7 @@ class TestMCARBernoulli:
         with pytest.raises(ValueError, match="miss_rate"):
             MCARBernoulli(0, "test", GeneratorParams(miss_rate=1.5))
         with pytest.raises(ValueError, match="miss_rate"):
-            MCARBernoulli(0, "test", GeneratorParams(miss_rate=0.0))
+            MCARBernoulli(0, "test", GeneratorParams(miss_rate=-0.1))
     
     def test_sample_shapes(self):
         gen = MCARBernoulli(0, "test", GeneratorParams(miss_rate=0.3))

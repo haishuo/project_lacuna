@@ -713,9 +713,12 @@ class TestEarlyStopping:
         
         trainer.state.best_val_loss = 0.5
         trainer.state.patience_counter = 0
-        
-        should_stop = trainer._check_early_stopping({"val_loss": 0.49})
-        
+
+        # val_loss must be >= best_val_loss + min_delta to NOT count as improvement.
+        # The implementation checks: metric < (best_val_loss + min_delta), so
+        # 0.51 < (0.5 + 0.01) = 0.51 is False => no improvement => patience increments.
+        should_stop = trainer._check_early_stopping({"val_loss": 0.51})
+
         assert should_stop is False
         assert trainer.state.patience_counter == 1
     

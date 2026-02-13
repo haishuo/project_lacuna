@@ -15,10 +15,9 @@ from pathlib import Path
 
 from lacuna.core.types import TokenBatch, MCAR, MAR, MNAR
 from lacuna.core.rng import RNGState
-from lacuna.config.schema import LacunaConfig
 from lacuna.generators import load_registry_from_config
-from lacuna.data.batching import tokenize_and_batch
-from lacuna.models.assembly import LacunaModel
+from lacuna.data.tokenization import tokenize_and_batch
+from lacuna.models.assembly import create_lacuna_mini
 from lacuna.training.trainer import Trainer, TrainerConfig
 from lacuna.training.checkpoint import (
     save_checkpoint,
@@ -51,6 +50,7 @@ def generate_batch(registry, batch_size: int, rng: RNGState) -> TokenBatch:
     
     return tokenize_and_batch(
         datasets=datasets,
+        max_rows=64,
         max_cols=16,
         generator_ids=gen_ids,
         class_mapping=registry.get_class_mapping(),
@@ -80,9 +80,7 @@ class TestTrainingLoop:
     
     def test_training_reduces_loss(self, registry):
         """Training should reduce loss over time."""
-        cfg = LacunaConfig.minimal()
-        class_mapping = registry.get_class_mapping()
-        model = LacunaModel.from_config(cfg, class_mapping)
+        model = create_lacuna_mini(max_cols=16)
         
         train_loader = SyntheticDataLoader(registry, n_batches=10, batch_size=8, seed=42)
         
@@ -128,11 +126,8 @@ class TestTrainingLoop:
     
     def test_checkpoint_save_load(self, registry):
         """Checkpoints should preserve model state."""
-        cfg = LacunaConfig.minimal()
-        class_mapping = registry.get_class_mapping()
-        
-        model1 = LacunaModel.from_config(cfg, class_mapping)
-        model2 = LacunaModel.from_config(cfg, class_mapping)
+        model1 = create_lacuna_mini(max_cols=16)
+        model2 = create_lacuna_mini(max_cols=16)
         
         # Train model1 briefly
         train_loader = SyntheticDataLoader(registry, n_batches=5, batch_size=8, seed=42)
@@ -169,9 +164,7 @@ class TestTrainingLoop:
     
     def test_training_with_validation(self, registry):
         """Training with validation should track best model."""
-        cfg = LacunaConfig.minimal()
-        class_mapping = registry.get_class_mapping()
-        model = LacunaModel.from_config(cfg, class_mapping)
+        model = create_lacuna_mini(max_cols=16)
         
         train_loader = SyntheticDataLoader(registry, n_batches=10, batch_size=8, seed=42)
         val_loader = SyntheticDataLoader(registry, n_batches=3, batch_size=8, seed=99)
@@ -193,9 +186,7 @@ class TestTrainingLoop:
     
     def test_early_stopping_triggers(self, registry):
         """Early stopping should trigger when validation doesn't improve."""
-        cfg = LacunaConfig.minimal()
-        class_mapping = registry.get_class_mapping()
-        model = LacunaModel.from_config(cfg, class_mapping)
+        model = create_lacuna_mini(max_cols=16)
         
         # Use tiny learning rate so model won't improve much
         train_loader = SyntheticDataLoader(registry, n_batches=5, batch_size=4, seed=42)
@@ -221,9 +212,7 @@ class TestCheckpointIntegrity:
     
     def test_checkpoint_preserves_all_state(self, registry):
         """Checkpoint should preserve step, epoch, and optimizer state."""
-        cfg = LacunaConfig.minimal()
-        class_mapping = registry.get_class_mapping()
-        model = LacunaModel.from_config(cfg, class_mapping)
+        model = create_lacuna_mini(max_cols=16)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
         
         # Simulate some training

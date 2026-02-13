@@ -669,7 +669,7 @@ class TestEndToEndPipeline:
                 "true_class": CLASS_NAMES[gen.class_id],
                 "p_class": output.posterior.p_class[0].tolist(),
                 "predicted_class": CLASS_NAMES[output.posterior.p_class[0].argmax().item()],
-                "action": output.decision.action_names[output.decision.action_ids[0].item()],
+                "action": output.decision.get_actions()[0],
                 "risk": output.decision.expected_risks[0].item(),
             })
         
