@@ -46,6 +46,8 @@ def parse_args():
     parser.add_argument("--device", type=str, default=None, help="Override device (cpu/cuda)")
     parser.add_argument("--seed", type=int, default=None, help="Override random seed")
     parser.add_argument("--wandb", action="store_true", help="Enable W&B logging")
+    parser.add_argument("--generators", type=str, default=None,
+                        help="Generator config name or YAML path (overrides training config)")
     return parser.parse_args()
 
 
@@ -124,8 +126,9 @@ def main():
         torch.cuda.manual_seed_all(config.seed)
     
     # Create generator registry
-    print("\nCreating generator registry...")
-    registry = load_registry_from_config("lacuna_minimal_6")
+    generators_name = args.generators or config.generator.config_path or config.generator.config_name
+    print(f"\nLoading generator registry: {generators_name}")
+    registry = load_registry_from_config(generators_name)
     prior = GeneratorPrior.uniform(registry)
     print(f"  Generators: {registry.K}")
     print(f"  Class distribution: {registry.class_counts()}")
