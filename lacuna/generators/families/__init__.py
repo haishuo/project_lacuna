@@ -29,6 +29,7 @@ from .mar import (
 from .mnar import (
     MNARLogistic,
     MNARSelfCensoring,
+    MNARThreshold,  # ADD THIS
 )
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     # MNAR
     "MNARLogistic",
     "MNARSelfCensoring",
+    "MNARThreshold",  # ADD THIS
 ]

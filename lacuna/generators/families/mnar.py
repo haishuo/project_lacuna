@@ -278,3 +278,82 @@ class MNARSelfCensoring(Generator):
     ) -> torch.Tensor:
         """Apply self-censoring MNAR missingness to existing data."""
         return self._compute_missingness(X, rng)
+    
+class MNARThreshold(Generator):
+    """MNAR Threshold generator - DIFFERENT functional form from sigmoid.
+    
+    Missingness via hard threshold: values beyond τ are systematically missing.
+    P(R_ij = 0 | X) = I(|X_ij| > τ) · p
+    
+    This is theoretically equivalent MNAR to sigmoid-based generators
+    but uses a COMPLETELY DIFFERENT functional form.
+    
+    Required params:
+        percentile: Threshold percentile (default: 70)
+        miss_prob: Probability of missingness beyond threshold (default: 0.7)
+    
+    Optional params:
+        affected_frac: Fraction of columns with threshold (default: 0.5)
+        use_absolute: If True, use |X_ij|, else use X_ij directly (default: True)
+    """
+    
+    def __init__(self, generator_id: int, name: str, params: GeneratorParams):
+        super().__init__(generator_id, name, MNAR, params)
+    
+    def _compute_missingness(self, X: torch.Tensor, rng: RNGState) -> torch.Tensor:
+        n, d = X.shape
+        R = torch.ones(n, d, dtype=torch.bool)
+        
+        # Select affected columns
+        affected_frac = self.params.get("affected_frac", 0.5)
+        n_affected = max(1, int(d * affected_frac))
+        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        
+        # Get parameters
+        percentile = self.params.get("percentile", 70)
+        miss_prob = self.params.get("miss_prob", 0.7)
+        use_absolute = self.params.get("use_absolute", True)
+        
+        # Apply threshold to each affected column
+        for col in affected_cols:
+            vals = X[:, col]
+            if use_absolute:
+                vals = vals.abs()
+            
+            threshold = torch.quantile(vals, percentile / 100.0)
+            beyond_threshold = vals > threshold
+            
+            # Stochastically apply missingness
+            missing_mask = beyond_threshold & (rng.rand(n) < miss_prob)
+            R[:, col] = ~missing_mask
+        
+        if R.sum() == 0:
+            R[0, 0] = True
+        
+        return R
+    
+    def sample(
+        self,
+        rng: RNGState,
+        n: int,
+        d: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Sample synthetic data AND missingness.
+        
+        Args:
+            rng: RNG state
+            n: Number of rows
+            d: Number of columns
+            
+        Returns:
+            X: Complete data [n, d]
+            R: Missingness indicator [n, d], True = observed
+        """
+        # Sample base Gaussian data
+        mean = self.params.get("base_mean", 0.0)
+        std = self.params.get("base_std", 1.0)
+        
+        X = sample_gaussian(rng.spawn(), n, d, mean=mean, std=std)
+        R = self._compute_missingness(X, rng.spawn())
+        
+        return X, R

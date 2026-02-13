@@ -25,6 +25,7 @@ from .families import (
     # MNAR
     MNARLogistic,
     MNARSelfCensoring,
+    MNARThreshold,  # ← ADD THIS LINE
 )
 
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "MARMultiColumn",
     "MNARLogistic",
     "MNARSelfCensoring",
+    "MNARThreshold",  # ← ADD THIS LINE
 ]
 
 
