@@ -250,7 +250,8 @@ class SemiSyntheticDataLoader:
         self.batch_size = batch_size
         self.batches_per_epoch = batches_per_epoch
         self.seed = seed
-        
+        self._epoch_counter = 0
+
         self._class_mapping = registry.get_class_mapping()
         
         if len(raw_datasets) == 0:
@@ -270,8 +271,11 @@ class SemiSyntheticDataLoader:
     
     def __iter__(self):
         from .batching import tokenize_and_batch
-        
-        rng = RNGState(seed=self.seed)
+
+        # Use a different seed each epoch so the model sees fresh data
+        epoch_seed = self.seed + self._epoch_counter * 1_000_000
+        self._epoch_counter += 1
+        rng = RNGState(seed=epoch_seed)
         n_datasets = len(self.raw_datasets)
         
         for batch_idx in range(self.batches_per_epoch):
