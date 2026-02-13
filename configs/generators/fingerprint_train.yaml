@@ -1,0 +1,242 @@
+# Fingerprint Train Registry — threshold-style MNAR
+# Training set for the fingerprint experiment:
+#   - Threshold-style MNAR (hard cutoff, quantile-based) as target class
+#   - MCAR and MAR generators for contrastive comparison
+#
+# The MNAR generators here use THRESHOLD-based mechanisms (hard cutoffs,
+# quantile-based censoring, detection limits). This is structurally distinct
+# from sigmoid-based self-censoring used in fingerprint_test.yaml (OOD).
+
+name: "fingerprint_train"
+description: "Fingerprint training: threshold-style MNAR + MCAR/MAR comparison"
+
+generators:
+  # ============================================================
+  # MCAR baselines (4 generators)
+  # ============================================================
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-10
+    params:
+      miss_rate: 0.10
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-25
+    params:
+      miss_rate: 0.25
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-40
+    params:
+      miss_rate: 0.40
+
+  - family: mcar
+    variant: ColumnGaussian
+    name: MCAR-ColGauss
+    params:
+      miss_rate_range: [0.05, 0.40]
+
+  # ============================================================
+  # MAR baselines (4 generators)
+  # ============================================================
+
+  - family: mar
+    variant: Logistic
+    name: MAR-Logistic-Mod
+    params:
+      alpha0: -0.5
+      alpha1: 2.5
+
+  - family: mar
+    variant: Logistic
+    name: MAR-Logistic-Strong
+    params:
+      alpha0: -0.5
+      alpha1: 4.0
+
+  - family: mar
+    variant: MultiColumn
+    name: MAR-MultiCol
+    params:
+      alpha0: -0.5
+      alpha1: 3.5
+      target_frac: 0.5
+
+  - family: mar
+    variant: Threshold
+    name: MAR-Threshold
+    params:
+      threshold: 0.0
+      miss_prob_above: 0.60
+      miss_prob_below: 0.10
+
+  # ============================================================
+  # MNAR — Threshold-style censoring (primary training targets)
+  # ============================================================
+
+  # ThresholdLeft: values above percentile go missing (hard cutoff)
+  - family: mnar
+    variant: ThresholdLeft
+    name: MNAR-ThreshLeft-70
+    params:
+      percentile: 70
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ThresholdLeft
+    name: MNAR-ThreshLeft-80
+    params:
+      percentile: 80
+      miss_prob: 0.80
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ThresholdLeft
+    name: MNAR-ThreshLeft-60
+    params:
+      percentile: 60
+      miss_prob: 0.60
+      affected_frac: 0.4
+
+  # ThresholdRight: values below percentile go missing
+  - family: mnar
+    variant: ThresholdRight
+    name: MNAR-ThreshRight-30
+    params:
+      percentile: 30
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ThresholdRight
+    name: MNAR-ThreshRight-20
+    params:
+      percentile: 20
+      miss_prob: 0.80
+      affected_frac: 0.5
+
+  # ThresholdTwoSided: both extremes go missing
+  - family: mnar
+    variant: ThresholdTwoSided
+    name: MNAR-ThreshTwoSided-20-80
+    params:
+      lower_percentile: 20
+      upper_percentile: 80
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ThresholdTwoSided
+    name: MNAR-ThreshTwoSided-10-90
+    params:
+      lower_percentile: 10
+      upper_percentile: 90
+      miss_prob: 0.80
+      affected_frac: 0.5
+
+  # SoftThreshold: smooth sigmoid transition near threshold
+  - family: mnar
+    variant: SoftThreshold
+    name: MNAR-SoftThresh-Steep
+    params:
+      percentile: 70
+      steepness: 5.0
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: SoftThreshold
+    name: MNAR-SoftThresh-Gentle
+    params:
+      percentile: 70
+      steepness: 2.0
+      affected_frac: 0.5
+
+  # MultiThreshold: multiple thresholds per column
+  - family: mnar
+    variant: MultiThreshold
+    name: MNAR-MultiThresh-2
+    params:
+      percentiles: [50, 80]
+      miss_probs: [0.30, 0.70]
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: MultiThreshold
+    name: MNAR-MultiThresh-3
+    params:
+      percentiles: [40, 65, 85]
+      miss_probs: [0.20, 0.50, 0.80]
+      affected_frac: 0.5
+
+  # Quantile shortcuts
+  - family: mnar
+    variant: Quantile70
+    name: MNAR-Q70
+    params:
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Quantile80
+    name: MNAR-Q80
+    params:
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: Quantile90
+    name: MNAR-Q90
+    params:
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  # ColumnSpecificThreshold
+  - family: mnar
+    variant: ColumnSpecificThreshold
+    name: MNAR-ColSpecThresh-Wide
+    params:
+      percentile_range: [50, 90]
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: ColumnSpecificThreshold
+    name: MNAR-ColSpecThresh-Narrow
+    params:
+      percentile_range: [65, 80]
+      miss_prob: 0.80
+      affected_frac: 0.5
+
+  # Detection limits (threshold-based)
+  - family: mnar
+    variant: DetectionLower
+    name: MNAR-DetectLower-15
+    params:
+      detection_percentile: 15
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: DetectionLower
+    name: MNAR-DetectLower-10
+    params:
+      detection_percentile: 10
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: DetectionUpper
+    name: MNAR-DetectUpper-85
+    params:
+      detection_percentile: 85
+      affected_frac: 0.5
+
+  - family: mnar
+    variant: DetectionBoth
+    name: MNAR-DetectBoth
+    params:
+      lower_percentile: 10
+      upper_percentile: 90
+      affected_frac: 0.5

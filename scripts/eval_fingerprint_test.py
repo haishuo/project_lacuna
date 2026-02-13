@@ -16,10 +16,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from lacuna.generators import (
     GeneratorRegistry,
     GeneratorParams,
-    MCARUniform,
+    MCARBernoulli,
     MARLogistic,
     MNARLogistic,
-    MNARSelfCensoring,
+    MNARSelfCensorHigh,
 )
 from lacuna.data.batching import SyntheticDataLoaderConfig, SyntheticDataLoader
 from lacuna.models.assembly import create_lacuna_model
@@ -31,14 +31,14 @@ def create_sigmoid_test_registry():
     """Create test registry with SIGMOID MNAR (unseen functional form!)."""
     return GeneratorRegistry([
         # Same MCAR/MAR as training
-        MCARUniform(0, "mcar_low", GeneratorParams(miss_rate=0.15)),
-        MCARUniform(1, "mcar_high", GeneratorParams(miss_rate=0.35)),
+        MCARBernoulli(0, "mcar_low", GeneratorParams(miss_rate=0.15)),
+        MCARBernoulli(1, "mcar_high", GeneratorParams(miss_rate=0.35)),
         MARLogistic(2, "mar_weak", GeneratorParams(alpha0=-0.5, alpha1=2.0)),
         MARLogistic(3, "mar_strong", GeneratorParams(alpha0=-0.5, alpha1=4.0)),
         
         # DIFFERENT: Sigmoid MNAR (never seen during training!)
         MNARLogistic(4, "mnar_sigmoid_weak", GeneratorParams(beta0=-0.5, beta2=1.5)),
-        MNARSelfCensoring(5, "mnar_sigmoid_strong", GeneratorParams(beta0=-0.5, beta1=2.5)),
+        MNARSelfCensorHigh(5, "mnar_sigmoid_strong", GeneratorParams(beta0=-0.5, beta1=2.5)),
     ])
 
 

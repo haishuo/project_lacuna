@@ -24,7 +24,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from lacuna.core.types import MCAR, MAR, MNAR, CLASS_NAMES
-from lacuna.generators import create_minimal_registry
+from lacuna.generators import load_registry_from_config
 from lacuna.generators.priors import GeneratorPrior
 from lacuna.data import tokenize_and_batch
 from lacuna.data.missingness_features import (
@@ -38,7 +38,7 @@ from lacuna.core.rng import RNGState
 def generate_test_batches(n_batches: int = 50, batch_size: int = 16, seed: int = 42):
     """Generate batches with known mechanism labels."""
     
-    registry = create_minimal_registry()
+    registry = load_registry_from_config("lacuna_minimal_6")
     prior = GeneratorPrior.uniform(registry)
     
     # Map generator IDs to class IDs

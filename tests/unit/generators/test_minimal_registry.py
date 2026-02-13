@@ -1,22 +1,22 @@
 """
-Tests for create_minimal_registry factory.
+Tests for load_registry_from_config factory.
 """
 
 import pytest
 from lacuna.core.rng import RNGState
 from lacuna.core.types import MCAR, MAR, MNAR
-from lacuna.generators import create_minimal_registry
+from lacuna.generators import load_registry_from_config
 
 
 class TestMinimalRegistry:
     """Tests for the minimal 6-generator registry."""
     
     def test_has_six_generators(self):
-        registry = create_minimal_registry()
+        registry = load_registry_from_config("lacuna_minimal_6")
         assert registry.K == 6
     
     def test_class_balance(self):
-        registry = create_minimal_registry()
+        registry = load_registry_from_config("lacuna_minimal_6")
         counts = registry.class_counts()
         
         assert counts[MCAR] == 2
@@ -24,7 +24,7 @@ class TestMinimalRegistry:
         assert counts[MNAR] == 2
     
     def test_all_generators_sample_correctly(self):
-        registry = create_minimal_registry()
+        registry = load_registry_from_config("lacuna_minimal_6")
         rng = RNGState(seed=42)
         
         for gen in registry:
@@ -36,7 +36,7 @@ class TestMinimalRegistry:
             assert R.sum() >= 1
     
     def test_generators_produce_observed_datasets(self):
-        registry = create_minimal_registry()
+        registry = load_registry_from_config("lacuna_minimal_6")
         rng = RNGState(seed=42)
         
         for gen in registry:

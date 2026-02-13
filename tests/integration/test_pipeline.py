@@ -65,9 +65,9 @@ from lacuna.training.checkpoint import (
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from lacuna.generators.registry import GeneratorRegistry
-from lacuna.generators.families.mcar import MCARUniform, MCARColumnwise
+from lacuna.generators.families.mcar import MCARBernoulli, MCARColumnGaussian
 from lacuna.generators.families.mar import MARLogistic, MARMultiPredictor
-from lacuna.generators.families.mnar import MNARLogistic, MNARSelfCensoring
+from lacuna.generators.families.mnar import MNARLogistic, MNARSelfCensorHigh
 
 
 # =============================================================================
@@ -85,7 +85,7 @@ def generators() -> Tuple[Generator, ...]:
         - ID 3: MNAR self-censoring (explicit)
     """
     return (
-        MCARUniform(
+        MCARBernoulli(
             generator_id=0,
             name="MCAR-Test",
             params=GeneratorParams(miss_rate=0.2),
@@ -100,7 +100,7 @@ def generators() -> Tuple[Generator, ...]:
             name="MNAR-Logistic-Test",
             params=GeneratorParams(beta0=0.0, beta1=0.0, beta2=1.5),
         ),
-        MNARSelfCensoring(
+        MNARSelfCensorHigh(
             generator_id=3,
             name="MNAR-SelfCensor-Test",
             params=GeneratorParams(beta0=0.0, beta1=1.5),
@@ -868,7 +868,7 @@ class TestErrorHandling:
     def test_graceful_handling_of_high_missingness(self, rng, model):
         """Model handles data with high missingness rates."""
         # Create MCAR with very high missing rate
-        gen = MCARUniform(
+        gen = MCARBernoulli(
             generator_id=0,
             name="HighMiss",
             params=GeneratorParams(miss_rate=0.8),

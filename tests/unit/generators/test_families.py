@@ -7,30 +7,30 @@ import torch
 from lacuna.core.rng import RNGState
 from lacuna.core.types import MCAR, MAR, MNAR
 from lacuna.generators.params import GeneratorParams
-from lacuna.generators.families.mcar import MCARUniform, MCARColumnwise
+from lacuna.generators.families.mcar import MCARBernoulli, MCARColumnGaussian
 from lacuna.generators.families.mar import MARLogistic, MARMultiPredictor
-from lacuna.generators.families.mnar import MNARLogistic, MNARSelfCensoring
+from lacuna.generators.families.mnar import MNARLogistic, MNARSelfCensorHigh
 
 
-class TestMCARUniform:
-    """Tests for MCARUniform generator."""
+class TestMCARBernoulli:
+    """Tests for MCARBernoulli generator."""
     
     def test_construction(self):
-        gen = MCARUniform(0, "test", GeneratorParams(miss_rate=0.2))
+        gen = MCARBernoulli(0, "test", GeneratorParams(miss_rate=0.2))
         assert gen.class_id == MCAR
     
     def test_missing_param_raises(self):
         with pytest.raises(ValueError, match="miss_rate"):
-            MCARUniform(0, "test", GeneratorParams())
+            MCARBernoulli(0, "test", GeneratorParams())
     
     def test_invalid_miss_rate_raises(self):
         with pytest.raises(ValueError, match="miss_rate"):
-            MCARUniform(0, "test", GeneratorParams(miss_rate=1.5))
+            MCARBernoulli(0, "test", GeneratorParams(miss_rate=1.5))
         with pytest.raises(ValueError, match="miss_rate"):
-            MCARUniform(0, "test", GeneratorParams(miss_rate=0.0))
+            MCARBernoulli(0, "test", GeneratorParams(miss_rate=0.0))
     
     def test_sample_shapes(self):
-        gen = MCARUniform(0, "test", GeneratorParams(miss_rate=0.3))
+        gen = MCARBernoulli(0, "test", GeneratorParams(miss_rate=0.3))
         rng = RNGState(seed=42)
         
         X, R = gen.sample(rng, n=100, d=5)
@@ -40,7 +40,7 @@ class TestMCARUniform:
         assert R.dtype == torch.bool
     
     def test_approximate_miss_rate(self):
-        gen = MCARUniform(0, "test", GeneratorParams(miss_rate=0.3))
+        gen = MCARBernoulli(0, "test", GeneratorParams(miss_rate=0.3))
         rng = RNGState(seed=42)
         
         X, R = gen.sample(rng, n=10000, d=10)
@@ -49,7 +49,7 @@ class TestMCARUniform:
         assert abs(empirical_rate - 0.3) < 0.02
     
     def test_at_least_one_observed(self):
-        gen = MCARUniform(0, "test", GeneratorParams(miss_rate=0.99))
+        gen = MCARBernoulli(0, "test", GeneratorParams(miss_rate=0.99))
         rng = RNGState(seed=42)
         
         X, R = gen.sample(rng, n=10, d=2)
@@ -57,11 +57,11 @@ class TestMCARUniform:
         assert R.sum() >= 1
 
 
-class TestMCARColumnwise:
-    """Tests for MCARColumnwise generator."""
+class TestMCARColumnGaussian:
+    """Tests for MCARColumnGaussian generator."""
     
     def test_sample_different_column_rates(self):
-        gen = MCARColumnwise(0, "test", GeneratorParams(miss_rate_range=(0.1, 0.5)))
+        gen = MCARColumnGaussian(0, "test", GeneratorParams(miss_rate_range=(0.1, 0.5)))
         rng = RNGState(seed=42)
         
         X, R = gen.sample(rng, n=5000, d=5)
@@ -197,19 +197,19 @@ class TestMNARLogistic:
         assert miss_rate_high > miss_rate_low + 0.1
 
 
-class TestMNARSelfCensoring:
-    """Tests for MNARSelfCensoring generator."""
+class TestMNARSelfCensorHigh:
+    """Tests for MNARSelfCensorHigh generator."""
     
     def test_construction(self):
-        gen = MNARSelfCensoring(0, "test", GeneratorParams(beta0=0.0, beta1=1.0))
+        gen = MNARSelfCensorHigh(0, "test", GeneratorParams(beta0=0.0, beta1=1.0))
         assert gen.class_id == MNAR
     
     def test_beta1_zero_raises(self):
         with pytest.raises(ValueError, match="beta1 must be non-zero"):
-            MNARSelfCensoring(0, "test", GeneratorParams(beta0=0.0, beta1=0.0))
+            MNARSelfCensorHigh(0, "test", GeneratorParams(beta0=0.0, beta1=0.0))
     
     def test_sample_shapes(self):
-        gen = MNARSelfCensoring(0, "test", GeneratorParams(beta0=0.0, beta1=1.0))
+        gen = MNARSelfCensorHigh(0, "test", GeneratorParams(beta0=0.0, beta1=1.0))
         rng = RNGState(seed=42)
         
         X, R = gen.sample(rng, n=100, d=5)

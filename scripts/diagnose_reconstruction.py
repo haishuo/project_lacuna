@@ -36,7 +36,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from lacuna.config import load_config
 from lacuna.models import create_lacuna_model, LacunaModel
-from lacuna.generators import create_minimal_registry
+from lacuna.generators import load_registry_from_config
 from lacuna.generators.priors import GeneratorPrior
 from lacuna.data import create_default_catalog, SemiSyntheticDataLoader
 from lacuna.core.types import MCAR, MAR, MNAR, CLASS_NAMES
@@ -125,7 +125,7 @@ def create_data_loader(config, seed: int) -> SemiSyntheticDataLoader:
     """Create data loader for diagnostic evaluation."""
     
     # Create generator registry
-    registry = create_minimal_registry()
+    registry = load_registry_from_config("lacuna_minimal_6")
     prior = GeneratorPrior.uniform(registry)
     
     # Load validation datasets

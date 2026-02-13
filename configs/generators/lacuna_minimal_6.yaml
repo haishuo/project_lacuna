@@ -1,0 +1,54 @@
+# Lacuna Minimal Registry (6 generators)
+# 2 MCAR + 2 MAR + 2 MNAR
+# Equivalent to the old create_minimal_registry()
+
+name: "lacuna_minimal_6"
+description: "Minimal registry for quick testing (2 per class)"
+
+generators:
+  # MCAR - random missingness independent of values
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-10
+    params:
+      miss_rate: 0.10
+
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-30
+    params:
+      miss_rate: 0.30
+
+  # MAR - missingness depends on OBSERVED values (predictor column)
+  - family: mar
+    variant: MultiColumn
+    name: MAR-MultiCol-Strong
+    params:
+      alpha0: -0.5
+      alpha1: 4.0
+      target_frac: 0.5
+
+  - family: mar
+    variant: MultiColumn
+    name: MAR-MultiCol-VeryStrong
+    params:
+      alpha0: -0.5
+      alpha1: 6.0
+      target_frac: 0.6
+
+  # MNAR - missingness depends on the UNOBSERVED value itself
+  - family: mnar
+    variant: SelfCensorHigh
+    name: MNAR-SelfCensor-Weak
+    params:
+      beta0: -0.5
+      beta1: 1.5
+      affected_frac: 0.4
+
+  - family: mnar
+    variant: SelfCensorHigh
+    name: MNAR-SelfCensor-Strong
+    params:
+      beta0: -0.5
+      beta1: 3.0
+      affected_frac: 0.5

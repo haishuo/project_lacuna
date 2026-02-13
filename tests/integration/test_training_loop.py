@@ -16,7 +16,7 @@ from pathlib import Path
 from lacuna.core.types import TokenBatch, MCAR, MAR, MNAR
 from lacuna.core.rng import RNGState
 from lacuna.config.schema import LacunaConfig
-from lacuna.generators import create_minimal_registry
+from lacuna.generators import load_registry_from_config
 from lacuna.data.batching import tokenize_and_batch
 from lacuna.data.features import FEATURE_DIM
 from lacuna.models.assembly import LacunaModel
@@ -32,7 +32,7 @@ from lacuna.training.checkpoint import (
 @pytest.fixture
 def registry():
     """Create a minimal generator registry."""
-    return create_minimal_registry()
+    return load_registry_from_config("lacuna_minimal_6")
 
 
 def generate_batch(registry, batch_size: int, rng: RNGState) -> TokenBatch:

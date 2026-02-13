@@ -113,7 +113,8 @@ def config_to_dict(config: LacunaConfig) -> Dict[str, Any]:
             "min_delta": config.training.min_delta,
         },
         "generator": {
-            "n_generators": config.generator.n_generators,
+            "config_name": config.generator.config_name,
+            **({"config_path": config.generator.config_path} if config.generator.config_path else {}),
         },
         "seed": config.seed,
         "device": config.device,

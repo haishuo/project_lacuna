@@ -1,0 +1,167 @@
+# Lacuna Minimal-18 Registry (18 generators)
+# 6 MCAR + 6 MAR + 6 MNAR — one per major module
+# Suitable for integration testing and quick experiments
+
+name: "lacuna_minimal_18"
+description: "Balanced minimal registry: 6 MCAR + 6 MAR + 6 MNAR, one per major module"
+
+generators:
+  # ============================================================
+  # MCAR (6) — one from each module
+  # ============================================================
+
+  # bernoulli.py
+  - family: mcar
+    variant: Bernoulli
+    name: MCAR-Bernoulli-20
+    params:
+      miss_rate: 0.20
+
+  # column_effects.py
+  - family: mcar
+    variant: ColumnGaussian
+    name: MCAR-ColGauss
+    params:
+      miss_rate_range: [0.05, 0.40]
+
+  # row_effects.py
+  - family: mcar
+    variant: RowGaussian
+    name: MCAR-RowGauss
+    params:
+      mean_rate: 0.20
+      std_rate: 0.10
+
+  # blocks.py
+  - family: mcar
+    variant: RandomBlocks
+    name: MCAR-RandBlocks
+    params:
+      block_size: 5
+      miss_prob: 0.30
+
+  # distributional.py
+  - family: mcar
+    variant: Cauchy
+    name: MCAR-Cauchy
+    params:
+      location: 0.0
+      scale: 1.0
+
+  # multilevel.py
+  - family: mcar
+    variant: RowColumnAdditive
+    name: MCAR-RowColAdd
+    params:
+      row_std: 0.10
+      col_std: 0.10
+      base_rate: 0.20
+
+  # ============================================================
+  # MAR (6) — one from each module
+  # ============================================================
+
+  # simple.py
+  - family: mar
+    variant: Logistic
+    name: MAR-Logistic
+    params:
+      alpha0: -0.5
+      alpha1: 3.0
+
+  # multiple.py
+  - family: mar
+    variant: MultiColumn
+    name: MAR-MultiCol
+    params:
+      alpha0: -0.5
+      alpha1: 4.0
+      target_frac: 0.5
+
+  # strength.py
+  - family: mar
+    variant: Moderate
+    name: MAR-Moderate
+    params:
+      alpha0: -0.5
+
+  # predictor_types.py
+  - family: mar
+    variant: BinaryPredictor
+    name: MAR-BinaryPred
+    params:
+      miss_rate_high: 0.50
+      miss_rate_low: 0.10
+
+  # complex.py
+  - family: mar
+    variant: TreeRules
+    name: MAR-TreeRules
+    params:
+      rules:
+        - { col: 0, threshold: 0.5, rate: 0.6 }
+        - { col: 1, threshold: -0.5, rate: 0.4 }
+
+  # structural.py
+  - family: mar
+    variant: ColumnBlocks
+    name: MAR-ColBlocks
+    params:
+      n_blocks: 3
+      alpha_per_block: [1.0, 2.5, 4.0]
+
+  # ============================================================
+  # MNAR (6) — one from each major module
+  # ============================================================
+
+  # self_censoring.py
+  - family: mnar
+    variant: SelfCensorHigh
+    name: MNAR-SelfCensor-High
+    params:
+      beta0: -0.5
+      beta1: 2.5
+      affected_frac: 0.5
+
+  # censoring.py
+  - family: mnar
+    variant: ThresholdLeft
+    name: MNAR-ThreshLeft
+    params:
+      percentile: 70
+      miss_prob: 0.70
+      affected_frac: 0.5
+
+  # detection.py
+  - family: mnar
+    variant: DetectionLower
+    name: MNAR-DetectLower
+    params:
+      detection_percentile: 15
+      affected_frac: 0.5
+
+  # social.py
+  - family: mnar
+    variant: UnderReport
+    name: MNAR-UnderReport
+    params:
+      threshold_percentile: 75
+      under_report_prob: 0.60
+      affected_frac: 0.5
+
+  # latent.py
+  - family: mnar
+    variant: LatentHealth
+    name: MNAR-LatentHealth
+    params:
+      latent_strength: 1.5
+      obs_strength: 0.8
+
+  # selection.py
+  - family: mnar
+    variant: Truncation
+    name: MNAR-Truncation
+    params:
+      selection_threshold: 40
+      miss_prob: 0.70
+      affected_frac: 0.5

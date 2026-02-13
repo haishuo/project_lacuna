@@ -49,5 +49,5 @@ def sample_observed_dataset(rng):
 @pytest.fixture
 def minimal_registry():
     """Provide minimal 6-generator registry."""
-    from lacuna.generators import create_minimal_registry
-    return create_minimal_registry()
+    from lacuna.generators import load_registry_from_config
+    return load_registry_from_config("lacuna_minimal_6")
