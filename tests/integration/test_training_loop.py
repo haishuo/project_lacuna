@@ -89,14 +89,12 @@ class TestTrainingLoop:
         initial_losses = []
         with torch.no_grad():
             for batch in SyntheticDataLoader(registry, n_batches=5, batch_size=8, seed=99):
-                posterior = model(batch)
-                loss = torch.nn.functional.cross_entropy(
-                    posterior.logits_generator,
-                    batch.generator_ids,
-                )
+                output = model(batch)
+                log_probs = output.posterior.p_class.clamp(min=1e-8).log()
+                loss = torch.nn.functional.nll_loss(log_probs, batch.class_ids)
                 initial_losses.append(loss.item())
         initial_avg = sum(initial_losses) / len(initial_losses)
-        
+
         # Train
         trainer_config = TrainerConfig(
             lr=1e-3,
@@ -105,19 +103,17 @@ class TestTrainingLoop:
             grad_clip=1.0,
         )
         trainer = Trainer(model, trainer_config, device="cpu")
-        
+
         result = trainer.fit(train_loader)
-        
+
         # Get final loss
         model.eval()
         final_losses = []
         with torch.no_grad():
             for batch in SyntheticDataLoader(registry, n_batches=5, batch_size=8, seed=99):
-                posterior = model(batch)
-                loss = torch.nn.functional.cross_entropy(
-                    posterior.logits_generator,
-                    batch.generator_ids,
-                )
+                output = model(batch)
+                log_probs = output.posterior.p_class.clamp(min=1e-8).log()
+                loss = torch.nn.functional.nll_loss(log_probs, batch.class_ids)
                 final_losses.append(loss.item())
         final_avg = sum(final_losses) / len(final_losses)
         
@@ -159,8 +155,7 @@ class TestTrainingLoop:
             out1 = model1(test_batch)
             out2 = model2(test_batch)
         
-        assert torch.allclose(out1.logits_generator, out2.logits_generator)
-        assert torch.allclose(out1.p_class, out2.p_class)
+        assert torch.allclose(out1.posterior.p_class, out2.posterior.p_class)
     
     def test_training_with_validation(self, registry):
         """Training with validation should track best model."""
@@ -204,7 +199,7 @@ class TestTrainingLoop:
         result = trainer.fit(train_loader, val_loader)
         
         # Should stop well before 100 epochs
-        assert result["epochs_completed"] < 100
+        assert result["final_epoch"] < 100
 
 
 class TestCheckpointIntegrity:
@@ -220,11 +215,9 @@ class TestCheckpointIntegrity:
         for i in range(5):
             batch = generate_batch(registry, batch_size=4, rng=rng)
             optimizer.zero_grad()
-            posterior = model(batch)
-            loss = torch.nn.functional.cross_entropy(
-                posterior.logits_generator,
-                batch.generator_ids,
-            )
+            output = model(batch)
+            log_probs = output.posterior.p_class.clamp(min=1e-8).log()
+            loss = torch.nn.functional.nll_loss(log_probs, batch.class_ids)
             loss.backward()
             optimizer.step()
         

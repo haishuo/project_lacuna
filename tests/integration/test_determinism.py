@@ -103,8 +103,7 @@ class TestModelDeterminism:
             out1 = model(batch)
             out2 = model(batch)
         
-        assert torch.equal(out1.logits_generator, out2.logits_generator)
-        assert torch.equal(out1.p_class, out2.p_class)
+        assert torch.equal(out1.posterior.p_class, out2.posterior.p_class)
 
 
 class TestTrainingDeterminism:
