@@ -16,7 +16,7 @@ class DataConfig:
     """Data processing configuration."""
     # Synthetic data ranges (used by SyntheticDataLoader)
     n_range: Tuple[int, int] = (50, 500)
-    d_range: Tuple[int, int] = (3, 20)
+    d_range: Tuple[int, int] = (5, 20)
     
     # Dimension limits
     max_cols: int = 32
@@ -111,7 +111,7 @@ class LacunaConfig:
         return cls(
             data=DataConfig(
                 n_range=(50, 100),
-                d_range=(3, 8),
+                d_range=(5, 8),
                 max_cols=16,
                 max_rows=64,
             ),

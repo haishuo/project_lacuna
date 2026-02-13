@@ -7,7 +7,7 @@ output_dir: /mnt/artifacts/project_lacuna/runs
 
 data:
   n_range: [50, 200]
-  d_range: [3, 12]
+  d_range: [5, 12]
   max_cols: 16
   max_rows: 128
 
