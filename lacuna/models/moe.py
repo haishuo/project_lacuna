@@ -64,7 +64,7 @@ class MoEConfig:
     learn_temperature: bool = False
     
     # Class aggregation
-    class_aggregation: str = "mean"
+    class_aggregation: str = "sum"
     
     # Regularization
     load_balance_weight: float = 0.0
@@ -355,8 +355,9 @@ class MixtureOfExperts(nn.Module):
     def get_class_posterior(self, output: MoEOutput) -> torch.Tensor:
         """
         Aggregate expert probabilities to class probabilities.
-        
-        Uses balanced aggregation by default to avoid MNAR bias.
+
+        Uses sum aggregation by default: expert probs are summed per class
+        then normalized. This gives equal gradient flow to all experts.
         """
         gate_probs = output.gate_probs
         B = gate_probs.shape[0]
@@ -479,7 +480,7 @@ def create_moe(
     use_expert_heads: bool = False,
     temperature: float = 1.0,
     learn_temperature: bool = False,
-    class_aggregation: str = "mean",
+    class_aggregation: str = "sum",
     load_balance_weight: float = 0.0,
     entropy_weight: float = 0.0,
     dropout: float = 0.1,
