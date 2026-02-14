@@ -1,0 +1,6 @@
+id,name,accuracy,mcar_recall,mar_recall,mnar_recall,mcar_precision,mar_precision,mnar_precision,mcar_f1,mar_f1,mnar_f1,ece,architecture,prior,loss,temperature
+5,Baseline (1/1/3),0.77,0.934,0.526,0.853,0.703,0.943,0.83,0.802,0.675,0.841,0.1338,1/1/3 (5 experts),uniform,cross_entropy,1.0
+7,Brier + Bal. Prior,0.548,0.651,0.307,0.831,0.859,0.972,0.322,0.741,0.466,0.465,0.2867,1/1/3 (5 experts),class_balanced,brier,1.0
+8,Bal. Prior Only,0.626,0.89,0.348,0.746,0.491,0.86,0.823,0.633,0.496,0.774,0.2329,1/1/3 (5 experts),class_balanced,cross_entropy,1.0
+9,1/1/1 Symmetric,0.784,0.895,0.693,0.794,0.852,0.887,0.668,0.872,0.778,0.725,0.1157,1/1/1 (3 experts),uniform,cross_entropy,1.0
+10,1/1/1 + T=1.96,0.826,0.945,0.736,0.845,0.794,0.918,0.787,0.863,0.817,0.815,0.0383,1/1/1 (3 experts),uniform,cross_entropy,1.963
