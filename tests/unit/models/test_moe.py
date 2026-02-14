@@ -114,13 +114,13 @@ class TestMoEConfig:
         
         assert config.evidence_dim == 64
         assert config.hidden_dim == 128
-        assert config.mnar_variants == ["self_censoring", "threshold", "latent"]
+        assert config.mnar_variants == ["self_censoring"]
         assert config.gate_hidden_dim == 64
         assert config.gate_n_layers == 2
         assert config.gate_dropout == 0.1
         assert config.gating_level == "dataset"
         assert config.use_reconstruction_errors is True
-        assert config.n_reconstruction_heads == 5
+        assert config.n_reconstruction_heads == 3
         assert config.use_expert_heads is False
         assert config.expert_hidden_dim == 32
         assert config.temperature == 1.0

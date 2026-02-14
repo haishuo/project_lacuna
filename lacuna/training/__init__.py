@@ -44,6 +44,7 @@ from .trainer import (
     Trainer,
     TrainerConfig,
     TrainerState,
+    DetailedValResult,
 )
 
 from .checkpoint import (
@@ -60,6 +61,26 @@ from .checkpoint import (
 
 from .logging import (
     create_logger,
+)
+
+from .report import (
+    generate_eval_report,
+    compute_confidence_analysis,
+    compute_probability_distributions,
+    compute_entropy_stats,
+    compute_ece,
+    compute_selective_accuracy,
+    compute_per_generator_accuracy,
+    save_raw_predictions,
+    load_raw_predictions,
+    print_eval_summary,
+)
+
+from .calibration import (
+    find_optimal_temperature,
+    apply_temperature_scaling,
+    collect_gate_logits,
+    logits_to_class_probs,
 )
 
 __all__ = [
@@ -94,6 +115,7 @@ __all__ = [
     "Trainer",
     "TrainerConfig",
     "TrainerState",
+    "DetailedValResult",
     # Checkpoint
     "CheckpointData",
     "save_checkpoint",
@@ -106,4 +128,20 @@ __all__ = [
     "compute_checkpoint_hash",
     # Logging
     "create_logger",
+    # Report utilities
+    "generate_eval_report",
+    "compute_confidence_analysis",
+    "compute_probability_distributions",
+    "compute_entropy_stats",
+    "compute_ece",
+    "compute_selective_accuracy",
+    "compute_per_generator_accuracy",
+    "save_raw_predictions",
+    "load_raw_predictions",
+    "print_eval_summary",
+    # Calibration
+    "find_optimal_temperature",
+    "apply_temperature_scaling",
+    "collect_gate_logits",
+    "logits_to_class_probs",
 ]

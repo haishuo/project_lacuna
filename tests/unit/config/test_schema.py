@@ -21,7 +21,7 @@ class TestDataConfig:
         assert cfg.max_cols == 32
         assert cfg.max_rows == 256
         assert cfg.n_range == (50, 500)
-        assert cfg.d_range == (3, 20)
+        assert cfg.d_range == (5, 20)
     
     def test_invalid_n_range_raises(self):
         with pytest.raises(ValueError):

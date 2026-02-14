@@ -113,8 +113,8 @@ class LacunaModelConfig:
     
     def __post_init__(self):
         if self.mnar_variants is None:
-            self.mnar_variants = ["self_censoring", "threshold", "latent"]
-        
+            self.mnar_variants = ["self_censoring"]
+
         if self.hidden_dim % self.n_heads != 0:
             raise ValidationError(
                 f"hidden_dim ({self.hidden_dim}) must be divisible by n_heads ({self.n_heads})"
@@ -585,8 +585,8 @@ def create_lacuna_model(
         Configured LacunaModel instance.
     """
     if mnar_variants is None:
-        mnar_variants = ["self_censoring", "threshold", "latent"]
-    
+        mnar_variants = ["self_censoring"]
+
     if loss_matrix is None:
         loss_matrix = [
             0.0, 0.3, 1.0,   # Green
@@ -631,8 +631,8 @@ def create_lacuna_mini(
     Create a minimal Lacuna model for testing and fast iteration.
     """
     if mnar_variants is None:
-        mnar_variants = ["self_censoring", "threshold"]
-    
+        mnar_variants = ["self_censoring"]
+
     return create_lacuna_model(
         hidden_dim=64,
         evidence_dim=32,

@@ -49,8 +49,8 @@ class MoEConfig:
     # Gating mode
     gating_level: str = "dataset"
     use_reconstruction_errors: bool = True
-    n_reconstruction_heads: int = 5
-    
+    n_reconstruction_heads: int = 3
+
     # Missingness pattern features (NEW)
     use_missingness_features: bool = True
     n_missingness_features: int = 16  # From MissingnessFeatureConfig.n_features
@@ -72,7 +72,7 @@ class MoEConfig:
     
     def __post_init__(self):
         if self.mnar_variants is None:
-            self.mnar_variants = ["self_censoring", "threshold", "latent"]
+            self.mnar_variants = ["self_censoring"]
         
         if self.gating_level not in ("dataset", "row"):
             raise ValueError(f"gating_level must be 'dataset' or 'row', got {self.gating_level}")
@@ -473,7 +473,7 @@ def create_moe(
     gate_n_layers: int = 2,
     gating_level: str = "dataset",
     use_reconstruction_errors: bool = True,
-    n_reconstruction_heads: int = 5,
+    n_reconstruction_heads: int = 3,
     use_missingness_features: bool = True,
     n_missingness_features: int = 16,
     use_expert_heads: bool = False,
@@ -487,8 +487,8 @@ def create_moe(
     """Factory function to create MixtureOfExperts."""
     
     if mnar_variants is None:
-        mnar_variants = ["self_censoring", "threshold", "latent"]
-    
+        mnar_variants = ["self_censoring"]
+
     config = MoEConfig(
         evidence_dim=evidence_dim,
         hidden_dim=hidden_dim,

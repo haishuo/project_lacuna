@@ -432,8 +432,8 @@ def create_reconstruction_heads(
         Configured ReconstructionHeads instance.
     """
     if mnar_variants is None:
-        mnar_variants = ["self_censoring", "threshold", "latent"]
-    
+        mnar_variants = ["self_censoring"]
+
     config = ReconstructionConfig(
         hidden_dim=hidden_dim,
         head_hidden_dim=head_hidden_dim,

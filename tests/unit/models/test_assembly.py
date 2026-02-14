@@ -738,8 +738,8 @@ class TestCreateLacunaModel:
     def test_default_mnar_variants(self):
         """Test default MNAR variants when None."""
         model = create_lacuna_model()
-        
-        assert model.config.mnar_variants == ["self_censoring", "threshold", "latent"]
+
+        assert model.config.mnar_variants == ["self_censoring"]
     
     def test_custom_loss_matrix(self):
         """Test custom loss matrix."""
