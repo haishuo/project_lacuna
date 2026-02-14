@@ -91,7 +91,8 @@ class TrainerConfig:
     mechanism_weight: float = 1.0       # Weight for mechanism classification loss
     reconstruction_weight: float = 0.5  # Weight for reconstruction loss
     class_weight: float = 0.5           # Weight for class-level vs mechanism-level
-    label_smoothing: float = 0.0        # Label smoothing
+    mechanism_loss_type: str = "cross_entropy"  # "cross_entropy" or "brier"
+    label_smoothing: float = 0.0        # Label smoothing (cross-entropy only)
     load_balance_weight: float = 0.01   # MoE load balancing
     
     # === Mixed Precision ===
@@ -143,6 +144,7 @@ class TrainerConfig:
             mechanism_weight=mechanism_weight,
             reconstruction_weight=reconstruction_weight,
             class_weight=self.class_weight,
+            mechanism_loss_type=self.mechanism_loss_type,
             label_smoothing=self.label_smoothing,
             load_balance_weight=self.load_balance_weight,
         )

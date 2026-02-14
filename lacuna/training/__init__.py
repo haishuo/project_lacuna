@@ -76,6 +76,13 @@ from .report import (
     print_eval_summary,
 )
 
+from .calibration import (
+    find_optimal_temperature,
+    apply_temperature_scaling,
+    collect_gate_logits,
+    logits_to_class_probs,
+)
+
 __all__ = [
     # Loss Configuration
     "LossConfig",
@@ -132,4 +139,9 @@ __all__ = [
     "save_raw_predictions",
     "load_raw_predictions",
     "print_eval_summary",
+    # Calibration
+    "find_optimal_temperature",
+    "apply_temperature_scaling",
+    "collect_gate_logits",
+    "logits_to_class_probs",
 ]

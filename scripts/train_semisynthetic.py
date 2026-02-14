@@ -127,7 +127,7 @@ def main():
     # Create generator registry
     generators_name = args.generators or config.generator.config_path or config.generator.config_name
     registry = load_registry_from_config(generators_name)
-    prior = GeneratorPrior.uniform(registry)
+    prior = GeneratorPrior.class_balanced(registry)
 
     # Load datasets
     catalog = create_default_catalog()
@@ -234,6 +234,8 @@ def main():
         checkpoint_dir=str(exp_dir / "checkpoints"),
         save_best_only=True,
         quiet=quiet,
+        mechanism_loss_type="brier",
+        label_smoothing=0.1,
     )
 
     logger = create_logger(exp_dir)
