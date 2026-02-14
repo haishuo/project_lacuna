@@ -5,6 +5,16 @@ Generate a journal entry from experiment artifacts.
 Reads eval_report.json and calibrated.json (if present) and prints a
 formatted experiment entry suitable for pasting into JOURNAL.md.
 
+The eval_report.json structure (produced by lacuna.training.report):
+    report["summary"]                  -> {accuracy, mcar_acc, mar_acc, mnar_acc, loss}
+    report["confusion_matrix"]         -> {matrix: [[...]], labels, precision, recall, f1}
+    report["confidence_analysis"]      -> {mean_confidence, mean_confidence_correct, ...}
+    report["probability_distributions"]-> {mcar: {mean, std, ...}, mar: ..., mnar: ...}
+    report["entropy"]                  -> {mcar: {mean, std}, mar: ..., correct: ..., incorrect: ...}
+    report["calibration"]              -> {ece, bins: [...]}
+    report["selective_accuracy"]       -> {thresholds: [...], threshold_for_90_accuracy, ...}
+    report["n_samples"]                -> int
+
 Usage:
     python scripts/journal_entry.py --report /path/to/eval_report.json
     python scripts/journal_entry.py --report /path/to/eval_report.json --calibration /path/to/calibrated.json
@@ -56,33 +66,67 @@ def load_json(path: str) -> dict:
         return json.load(f)
 
 
-def format_confusion_matrix(cm: list) -> str:
-    """Format confusion matrix as markdown table."""
+def format_confusion_matrix(cm_section: dict) -> str:
+    """Format confusion matrix as markdown table.
+
+    cm_section is report["confusion_matrix"] which has:
+        matrix: [[row0], [row1], [row2]]
+        labels: ["MCAR", "MAR", "MNAR"]
+        precision: [p0, p1, p2]
+        recall: [r0, r1, r2]
+        f1: [f0, f1, f2]
+    """
+    # Support both formats: dict with "matrix" key, or raw list of lists
+    if isinstance(cm_section, dict):
+        cm = cm_section.get("matrix", [])
+    else:
+        cm = cm_section
+
+    if not cm:
+        return "*No confusion matrix data available.*"
+
     labels = ["MCAR", "MAR", "MNAR"]
     lines = []
     lines.append("|  | Pred MCAR | Pred MAR | Pred MNAR |")
     lines.append("|--|-----------|----------|-----------|")
     for i, label in enumerate(labels):
-        row = cm[i]
-        lines.append(f"| **True {label}** | {row[0]} | {row[1]} | {row[2]} |")
+        if i < len(cm):
+            row = cm[i]
+            lines.append(f"| **True {label}** | {row[0]} | {row[1]} | {row[2]} |")
     return "\n".join(lines)
 
 
 def format_per_class_metrics(report: dict) -> str:
-    """Format per-class precision/recall/F1 table."""
+    """Format per-class precision/recall/F1 table.
+
+    Extracts from report["confusion_matrix"]["precision"/"recall"/"f1"]
+    and report["confusion_matrix"]["matrix"] for support counts.
+    """
+    cm_section = report.get("confusion_matrix", {})
+
+    if isinstance(cm_section, dict):
+        precision = cm_section.get("precision", [])
+        recall = cm_section.get("recall", [])
+        f1 = cm_section.get("f1", [])
+        matrix = cm_section.get("matrix", [])
+    else:
+        return "*No per-class metrics available.*"
+
+    if not precision:
+        return "*No per-class metrics available.*"
+
+    labels = ["MCAR", "MAR", "MNAR"]
     lines = []
     lines.append("| Class | Precision | Recall | F1 | Support |")
     lines.append("|-------|-----------|--------|----|---------|")
 
-    for class_name in ["MCAR", "MAR", "MNAR"]:
-        key = class_name.lower()
-        if key in report.get("per_class", {}):
-            cls = report["per_class"][key]
-            prec = cls.get("precision", 0) * 100
-            rec = cls.get("recall", 0) * 100
-            f1 = cls.get("f1", 0) * 100
-            support = cls.get("support", 0)
-            lines.append(f"| {class_name} | {prec:.1f}% | {rec:.1f}% | {f1:.1f}% | {support} |")
+    for i, label in enumerate(labels):
+        if i < len(precision):
+            p = precision[i] * 100
+            r = recall[i] * 100 if i < len(recall) else 0
+            f = f1[i] * 100 if i < len(f1) else 0
+            support = sum(matrix[i]) if i < len(matrix) else 0
+            lines.append(f"| {label} | {p:.1f}% | {r:.1f}% | {f:.1f}% | {support} |")
 
     return "\n".join(lines)
 
@@ -120,8 +164,16 @@ def format_calibration(report: dict) -> str:
     # Confidence analysis
     conf = report.get("confidence_analysis", {})
     if conf:
-        lines.append(f"- **Mean confidence (correct):** {conf.get('mean_confidence_correct', 0):.3f}")
-        lines.append(f"- **Mean confidence (incorrect):** {conf.get('mean_confidence_incorrect', 0):.3f}")
+        mean_correct = conf.get("mean_confidence_correct", None)
+        mean_incorrect = conf.get("mean_confidence_incorrect", None)
+        mean_overall = conf.get("mean_confidence", None)
+
+        if mean_overall is not None:
+            lines.append(f"- **Mean confidence:** {mean_overall:.3f}")
+        if mean_correct is not None:
+            lines.append(f"- **Mean confidence (correct):** {mean_correct:.3f}")
+        if mean_incorrect is not None:
+            lines.append(f"- **Mean confidence (incorrect):** {mean_incorrect:.3f}")
 
     return "\n".join(lines)
 
@@ -155,7 +207,7 @@ def format_selective_accuracy(report: dict) -> str:
 
 
 def generate_entry(report: dict, calibration: dict = None, name: str = None, hypothesis: str = None) -> str:
-    """Generate a complete journal entry."""
+    """Generate a complete journal entry from eval_report.json data."""
     lines = []
 
     # Header
@@ -164,15 +216,21 @@ def generate_entry(report: dict, calibration: dict = None, name: str = None, hyp
     lines.append("")
     lines.append(f"**Date:** {datetime.now().strftime('%Y-%m-%d')}")
 
-    if "checkpoint_path" in report:
-        lines.append(f"**Checkpoint:** `{report['checkpoint_path']}`")
-    if "config_path" in report:
-        lines.append(f"**Config:** `{report['config_path']}`")
+    # Source info
+    checkpoint = report.get("checkpoint")
+    config = report.get("config")
+    exp_dir = report.get("experiment_dir")
+    if checkpoint:
+        lines.append(f"**Checkpoint:** `{checkpoint}`")
+    if config:
+        lines.append(f"**Config:** `{config}`")
+    if exp_dir:
+        lines.append(f"**Run dir:** `{exp_dir}`")
     lines.append("")
 
     # Hypothesis
     if hypothesis:
-        lines.append(f"### Hypothesis")
+        lines.append("### Hypothesis")
         lines.append(hypothesis)
         lines.append("")
 
@@ -180,11 +238,24 @@ def generate_entry(report: dict, calibration: dict = None, name: str = None, hyp
     lines.append("### Results")
     lines.append("")
 
-    # Overall metrics table
-    overall_acc = report.get("overall_accuracy", 0) * 100
+    # Overall metrics — from report["summary"]
+    summary = report.get("summary", {})
+    overall_acc = summary.get("accuracy", 0) * 100
     n_samples = report.get("n_samples", 0)
-    lines.append(f"**Overall accuracy: {overall_acc:.1f}%** ({n_samples} samples)")
+    training_time = report.get("training_time_seconds")
+
+    result_line = f"**Overall accuracy: {overall_acc:.1f}%** ({n_samples} samples)"
+    if training_time:
+        result_line += f" | Training: {training_time:.0f}s"
+    lines.append(result_line)
     lines.append("")
+
+    # Architecture info
+    n_experts = report.get("n_experts")
+    mnar_variants = report.get("mnar_variants")
+    if n_experts:
+        lines.append(f"**Architecture:** {n_experts} experts (mnar_variants={mnar_variants})")
+        lines.append("")
 
     # Per-class metrics
     lines.append("**Per-class metrics:**")
@@ -225,11 +296,15 @@ def generate_entry(report: dict, calibration: dict = None, name: str = None, hyp
         lines.append(f"- **Optimal temperature:** {opt_t}")
         lines.append(f"- **NLL:** {calibration.get('nll_before', 'N/A')} → {calibration.get('nll_after', 'N/A')}")
         lines.append(f"- **ECE:** {calibration.get('ece_before', 'N/A')} → {calibration.get('ece_after', 'N/A')}")
-        lines.append(f"- **Accuracy:** {calibration.get('accuracy_before', 0)*100:.1f}% → {calibration.get('accuracy_after', 0)*100:.1f}%")
+
+        acc_before = calibration.get("accuracy_before")
+        acc_after = calibration.get("accuracy_after")
+        if acc_before is not None and acc_after is not None:
+            lines.append(f"- **Accuracy:** {acc_before*100:.1f}% → {acc_after*100:.1f}%")
         lines.append("")
 
-    # Entropy stats
-    entropy = report.get("entropy_stats", {})
+    # Entropy stats — stored under "entropy" key
+    entropy = report.get("entropy", {})
     if entropy:
         lines.append("**Entropy:**")
         lines.append("")
