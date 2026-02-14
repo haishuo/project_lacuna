@@ -195,7 +195,7 @@ def main():
     # Also save experiment metadata for reproducibility
     exp_meta = {
         "mnar_variants": mnar_variants or ["self_censoring", "threshold", "latent"],
-        "prior": "class_balanced",
+        "prior": "uniform",
         "loss": "cross_entropy",
         "label_smoothing": 0.0,
         "config_path": args.config,
@@ -213,7 +213,7 @@ def main():
     # Create generator registry
     generators_name = args.generators or config.generator.config_path or config.generator.config_name
     registry = load_registry_from_config(generators_name)
-    prior = GeneratorPrior.class_balanced(registry)
+    prior = GeneratorPrior.uniform(registry)
 
     # Load datasets
     catalog = create_default_catalog()

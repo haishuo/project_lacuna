@@ -146,7 +146,7 @@ def main():
     generators_name = args.generators or config.generator.config_path or config.generator.config_name
     print(f"Generator config: {generators_name}")
     registry = load_registry_from_config(generators_name)
-    prior = GeneratorPrior.class_balanced(registry)
+    prior = GeneratorPrior.uniform(registry)
     print(f"  Generators: {registry.K} | Classes: {registry.class_counts()}")
 
     # Load datasets
