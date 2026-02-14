@@ -523,6 +523,80 @@ python scripts/train_semisynthetic.py \
 
 ---
 
+
+---
+
+## Experiment 9 — 1/1/1 ablation (uniform prior)
+
+**Date:** 2026-02-14
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/Experiment 9 — 1/1/1 ablation (uniform prior)/checkpoints/best_model.pt`
+**Config:** `configs/training/semisynthetic_full.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/Experiment 9 — 1/1/1 ablation (uniform prior)`
+
+**Architecture:** 3 experts (expert_to_class = [0, 1, 2], mnar_variants = ['self_censoring'])
+
+### Results
+
+**Overall accuracy: 78.4%** (800 samples) | Training: 1679s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 85.2% | 89.5% | 87.2% | 218 |
+| MAR | 88.7% | 69.3% | 77.8% | 296 |
+| MNAR | 66.8% | 79.4% | 72.5% | 286 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 195 | 0 | 23 |
+| **True MAR** | 1 | 205 | 90 |
+| **True MNAR** | 33 | 26 | 227 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.1157
+- **Mean confidence:** 0.899
+- **Mean confidence (correct):** 0.934
+- **Mean confidence (incorrect):** 0.772
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 78.4% | 100.0% |
+| 0.50 | 79.3% | 97.9% |
+| 0.60 | 81.1% | 92.8% |
+| 0.70 | 84.5% | 86.9% |
+| 0.80 | 86.1% | 81.9% |
+| 0.90 | 90.9% | 70.2% |
+| 0.95 | 92.8% | 59.1% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
 ## Planned Experiments
 
 ### Experiment 10 — Post-Hoc Temperature Scaling
