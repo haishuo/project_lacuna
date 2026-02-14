@@ -58,6 +58,7 @@ def generate_eval_report(
         "probability_distributions": compute_probability_distributions(p_class, true_class),
         "entropy": compute_entropy_stats(p_class, true_class),
         "calibration": compute_ece(p_class, true_class),
+        "selective_accuracy": compute_selective_accuracy(p_class, true_class),
         "per_generator_accuracy": compute_per_generator_accuracy(
             preds, true_class, gen_ids, registry
         ),
@@ -343,6 +344,70 @@ def compute_ece(
 
 
 # ---------------------------------------------------------------------------
+# Selective prediction (accuracy vs coverage at confidence thresholds)
+# ---------------------------------------------------------------------------
+
+def compute_selective_accuracy(
+    p_class: torch.Tensor,
+    true_class: torch.Tensor,
+    thresholds: Optional[List[float]] = None,
+) -> dict:
+    """Compute accuracy-coverage trade-off at confidence thresholds.
+
+    At threshold τ, we only predict on samples where max(p_class) >= τ.
+    - **Accuracy @ τ**: accuracy on those high-confidence samples.
+    - **Coverage @ τ**: fraction of all samples that meet the threshold.
+
+    A good model has high accuracy at moderate coverage (e.g. 95% accuracy
+    at 25% coverage means "when it's sure, it's almost always right").
+
+    Args:
+        p_class: [N, 3] probability predictions.
+        true_class: [N] ground truth labels.
+        thresholds: Confidence thresholds to evaluate.
+            Defaults to [0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95].
+
+    Returns:
+        Dict with per-threshold accuracy/coverage and overall summary.
+    """
+    if thresholds is None:
+        thresholds = [0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 0.95]
+
+    confidence, preds = p_class.max(dim=-1)  # [N], [N]
+    correct = (preds == true_class)
+    n = len(confidence)
+
+    if n == 0:
+        return {"error": "no samples"}
+
+    rows = []
+    for tau in thresholds:
+        mask = confidence >= tau
+        count = mask.sum().item()
+        coverage = count / n
+        acc = correct[mask].float().mean().item() if count > 0 else 0.0
+
+        rows.append({
+            "threshold": tau,
+            "accuracy": round(acc, 4),
+            "coverage": round(coverage, 4),
+            "count": count,
+        })
+
+    # Find the threshold where accuracy first exceeds 90% and 95%
+    acc_90_row = next((r for r in rows if r["accuracy"] >= 0.90), None)
+    acc_95_row = next((r for r in rows if r["accuracy"] >= 0.95), None)
+
+    return {
+        "thresholds": rows,
+        "acc_90_threshold": acc_90_row["threshold"] if acc_90_row else None,
+        "acc_90_coverage": acc_90_row["coverage"] if acc_90_row else None,
+        "acc_95_threshold": acc_95_row["threshold"] if acc_95_row else None,
+        "acc_95_coverage": acc_95_row["coverage"] if acc_95_row else None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Per-generator accuracy
 # ---------------------------------------------------------------------------
 
@@ -473,9 +538,25 @@ def print_eval_summary(report: dict) -> None:
     cal = report["calibration"]
     print(f"ECE: {cal['ece']:.4f}")
 
+    # Selective accuracy (accuracy vs coverage)
+    sel = report.get("selective_accuracy", {})
+    sel_rows = sel.get("thresholds", [])
+    if sel_rows:
+        print(f"\nSelective Accuracy (accuracy @ confidence threshold):")
+        print(f"  {'τ':>5s}  {'Acc':>6s}  {'Cov':>6s}  {'Count':>6s}")
+        for r in sel_rows:
+            print(f"  {r['threshold']:5.2f}  {r['accuracy']*100:5.1f}%  "
+                  f"{r['coverage']*100:5.1f}%  {r['count']:6d}")
+        if sel.get("acc_90_threshold") is not None:
+            print(f"  → 90% accuracy reached at τ={sel['acc_90_threshold']:.2f} "
+                  f"(coverage={sel['acc_90_coverage']*100:.1f}%)")
+        if sel.get("acc_95_threshold") is not None:
+            print(f"  → 95% accuracy reached at τ={sel['acc_95_threshold']:.2f} "
+                  f"(coverage={sel['acc_95_coverage']*100:.1f}%)")
+
     # Entropy
     ent = report["entropy"]
-    print(f"Entropy: mean={ent['overall']['mean']:.3f} "
+    print(f"\nEntropy: mean={ent['overall']['mean']:.3f} "
           f"(normalized={ent['overall']['mean_normalized']:.3f})")
 
     # Probability distributions
