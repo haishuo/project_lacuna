@@ -94,6 +94,11 @@ def parse_args():
         "--t-max", type=float, default=10.0,
         help="Maximum temperature to search (default: 10.0)",
     )
+    parser.add_argument(
+        "--mnar-variants", type=str, nargs="+", default=None,
+        help="MNAR variant names (default: ['self_censoring']). "
+             "Must match the architecture used to train the checkpoint.",
+    )
     return parser.parse_args()
 
 
@@ -155,7 +160,7 @@ def main():
     # Load generator registry
     generators_name = args.generators or config.generator.config_path or config.generator.config_name
     registry = load_registry_from_config(generators_name)
-    prior = GeneratorPrior.class_balanced(registry)
+    prior = GeneratorPrior.uniform(registry)
     print(f"\nGenerators: {registry.K} | Classes: {registry.class_counts()}")
 
     # Load calibration datasets (use validation datasets)
@@ -184,6 +189,7 @@ def main():
     )
 
     # Create model and load weights
+    mnar_variants = args.mnar_variants  # None means use default (1/1/1)
     model = create_lacuna_model(
         hidden_dim=config.model.hidden_dim,
         evidence_dim=config.model.evidence_dim,
@@ -191,6 +197,7 @@ def main():
         n_heads=config.model.n_heads,
         max_cols=config.data.max_cols,
         dropout=config.model.dropout,
+        mnar_variants=mnar_variants,
     )
     load_model_weights(model, str(ckpt_path), device=device)
     model.to(device)

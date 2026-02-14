@@ -604,12 +604,62 @@ The single change of reducing from 5 experts (1/1/3) to 3 experts (1/1/1) produc
 
 ---
 
-## Planned Experiments
+## Experiment 10 — Post-Hoc Temperature Scaling
 
-### Experiment 10 — Post-Hoc Temperature Scaling
-**Trigger:** After Experiments 8-9 establish best pre-calibration baseline
-**Change:** Apply `scripts/calibrate.py` to best checkpoint
-**Target:** ECE < 0.05 without accuracy loss
+**Date:** 2026-02-14
+**Commit:** *(pending)*
+**Baseline checkpoint:** Experiment 9 (`best_model.pt` from 1/1/1 ablation)
+
+### Motivation
+Experiment 9 achieved ECE = 0.1157 — good but not great. Post-hoc temperature scaling (Guo et al. 2017) can improve calibration without retraining by finding optimal T to rescale gate logits before softmax.
+
+### Hypothesis
+Temperature scaling will reduce ECE below 0.05 without harming accuracy. The 1/1/1 architecture's simpler logit space (3 logits → 3 classes, no aggregation) should be especially amenable to single-parameter calibration.
+
+### Changes
+- Apply `scripts/calibrate.py` to Experiment 9 best checkpoint
+- Two-phase grid search: coarse (100 log-uniform points over [0.1, 10]) + fine (100 linear points)
+- Save calibrated checkpoint with patched `log_temperature`
+- Evaluate calibrated checkpoint with `scripts/evaluate.py`
+
+### Configuration
+- Source: Experiment 9 checkpoint (1/1/1, uniform prior, CE loss)
+- Calibration data: validation datasets from config
+- No retraining — post-hoc only
+
+### Evaluation Workflow
+```bash
+# Step 1: Find optimal temperature
+python scripts/calibrate.py \
+  --checkpoint "/mnt/artifacts/project_lacuna/runs/Experiment 9 — 1/1/1 ablation (uniform prior)/checkpoints/best_model.pt" \
+  --config configs/training/semisynthetic_full.yaml \
+  --generators lacuna_tabular_110 --device cuda
+
+# Step 2: Evaluate calibrated model
+python scripts/evaluate.py \
+  --checkpoint "/mnt/artifacts/project_lacuna/runs/Experiment 9 — 1/1/1 ablation (uniform prior)/checkpoints/calibrated.pt" \
+  --config configs/training/semisynthetic_full.yaml \
+  --generators lacuna_tabular_110 --device cuda --report
+```
+
+### Targets
+| Metric | Exp 9 (baseline) | Target |
+|--------|-----------------|--------|
+| ECE | 0.1157 | < 0.05 |
+| Overall accuracy | 78.4% | ≥ 78% (no regression) |
+| MAR recall | 69.3% | ≥ 69% (no regression) |
+
+### Results
+**⏳ PENDING — awaiting calibration run on Forge**
+
+### Next Decision
+- If ECE improves and accuracy holds: calibrated 1/1/1 becomes the production model
+- If accuracy regresses: temperature may be shifting borderline cases — investigate per-class effects
+- Either way: consider per-class loss weights (Experiment 11) for further MAR recall improvement
+
+---
+
+## Planned Experiments
 
 ### Experiment 11 — Per-Class Loss Weights (Conditional)
 **Trigger:** MAR recall < 65% after Experiments 8-10
