@@ -653,6 +653,8 @@ The single change of reducing from 5 experts (1/1/3) to 3 experts (1/1/1) produc
 
 ## Appendix B: Model Architecture Summary
 
+**Current default (post-Experiment 9): 1/1/1 symmetric**
+
 ```
 LacunaModel
 ├── Encoder (Transformer)
@@ -660,19 +662,21 @@ LacunaModel
 │   ├── 4 transformer layers (128-dim, 4 heads)
 │   ├── Row pooling (attention) → per-row vectors
 │   └── Dataset pooling (attention) → evidence vector [64-dim]
-├── Reconstruction Heads (5 heads)
-│   ├── MCAR, MAR, self_censoring, threshold, latent
+├── Reconstruction Heads (3 heads)
+│   ├── MCAR, MAR, self_censoring
 │   └── Each: evidence → hidden → predicted values
 ├── Missingness Feature Extractor
 │   └── 16 statistical features from missingness patterns
 ├── Mixture of Experts
-│   ├── Gating Network: [evidence, recon_errors, miss_features] → 5 logits
-│   ├── Temperature-scaled softmax → 5 expert probs
-│   ├── Mean class aggregation: 5 experts → 3 classes
-│   └── expert_to_class = [MCAR, MAR, MNAR, MNAR, MNAR]
+│   ├── Gating Network: [evidence, recon_errors, miss_features] → 3 logits
+│   ├── Temperature-scaled softmax → 3 expert probs
+│   ├── 1:1 class mapping (no aggregation needed)
+│   └── expert_to_class = [MCAR, MAR, MNAR]
 └── Bayes Decision Rule
     └── Asymmetric loss matrix → Green/Yellow/Red action
 ```
+
+*Previous default (Experiments 1-5): 1/1/3 asymmetric with `expert_to_class = [MCAR, MAR, MNAR, MNAR, MNAR]` and 5 reconstruction heads. Retired after Experiment 9 showed the asymmetry caused MAR underdetection.*
 
 ## Appendix C: Evaluation Metrics Glossary
 

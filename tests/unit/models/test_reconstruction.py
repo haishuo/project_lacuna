@@ -53,8 +53,8 @@ class TestReconstructionConfig:
         assert config.head_hidden_dim == 64
         assert config.n_head_layers == 2
         assert config.dropout == 0.1
-        assert config.mnar_variants == ["self_censoring", "threshold", "latent"]
-    
+        assert config.mnar_variants == ["self_censoring"]
+
     def test_custom_values(self):
         """Test custom configuration values."""
         config = ReconstructionConfig(
@@ -72,10 +72,10 @@ class TestReconstructionConfig:
         assert config.mnar_variants == ["self_censoring", "threshold"]
     
     def test_mnar_variants_default_initialization(self):
-        """Test that mnar_variants defaults to full list if None."""
+        """Test that mnar_variants defaults to single variant if None."""
         config = ReconstructionConfig(mnar_variants=None)
-        
-        assert config.mnar_variants == ["self_censoring", "threshold", "latent"]
+
+        assert config.mnar_variants == ["self_censoring"]
 
 
 # =============================================================================

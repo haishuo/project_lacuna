@@ -130,7 +130,7 @@ def append_journal_entry(journal_path: Path, report: dict, exp_dir: Path,
     )
 
     # Add architecture note if non-default expert structure
-    if mnar_variants and mnar_variants != ["self_censoring", "threshold", "latent"]:
+    if mnar_variants and mnar_variants != ["self_censoring"]:
         n_experts = 2 + len(mnar_variants)
         expert_map = [0, 1] + [2] * len(mnar_variants)
         arch_note = (
@@ -184,7 +184,7 @@ def main():
         config.seed = args.seed
 
     # Resolve MNAR variants
-    mnar_variants = args.mnar_variants  # None means use default (3 variants)
+    mnar_variants = args.mnar_variants  # None means use default (1/1/1)
 
     # Setup experiment
     exp_dir = setup_experiment(config, args.name)
@@ -194,7 +194,7 @@ def main():
 
     # Also save experiment metadata for reproducibility
     exp_meta = {
-        "mnar_variants": mnar_variants or ["self_censoring", "threshold", "latent"],
+        "mnar_variants": mnar_variants or ["self_censoring"],
         "prior": "uniform",
         "loss": "cross_entropy",
         "label_smoothing": 0.0,
@@ -221,7 +221,7 @@ def main():
     val_dataset_names = config.data.val_datasets or ["iris"]
 
     # Expert structure info
-    n_experts = 2 + len(mnar_variants or ["self_censoring", "threshold", "latent"])
+    n_experts = 2 + len(mnar_variants or ["self_censoring"])
     expert_desc = f"{n_experts} experts"
     if mnar_variants:
         expert_desc += f" (mnar={mnar_variants})"
@@ -369,7 +369,7 @@ def main():
             "data_mode": "semisynthetic",
             "train_datasets": [ds.name for ds in train_raw],
             "val_datasets": [ds.name for ds in val_raw],
-            "mnar_variants": mnar_variants or ["self_censoring", "threshold", "latent"],
+            "mnar_variants": mnar_variants or ["self_censoring"],
         },
     )
     save_checkpoint(final_ckpt, exp_dir / "checkpoints" / "final.pt")
@@ -394,7 +394,7 @@ def main():
         report["report_eval_time_seconds"] = round(report_time, 2)
         report["train_datasets"] = [ds.name for ds in train_raw]
         report["val_datasets"] = [ds.name for ds in val_raw]
-        report["mnar_variants"] = mnar_variants or ["self_censoring", "threshold", "latent"]
+        report["mnar_variants"] = mnar_variants or ["self_censoring"]
         report["n_experts"] = n_experts
         report["experiment_dir"] = str(exp_dir)
 
@@ -431,7 +431,7 @@ def main():
                     journal_path=journal_path,
                     report=report,
                     exp_dir=exp_dir,
-                    mnar_variants=mnar_variants or ["self_censoring", "threshold", "latent"],
+                    mnar_variants=mnar_variants or ["self_censoring"],
                     exp_name=args.name,
                 )
                 print(f"Journal: {saved_path}")

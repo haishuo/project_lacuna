@@ -45,7 +45,7 @@ class ReconstructionConfig:
     
     def __post_init__(self):
         if self.mnar_variants is None:
-            self.mnar_variants = ["self_censoring", "threshold", "latent"]
+            self.mnar_variants = ["self_censoring"]
 
 
 # =============================================================================
