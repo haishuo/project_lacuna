@@ -372,25 +372,74 @@ python scripts/train_semisynthetic.py \
 
 ---
 
+## Experiment 9 — 1/1/1 Expert Ablation (Architecture Diagnostic)
+
+**Date:** 2026-02-14
+**Commit:** *(pending)*
+
+### Motivation
+The current MoE has 5 experts mapped as `[MCAR, MAR, MNAR, MNAR, MNAR]` — 3 MNAR experts vs 1 each for MCAR and MAR. Even with "mean" aggregation (which corrects the prior), this creates:
+- **Capacity asymmetry:** MNAR gets 3x the gating parameters
+- **Gradient asymmetry:** MNAR receives gradient through 3 logits vs 1 for MAR
+- **Representational asymmetry:** 3 reconstruction heads for MNAR vs 1 for MAR
+
+This ablation removes all of that by collapsing to 1 expert per class. It answers: *is the multi-expert MNAR structure helping or creating an MNAR attractor that steals borderline MAR cases?*
+
+### Hypothesis
+If MAR recall improves with 1/1/1: the 1/1/3 asymmetry is biasing toward MNAR in the decision geometry. If MAR recall stays the same: the confusion comes from data/identifiability, not architecture.
+
+### Changes
+- `--mnar-variants self_censoring` → 3 experts total (1/1/1)
+- `expert_to_class = [0, 1, 2]`, `experts_per_class = [1, 1, 1]`
+- No aggregation needed (already 1:1 mapping)
+
+### Configuration
+Same as Experiment 8 except:
+- `mnar_variants=["self_censoring"]` (was `["self_censoring", "threshold", "latent"]`)
+
+### Controlled Variables
+- Same prior (class_balanced), same loss (cross-entropy), same data, same hyperparameters
+- Only change: expert structure
+
+### Evaluation Workflow
+```bash
+# 1/1/1 ablation
+python scripts/train_semisynthetic.py \
+  --config configs/training/semisynthetic_full.yaml \
+  --generators lacuna_tabular_110 --device cuda --quiet --report \
+  --mnar-variants self_censoring
+```
+
+### Results
+**⏳ PENDING — awaiting training run on Forge**
+
+### Next Decision
+- If MAR recall improves significantly: redesign expert allocation (consider 2/2/2 symmetric)
+- If MAR recall unchanged: problem is in data/identifiability, pursue training-side fixes
+- Compare parameter counts: 1/1/1 should be notably smaller — if it matches or beats 1/1/3, the extra experts are dead weight
+
+---
+
 ## Planned Experiments
 
-### Experiment 9 — Post-Hoc Temperature Scaling
-**Trigger:** After Experiment 8 establishes best pre-calibration baseline
+### Experiment 10 — Post-Hoc Temperature Scaling
+**Trigger:** After Experiments 8-9 establish best pre-calibration baseline
 **Change:** Apply `scripts/calibrate.py` to best checkpoint
 **Target:** ECE < 0.05 without accuracy loss
 
-### Experiment 10 — Per-Class Loss Weights (Conditional)
-**Trigger:** MAR recall < 65% after Experiments 8-9
+### Experiment 11 — Per-Class Loss Weights (Conditional)
+**Trigger:** MAR recall < 65% after Experiments 8-10
 **Change:** Add `class_weights=[1.0, 1.5, 1.0]` to cross-entropy — upweight MAR 50%
 **Target:** MAR recall > 65%, overall accuracy > 77%
 
-### Experiment 11 — Dataset Expansion
+### Experiment 12 — Dataset Expansion
 **Change:** Increase `max_cols` from 48 to 64, add more datasets from OpenML
 **Hypothesis:** More diverse training data improves generalization
 
-### Experiment 12 — Architecture Exploration
+### Experiment 13 — Architecture Exploration
 **Trigger:** Rebalancing fails to solve MAR/MNAR confusion
 **Options:**
+- 2/2/2 symmetric experts (define MCAR and MAR subtypes)
 - Explicit cross-column dependency module
 - Deeper gating network
 - Learnable class aggregation (instead of mean)

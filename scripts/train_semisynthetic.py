@@ -9,6 +9,7 @@ Usage:
     python scripts/train_semisynthetic.py --config configs/training/semisynthetic.yaml --quiet
     python scripts/train_semisynthetic.py --config configs/training/semisynthetic.yaml --quiet --report
     python scripts/train_semisynthetic.py --config configs/training/semisynthetic.yaml --name my_experiment
+    python scripts/train_semisynthetic.py --config configs/training/semisynthetic.yaml --mnar-variants self_censoring
 """
 
 import argparse
@@ -58,7 +59,15 @@ def parse_args():
                              "Warnings and early stopping are always printed.")
     parser.add_argument("--report", action="store_true",
                         help="Generate detailed evaluation report after training "
-                             "(eval_report.json + predictions.pt)")
+                             "(eval_report.json + predictions.pt + journal entry)")
+    parser.add_argument("--mnar-variants", type=str, nargs="+", default=None,
+                        help="Override MNAR expert variants "
+                             "(default: self_censoring threshold latent). "
+                             "Use a single value for 1/1/1 ablation, e.g.: "
+                             "--mnar-variants self_censoring")
+    parser.add_argument("--journal", type=str, default=None,
+                        help="Path to experiment journal (default: experiments/JOURNAL.md). "
+                             "Set to 'none' to disable auto-journaling.")
     return parser.parse_args()
 
 
@@ -100,6 +109,67 @@ def load_raw_datasets(catalog, dataset_names: list, max_cols: int, quiet: bool =
     return datasets
 
 
+def append_journal_entry(journal_path: Path, report: dict, exp_dir: Path,
+                         mnar_variants: list, exp_name: str = None):
+    """Append a formatted journal entry to JOURNAL.md from eval report data."""
+    # Import the journal entry generator
+    from journal_entry import generate_entry
+
+    # Check for calibration data
+    calibration = None
+    cal_path = exp_dir / "checkpoints" / "calibrated.json"
+    if cal_path.exists():
+        with open(cal_path) as f:
+            calibration = json.load(f)
+
+    # Generate the markdown entry
+    entry = generate_entry(
+        report=report,
+        calibration=calibration,
+        name=exp_name,
+    )
+
+    # Add architecture note if non-default expert structure
+    if mnar_variants and mnar_variants != ["self_censoring", "threshold", "latent"]:
+        n_experts = 2 + len(mnar_variants)
+        expert_map = [0, 1] + [2] * len(mnar_variants)
+        arch_note = (
+            f"\n**Architecture:** {n_experts} experts "
+            f"(expert_to_class = {expert_map}, "
+            f"mnar_variants = {mnar_variants})\n"
+        )
+        # Insert after the date line
+        entry = entry.replace("\n### Results", f"{arch_note}\n### Results", 1)
+
+    # Append to journal
+    separator = "\n---\n\n"
+
+    if journal_path.exists():
+        content = journal_path.read_text()
+        # Find the "Planned Experiments" section and insert before it
+        marker = "## Planned Experiments"
+        if marker in content:
+            idx = content.index(marker)
+            new_content = (
+                content[:idx].rstrip() + "\n\n" + separator +
+                entry + "\n" + separator +
+                content[idx:]
+            )
+            journal_path.write_text(new_content)
+        else:
+            # Just append at the end
+            with open(journal_path, "a") as f:
+                f.write(separator + entry + "\n")
+    else:
+        # Create new journal with this entry
+        journal_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(journal_path, "w") as f:
+            f.write("# Lacuna Experiment Journal\n\n")
+            f.write(entry + "\n")
+
+    return journal_path
+
+
 def main():
     args = parse_args()
     quiet = args.quiet
@@ -113,11 +183,27 @@ def main():
     if args.seed:
         config.seed = args.seed
 
+    # Resolve MNAR variants
+    mnar_variants = args.mnar_variants  # None means use default (3 variants)
+
     # Setup experiment
     exp_dir = setup_experiment(config, args.name)
 
     # Save config
     save_config(config, exp_dir / "config.yaml")
+
+    # Also save experiment metadata for reproducibility
+    exp_meta = {
+        "mnar_variants": mnar_variants or ["self_censoring", "threshold", "latent"],
+        "prior": "class_balanced",
+        "loss": "cross_entropy",
+        "label_smoothing": 0.0,
+        "config_path": args.config,
+        "generators": args.generators or config.generator.config_path or config.generator.config_name,
+        "timestamp": datetime.now().isoformat(),
+    }
+    with open(exp_dir / "experiment_meta.json", "w") as f:
+        json.dump(exp_meta, f, indent=2)
 
     # Set seed
     torch.manual_seed(config.seed)
@@ -134,9 +220,15 @@ def main():
     train_dataset_names = config.data.train_datasets or ["diabetes", "wine", "breast_cancer"]
     val_dataset_names = config.data.val_datasets or ["iris"]
 
+    # Expert structure info
+    n_experts = 2 + len(mnar_variants or ["self_censoring", "threshold", "latent"])
+    expert_desc = f"{n_experts} experts"
+    if mnar_variants:
+        expert_desc += f" (mnar={mnar_variants})"
+
     if quiet:
         # Single-line setup summary
-        print(f"LACUNA Semi-Synthetic | {registry.K} generators | "
+        print(f"LACUNA Semi-Synthetic | {registry.K} generators | {expert_desc} | "
               f"hidden={config.model.hidden_dim} layers={config.model.n_layers} | "
               f"{config.device}")
     else:
@@ -149,6 +241,7 @@ def main():
         print(f"  Device: {config.device}")
         print(f"  Seed: {config.seed}")
         print(f"  Model: hidden={config.model.hidden_dim}, layers={config.model.n_layers}, heads={config.model.n_heads}")
+        print(f"  Experts: {expert_desc}")
         print(f"  Training: epochs={config.training.epochs}, lr={config.training.lr}, batch={config.training.batch_size}")
         print(f"  Data: max_rows={config.data.max_rows}, max_cols={config.data.max_cols}")
         print(f"\nSetting seed: {config.seed}")
@@ -206,7 +299,7 @@ def main():
         print(f"  Train: {len(train_loader)} batches/epoch")
         print(f"  Val: {len(val_loader)} batches")
 
-    # Create model
+    # Create model (with optional mnar_variants override)
     model = create_lacuna_model(
         hidden_dim=config.model.hidden_dim,
         evidence_dim=config.model.evidence_dim,
@@ -214,6 +307,7 @@ def main():
         n_heads=config.model.n_heads,
         max_cols=config.data.max_cols,
         dropout=config.model.dropout,
+        mnar_variants=mnar_variants,
     )
 
     if not quiet:
@@ -275,6 +369,7 @@ def main():
             "data_mode": "semisynthetic",
             "train_datasets": [ds.name for ds in train_raw],
             "val_datasets": [ds.name for ds in val_raw],
+            "mnar_variants": mnar_variants or ["self_censoring", "threshold", "latent"],
         },
     )
     save_checkpoint(final_ckpt, exp_dir / "checkpoints" / "final.pt")
@@ -299,6 +394,9 @@ def main():
         report["report_eval_time_seconds"] = round(report_time, 2)
         report["train_datasets"] = [ds.name for ds in train_raw]
         report["val_datasets"] = [ds.name for ds in val_raw]
+        report["mnar_variants"] = mnar_variants or ["self_censoring", "threshold", "latent"]
+        report["n_experts"] = n_experts
+        report["experiment_dir"] = str(exp_dir)
 
         # Save JSON report
         json_path = exp_dir / "eval_report.json"
@@ -318,6 +416,27 @@ def main():
         print_eval_summary(report)
         print(f"\nReport: {json_path}")
         print(f"Predictions: {pt_path}")
+
+        # Auto-append journal entry
+        journal_opt = args.journal
+        if journal_opt != "none":
+            if journal_opt:
+                journal_path = Path(journal_opt)
+            else:
+                # Default: experiments/JOURNAL.md relative to project root
+                journal_path = PROJECT_ROOT / "experiments" / "JOURNAL.md"
+
+            try:
+                saved_path = append_journal_entry(
+                    journal_path=journal_path,
+                    report=report,
+                    exp_dir=exp_dir,
+                    mnar_variants=mnar_variants or ["self_censoring", "threshold", "latent"],
+                    exp_name=args.name,
+                )
+                print(f"Journal: {saved_path}")
+            except Exception as e:
+                print(f"Warning: Could not append journal entry: {e}")
     else:
         if not quiet:
             print("\nDone! (use --report to generate detailed evaluation)")

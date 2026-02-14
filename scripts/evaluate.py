@@ -83,6 +83,10 @@ def parse_args():
         "--seed", type=int, default=None,
         help="Override random seed",
     )
+    parser.add_argument(
+        "--mnar-variants", type=str, nargs="+", default=None,
+        help="Override MNAR expert variants (must match checkpoint architecture)",
+    )
     return parser.parse_args()
 
 
@@ -170,7 +174,8 @@ def main():
         seed=seed + 9999999,  # Different seed from training
     )
 
-    # Create model
+    # Create model (with optional mnar_variants override)
+    mnar_variants = args.mnar_variants
     model = create_lacuna_model(
         hidden_dim=config.model.hidden_dim,
         evidence_dim=config.model.evidence_dim,
@@ -178,6 +183,7 @@ def main():
         n_heads=config.model.n_heads,
         max_cols=config.data.max_cols,
         dropout=config.model.dropout,
+        mnar_variants=mnar_variants,
     )
 
     # Load checkpoint weights
