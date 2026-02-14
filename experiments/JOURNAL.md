@@ -363,12 +363,115 @@ python scripts/train_semisynthetic.py \
 ```
 
 ### Results
-**⏳ PENDING — awaiting training run on Forge**
+
+**Run:** `lacuna_semisyn_20260214_024148` on Forge (5070Ti, CUDA 12.x)
+**Training time:** 729.2s (12.2 min), best val_loss=0.6791 at epoch 6, early stop at epoch 17
+
+| Metric | Exp 5 (baseline) | Exp 7 (Brier+balanced) | Exp 8 (this) | Δ vs Exp 5 |
+|--------|-----------------|----------------------|-------------|-----------|
+| **Overall accuracy** | 77.0% | 54.8% | **62.6%** | **−14.4%** |
+| **MCAR recall** | 93.4% | 65.1% | 89.0% | −4.4% |
+| **MCAR precision** | 70.3% | — | 49.1% | −21.2% |
+| **MAR recall** | 52.6% | 30.7% | **34.8%** | **−17.8%** |
+| **MAR precision** | 94.3% | 97.2% | 85.7% | −8.6% |
+| **MNAR recall** | 85.3% | 83.1% | 74.6% | −10.7% |
+| **MNAR precision** | 72.3% | — | 81.2% | +8.9% |
+| **ECE** | 0.1338 | 0.2867 | **0.2329** | **+0.095** |
+| **Confidence (correct)** | 0.865 | — | 0.782 | −0.083 |
+| **Confidence (incorrect)** | 0.818 | 0.789 | 0.720 | −0.098 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 258 | 2 | 30 |
+| **True MAR** | 119 | 98 | 64 |
+| **True MNAR** | 148 | 14 | 438 |
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 49.1% | 89.0% | 63.3% | 290 |
+| MAR | 86.0% | 34.9% | 49.6% | 281 |
+| MNAR | 82.3% | 73.0% | 77.4% | 600 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+| MCAR | 0.705 | 0.045 | 0.250 |
+| MAR | 0.295 | 0.361 | 0.344 |
+| MNAR | 0.247 | 0.060 | 0.692 |
+
+**Selective accuracy:** 90% accuracy at τ=0.90 (coverage=24.7%), 95% accuracy at τ=0.95 (coverage=14.7%)
+
+**Calibration:** ECE = 0.2329
+
+### Key Finding: Bimodal MAR Detection (Per-Generator Analysis)
+
+The per-generator accuracy breakdown reveals that the "MAR recall problem" is not a uniform failure — it's a **bimodal split** between easily-detected and essentially-undetectable generators:
+
+**Well-detected MAR generators:**
+
+| Generator | Accuracy | Samples | Note |
+|-----------|----------|---------|------|
+| MAR-ColBlocks | 100% | 37 | Block-structured column-level missingness |
+| MAR-CrossClass | 100% | 31 | Cross-class dependency patterns |
+| MAR-SkipLogic | 89.7% | 29 | Skip-pattern conditional missingness |
+| MAR-MonoPredictor | 57.1% | 14 | Single-column predictor |
+
+**Near-zero MAR generators:**
+
+| Generator | Accuracy | Samples | Note |
+|-----------|----------|---------|------|
+| MAR-Weak | 0% | 7 | Weak signal — near-MCAR |
+| MAR-Interactive | 0% | 30 | Interaction-based — may overlap with MNAR |
+| MAR-Section | 0% | 33 | Section-level patterns |
+| MAR-Moderate | 12.5% | 16 | Moderate signal strength |
+| MAR-MixedPred | 15.7% | 51 | Multi-predictor — largest MAR group, mostly misclassified |
+
+**MNAR also has outliers:**
+
+| Generator | Accuracy | Samples | Note |
+|-----------|----------|---------|------|
+| MNAR-LatentCorr | 0% | 19 | Latent correlation — may look like MAR |
+| MNAR-AdaptSamp | 26.3% | 19 | Adaptive sampling — ambiguous pattern |
+| MNAR-Feedback | 63.2% | 19 | Feedback mechanism |
+
+**MCAR is bimodal too:**
+
+| Generator | Accuracy | Samples | Note |
+|-----------|----------|---------|------|
+| MCAR-Complete | 100% | 57 | Complete random — strong pattern |
+| MCAR-IndepCol | 100% | 24 | Independent columns |
+| MCAR-Burst | 44.4% | 9 | Burst patterns — looks structured |
+| MCAR-Uniform | 75.5% | 53 | Uniform random |
+| MCAR-Seasonal | 88.2% | 17 | Seasonal pattern — still detectable |
+
+### Interpretation
+
+**Class-balanced prior alone makes things worse.** All three metrics regressed from the Experiment 5 baseline. Overall accuracy dropped 14.4 points, and MAR recall actually got *worse* (52.6% → 34.8%), the opposite of what was intended.
+
+**The real problem is not the prior — it's generator identifiability.** The per-generator data shows that some MAR generators produce patterns that are genuinely indistinguishable from MNAR (or MCAR) given only missingness patterns:
+
+1. **MAR-Weak** and **MAR-Moderate**: Weak MAR signals look like MCAR (random noise). The model can't detect what isn't there.
+2. **MAR-Interactive** and **MAR-Section**: These produce structured missingness patterns that overlap with MNAR mechanisms.
+3. **MAR-MixedPred** (51 samples, 15.7% accuracy): The largest MAR subgroup, and it's almost entirely misclassified. Multi-predictor MAR may produce patterns that look like MNAR self-censoring.
+4. **MNAR-LatentCorr** (0% accuracy): A latent-variable MNAR mechanism that produces patterns resembling MAR. This confirms the boundary is genuinely blurry for certain mechanisms.
+
+**Class-balanced prior backfires because it forces 1/3 MAR**: Under uniform sampling, borderline MAR generators were a smaller fraction of training, so the model could learn to classify the detectable ones. With balanced prior, the undetectable MAR generators get equal weight, drowning the learning signal.
+
+**The overconfidence got worse** (ECE 0.13 → 0.23). The model is now less accurate AND more confused about its confidence.
+
+**New pattern: MCAR is stealing MAR samples.** 119 true MAR samples were classified as MCAR (vs only 3 in Exp 5). The balanced prior may have strengthened the MCAR attractor at the expense of MAR.
 
 ### Next Decision
-- If accuracy ≥ Exp 5 and MAR recall improves: class-balanced prior is beneficial, keep it
-- If accuracy regresses: revert prior, investigate MAR/MNAR confusion from architecture angle
-- Either way: attempt post-hoc temperature scaling on the best model
+
+1. **The class-balanced prior should be reverted to uniform** for the baseline. It demonstrably hurts.
+2. **Run Experiment 9 (1/1/1 ablation)** with uniform prior to test if architecture asymmetry is a factor — but the per-generator data suggests this is primarily a data/identifiability issue.
+3. **Consider generator pruning or reclassification:** MAR-Weak and MAR-Moderate may be producing genuinely MCAR-like patterns. MAR-MixedPred needs investigation — is its pattern actually distinguishable from MNAR?
+4. **Post-hoc temperature scaling** (Experiment 10) may still help with calibration even if classification accuracy is capped by generator overlap.
 
 ---
 
