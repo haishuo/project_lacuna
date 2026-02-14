@@ -132,11 +132,15 @@ Experiments 1-4 were infrastructure (architecture, tests, generators, data pipel
 - `lacuna/generators/` — 110 missingness generators (MCAR/MAR/MNAR)
 
 ### Key Scripts
+- `scripts/infer.py` — **User-facing inference**: give it a CSV with NaN, get mechanism classification + recommended action
 - `scripts/train_semisynthetic.py` — Training with semi-synthetic data
 - `scripts/evaluate.py` — Full evaluation with reporting
 - `scripts/calibrate.py` — Post-hoc temperature scaling
 - `scripts/consolidate_results.py` — Gather all results into one JSON
 - `scripts/generate_dissertation_figures.py` — Generate figures and LaTeX tables
+
+### Sample Output
+- `docs/sample_output.txt` — Three example inference outputs (MAR, MCAR, MNAR) showing what a user would see
 
 ### Experiment Log
 - `experiments/JOURNAL.md` — Complete experiment journal with methodology, results, and interpretation
@@ -144,6 +148,31 @@ Experiments 1-4 were infrastructure (architecture, tests, generators, data pipel
 ### Configs
 - `configs/training/semisynthetic_full.yaml` — Production training config
 - `configs/generators/lacuna_tabular_110.yaml` — Full generator registry (110 generators)
+
+---
+
+## End-User Interface
+
+A researcher with tabular data containing missing values uses Lacuna via:
+
+```bash
+python scripts/infer.py --input my_data.csv --checkpoint calibrated.pt
+```
+
+**Input:** Any CSV with numeric columns and NaN values representing missingness.
+
+**Output:** A report containing:
+1. **Classification probabilities:** P(MCAR), P(MAR), P(MNAR)
+2. **Confidence level:** Based on the maximum probability
+3. **Recommended action:** One of three actions from Bayes-optimal decision rule:
+   - **GREEN (MCAR):** Complete-case analysis or simple imputation
+   - **YELLOW (MAR):** Multiple imputation (MICE, Amelia) or likelihood methods (EM, FIML)
+   - **RED (MNAR):** Sensitivity analysis, selection models (Heckman), pattern-mixture models
+4. **Bayes risk analysis:** Expected risk for each action given the posterior probabilities
+
+See `docs/sample_output.txt` for three example outputs showing MAR, MCAR, and MNAR classifications.
+
+The Bayes decision rule uses an asymmetric loss matrix that encodes the practical cost of each misclassification. For example, treating MNAR data as MCAR (risk = 1.0) is worse than treating MCAR data as MAR (risk = 0.2), because the former produces biased results while the latter is merely conservative.
 
 ---
 
