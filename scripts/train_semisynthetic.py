@@ -234,8 +234,6 @@ def main():
         checkpoint_dir=str(exp_dir / "checkpoints"),
         save_best_only=True,
         quiet=quiet,
-        mechanism_loss_type="brier",
-        label_smoothing=0.1,
     )
 
     logger = create_logger(exp_dir)

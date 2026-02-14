@@ -269,15 +269,90 @@ Same as Experiment 5 except:
 - Same generator set (lacuna_tabular_110)
 
 ### Results
-**⏳ PENDING — awaiting training run on Forge**
+
+**Run:** `lacuna_semisyn_20260214_012227` on Forge (5070Ti, CUDA 12.x)
+**Training time:** 730.9s (12.2 min), best val_loss=0.0845 at epoch 4
+
+| Metric | Exp 5 (baseline) | Exp 7 (this) | Δ |
+|--------|-----------------|-------------|---|
+| **Overall accuracy** | 77.0% | **54.8%** | **−22.2%** |
+| **MCAR recall** | 93.4% | 65.1% | −28.3% |
+| **MAR recall** | 52.6% | **30.7%** | **−21.9%** |
+| **MNAR recall** | 85.3% | 83.1% | −2.2% |
+| **MAR precision** | 94.3% | 97.2% | +2.9% |
+| **ECE** | 0.1338 | **0.2867** | **+0.153** |
+| **Confidence (incorrect)** | 0.818 | 0.789 | −0.029 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 177 | 0 | 95 |
+| **True MAR** | 0 | 104 | 235 |
+| **True MNAR** | 29 | 3 | 157 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+| MCAR | 0.643 | 0.012 | 0.345 |
+| MAR | 0.019 | 0.406 | 0.575 |
+| MNAR | 0.158 | 0.107 | 0.735 |
+
+**Selective accuracy:** 90% accuracy only reached at τ=0.95 (coverage=16.5%)
+
+**Note on generator counts:** Forge reports `{0: 32, 1: 36, 2: 42}` — MNAR has 42 generators at runtime (not 38 as in local registry), likely due to dimension-dependent filtering creating different effective sets.
+
+### Interpretation
+
+**This experiment failed.** All three targets missed badly. Every metric regressed except MAR precision (trivially — fewer MAR predictions made, so the few that survive are more confident).
+
+**Root cause analysis — too many variables changed at once:**
+1. **Brier score loss is likely the culprit.** Cross-entropy has infinitely sharp gradient as p→0, which drives the model hard toward correct answers. Brier's quadratic penalty is gentler — with 110 generators and limited training data, the weaker gradient may not push the model hard enough to learn the MAR/MNAR boundary.
+2. **Label smoothing compounded the problem.** Smoothing softens targets (1.0→0.9, 0.0→0.033), and Brier already penalizes less than CE. Together they made the loss landscape too flat for the model to find sharp class boundaries.
+3. **Class-balanced prior may actually help**, but its effect is masked by the Brier score regression. Need to isolate this variable.
+4. **ECE doubled (0.13→0.29)** despite Brier being a "proper scoring rule" — the model is *less* calibrated, not more, because it never learned to classify well in the first place.
+
+**Key lesson:** Change one variable at a time. Always have a control.
+
+### Next Decision
+Revert to cross-entropy loss with no label smoothing. Keep class-balanced prior as the single intervention. This isolates the prior effect from the loss function change.
+
+---
+
+## Experiment 8 — Class-Balanced Prior Only (Isolating Variables)
+
+**Date:** 2026-02-14
+**Commit:** *(pending)*
+
+### Motivation
+Experiment 7 changed three things at once (loss function, label smoothing, class prior) and everything got worse. We need to isolate: does class-balanced prior help when everything else stays constant?
+
+### Hypothesis
+Class-balanced prior alone (1/3 per class instead of ~38% MNAR under uniform) will reduce MAR→MNAR misclassification without harming overall accuracy.
+
+### Changes
+- Keep `GeneratorPrior.class_balanced(registry)` (from Exp 7)
+- Revert to cross-entropy loss (from Exp 5)
+- Remove label smoothing (back to 0.0)
+- No temperature scaling applied
+
+### Configuration
+Same as Experiment 5 except:
+- Prior: `GeneratorPrior.class_balanced(registry)` (was `.uniform()`)
+
+### Controlled Variables
+- Loss: cross-entropy (same as Exp 5)
+- Label smoothing: 0.0 (same as Exp 5)
+- Same model architecture, same datasets, same hyperparameters
+- Same generator set (lacuna_tabular_110)
 
 ### Targets
-| Metric | Experiment 5 | Target |
-|--------|-------------|--------|
-| MAR recall | 52.6% | >65% |
-| ECE | 0.1338 | <0.05 |
-| Mean confidence (incorrect) | 0.818 | <0.75 |
-| Overall accuracy | 77.0% | >77% (no regression) |
+| Metric | Exp 5 (CE, uniform) | Exp 7 (Brier, balanced) | Target |
+|--------|--------------------|-----------------------|--------|
+| Overall accuracy | 77.0% | 54.8% | >77% |
+| MAR recall | 52.6% | 30.7% | >55% |
+| ECE | 0.1338 | 0.2867 | <0.15 |
 
 ### Evaluation Workflow
 ```bash
@@ -285,39 +360,35 @@ Same as Experiment 5 except:
 python scripts/train_semisynthetic.py \
   --config configs/training/semisynthetic_full.yaml \
   --generators lacuna_tabular_110 --device cuda --quiet --report
-
-# Calibrate
-python scripts/calibrate.py \
-  --checkpoint /path/to/best_model.pt \
-  --config configs/training/semisynthetic_full.yaml \
-  --generators lacuna_tabular_110 --device cuda
-
-# Evaluate calibrated
-python scripts/evaluate.py \
-  --checkpoint /path/to/calibrated.pt \
-  --config configs/training/semisynthetic_full.yaml \
-  --generators lacuna_tabular_110 --device cuda
 ```
 
+### Results
+**⏳ PENDING — awaiting training run on Forge**
+
 ### Next Decision
-- If MAR recall < 70% after this: Implement per-class loss weights `[1.0, 1.5, 1.0]` (upweight MAR 50%)
-- If ECE < 0.05 after temperature scaling: Calibration problem solved
-- If both pass: Move to dataset expansion and architecture experiments
+- If accuracy ≥ Exp 5 and MAR recall improves: class-balanced prior is beneficial, keep it
+- If accuracy regresses: revert prior, investigate MAR/MNAR confusion from architecture angle
+- Either way: attempt post-hoc temperature scaling on the best model
 
 ---
 
 ## Planned Experiments
 
-### Experiment 8 — Per-Class Loss Weights (Conditional)
-**Trigger:** MAR recall < 70% after Experiment 7
-**Change:** Add `class_weights=[1.0, 1.5, 1.0]` to Brier score loss — upweight MAR samples 50%
-**Target:** MAR recall > 70%, overall accuracy > 77%
+### Experiment 9 — Post-Hoc Temperature Scaling
+**Trigger:** After Experiment 8 establishes best pre-calibration baseline
+**Change:** Apply `scripts/calibrate.py` to best checkpoint
+**Target:** ECE < 0.05 without accuracy loss
 
-### Experiment 9 — Dataset Expansion
+### Experiment 10 — Per-Class Loss Weights (Conditional)
+**Trigger:** MAR recall < 65% after Experiments 8-9
+**Change:** Add `class_weights=[1.0, 1.5, 1.0]` to cross-entropy — upweight MAR 50%
+**Target:** MAR recall > 65%, overall accuracy > 77%
+
+### Experiment 11 — Dataset Expansion
 **Change:** Increase `max_cols` from 48 to 64, add more datasets from OpenML
 **Hypothesis:** More diverse training data improves generalization
 
-### Experiment 10 — Architecture Exploration
+### Experiment 12 — Architecture Exploration
 **Trigger:** Rebalancing fails to solve MAR/MNAR confusion
 **Options:**
 - Explicit cross-column dependency module
@@ -329,16 +400,23 @@ python scripts/evaluate.py \
 
 ## Appendix A: Generator Distribution
 
+**Local (from YAML config):**
+
 | Class | Count | % (uniform) | % (balanced) |
 |-------|-------|-------------|-------------|
 | MCAR | 34 | 30.9% | 33.3% |
 | MAR | 36 | 32.7% | 33.3% |
 | MNAR | 38 | 34.5% | 33.3% |
-| **Self-Censoring** | 14 | 12.7% | — |
-| **Threshold** | 12 | 10.9% | — |
-| **Latent** | 12 | 10.9% | — |
 
-*Note: MNAR count is 38 in the tabular_110 config. The exact distribution may differ if some generators are filtered by dimension incompatibility at runtime.*
+**Forge runtime (after dimension filtering):**
+
+| Class | Count | % (uniform) | % (balanced) |
+|-------|-------|-------------|-------------|
+| MCAR | 32 | 29.1% | 33.3% |
+| MAR | 36 | 32.7% | 33.3% |
+| MNAR | 42 | 38.2% | 33.3% |
+
+*Note: The Forge runtime shows 110 total generators but different per-class counts ({0: 32, 1: 36, 2: 42}) than the local YAML (34/36/38). This may be due to dimension-dependent generator filtering or config differences. The effective MNAR bias under uniform sampling is 38.2%, making class-balanced prior even more important.*
 
 ## Appendix B: Model Architecture Summary
 
