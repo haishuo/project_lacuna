@@ -35,6 +35,7 @@ from pathlib import Path
 import time
 import json
 import math
+import numpy as np
 
 from lacuna.core.types import TokenBatch, LacunaOutput
 from lacuna.core.exceptions import NumericalError, CheckpointError
@@ -107,6 +108,10 @@ class TrainerConfig:
     save_every_epoch: bool = False      # Save checkpoint every epoch
     keep_last_n: int = 3                # Keep last N checkpoints (0 = keep all)
     
+    # === Output Control ===
+    quiet: bool = False                 # Suppress step-level logging (epoch summaries only)
+                                        # Warnings and early stopping notices are NEVER suppressed
+
     # === Reproducibility ===
     seed: Optional[int] = None          # Random seed
     deterministic: bool = False         # Use deterministic algorithms
@@ -186,6 +191,23 @@ class TrainerState:
             "epoch_acc": self.epoch_correct / n,
             "epoch_time": time.time() - self.epoch_start_time,
         }
+
+
+@dataclass
+class DetailedValResult:
+    """Rich validation results for evaluation and reporting.
+
+    All tensor fields are on CPU to avoid GPU memory accumulation.
+    This is evaluation-only and does NOT affect the training loop.
+    """
+    metrics: Dict[str, float]           # Same as validate() returns
+    confusion_matrix: np.ndarray        # [3, 3] - rows=true, cols=pred
+    all_p_class: torch.Tensor           # [N_total, 3] - all probability predictions (CPU)
+    all_true_class: torch.Tensor        # [N_total] - all ground truth labels (CPU)
+    all_generator_ids: torch.Tensor     # [N_total] - generator that produced each sample (CPU)
+    per_generator_acc: Dict[int, float] # generator_id -> accuracy
+    per_generator_count: Dict[int, int] # generator_id -> sample count
+    n_samples: int
 
 
 # =============================================================================
@@ -520,8 +542,139 @@ class Trainer:
                 metrics[f"val_{k}"] = v / n
         
         return metrics
-    
-# In lacuna/training/trainer.py, replace the _check_early_stopping method with this:
+
+    @torch.no_grad()
+    def validate_detailed(self, val_loader: DataLoader) -> DetailedValResult:
+        """
+        Run detailed validation for evaluation/reporting.
+
+        Unlike validate(), this collects full probability predictions,
+        confusion matrix, and per-generator accuracy. All tensors are
+        moved to CPU immediately to avoid GPU memory accumulation.
+
+        This method is evaluation-only and does NOT affect training state.
+
+        Args:
+            val_loader: DataLoader for validation/test data.
+
+        Returns:
+            DetailedValResult with comprehensive metrics.
+        """
+        self.model.eval()
+
+        total_loss = 0.0
+        total_samples = 0
+        total_correct = 0
+
+        # Per-class tracking
+        class_correct = {0: 0, 1: 0, 2: 0}
+        class_total = {0: 0, 1: 0, 2: 0}
+
+        # Loss component tracking
+        loss_sums = {}
+
+        # Collect all predictions on CPU
+        all_p_class_list = []
+        all_true_class_list = []
+        all_generator_ids_list = []
+
+        for batch in val_loader:
+            batch = self._to_device(batch)
+
+            # Forward pass
+            if self.config.use_amp:
+                with autocast():
+                    output = self.model(batch)
+                    loss, loss_dict = self.loss_fn(output, batch)
+            else:
+                output = self.model(batch)
+                loss, loss_dict = self.loss_fn(output, batch)
+
+            B = batch.batch_size
+            total_loss += loss.item() * B
+            total_samples += B
+
+            # Track loss components
+            for k, v in loss_dict.items():
+                val = v.item() if torch.is_tensor(v) else v
+                loss_sums[k] = loss_sums.get(k, 0.0) + val * B
+
+            # Collect predictions — move to CPU immediately
+            p_class = output.posterior.p_class.detach().cpu()  # [B, 3]
+            all_p_class_list.append(p_class)
+
+            if batch.class_ids is not None:
+                true_class = batch.class_ids.detach().cpu()  # [B]
+                all_true_class_list.append(true_class)
+
+                preds = p_class.argmax(dim=-1)
+                total_correct += (preds == true_class).sum().item()
+
+                # Per-class accuracy
+                for class_idx in range(3):
+                    mask = true_class == class_idx
+                    if mask.sum() > 0:
+                        class_total[class_idx] += mask.sum().item()
+                        class_correct[class_idx] += (preds[mask] == class_idx).sum().item()
+
+            if batch.generator_ids is not None:
+                gen_ids = batch.generator_ids.detach().cpu()  # [B]
+                all_generator_ids_list.append(gen_ids)
+
+        # Concatenate all collected tensors
+        all_p_class = torch.cat(all_p_class_list, dim=0)  # [N_total, 3]
+        all_true_class = torch.cat(all_true_class_list, dim=0) if all_true_class_list else torch.zeros(total_samples, dtype=torch.long)
+        all_generator_ids = torch.cat(all_generator_ids_list, dim=0) if all_generator_ids_list else torch.zeros(total_samples, dtype=torch.long)
+
+        all_preds = all_p_class.argmax(dim=-1)  # [N_total]
+
+        # Compute confusion matrix [3, 3] — rows=true, cols=pred
+        confusion = np.zeros((3, 3), dtype=np.int64)
+        for true_idx in range(3):
+            for pred_idx in range(3):
+                confusion[true_idx, pred_idx] = (
+                    (all_true_class == true_idx) & (all_preds == pred_idx)
+                ).sum().item()
+
+        # Per-generator accuracy
+        per_generator_acc = {}
+        per_generator_count = {}
+        unique_gens = all_generator_ids.unique().tolist()
+        for gen_id in unique_gens:
+            gen_mask = all_generator_ids == gen_id
+            gen_count = gen_mask.sum().item()
+            gen_correct = (all_preds[gen_mask] == all_true_class[gen_mask]).sum().item()
+            per_generator_count[gen_id] = gen_count
+            per_generator_acc[gen_id] = gen_correct / gen_count if gen_count > 0 else 0.0
+
+        # Compute summary metrics (same format as validate())
+        n = max(total_samples, 1)
+        metrics = {
+            "val_loss": total_loss / n,
+            "val_acc": total_correct / n,
+        }
+
+        class_names = ["mcar", "mar", "mnar"]
+        for class_idx, class_name in enumerate(class_names):
+            if class_total[class_idx] > 0:
+                metrics[f"val_{class_name}_acc"] = class_correct[class_idx] / class_total[class_idx]
+            else:
+                metrics[f"val_{class_name}_acc"] = 0.0
+
+        for k, v in loss_sums.items():
+            if k != "total_loss":
+                metrics[f"val_{k}"] = v / n
+
+        return DetailedValResult(
+            metrics=metrics,
+            confusion_matrix=confusion,
+            all_p_class=all_p_class,
+            all_true_class=all_true_class,
+            all_generator_ids=all_generator_ids,
+            per_generator_acc=per_generator_acc,
+            per_generator_count=per_generator_count,
+            n_samples=total_samples,
+        )
 
     def _check_early_stopping(
         self,
@@ -664,37 +817,40 @@ class Trainer:
         # Initialize learning rate
         self.state.current_lr = self.scheduler.get_lr(self.state.step)
         
-        print(f"Starting training:")
-        print(f"  Mode: {self.config.training_mode}")
-        print(f"  Epochs: {self.config.epochs}")
-        print(f"  Steps/epoch: {steps_per_epoch}")
-        print(f"  Total steps: {total_steps}")
-        print(f"  Device: {self.device}")
-        print(f"  Mixed precision: {self.config.use_amp}")
-        
+        quiet = self.config.quiet
+
+        if not quiet:
+            print(f"Starting training:")
+            print(f"  Mode: {self.config.training_mode}")
+            print(f"  Epochs: {self.config.epochs}")
+            print(f"  Steps/epoch: {steps_per_epoch}")
+            print(f"  Total steps: {total_steps}")
+            print(f"  Device: {self.device}")
+            print(f"  Mixed precision: {self.config.use_amp}")
+
         # Training loop
         start_epoch = self.state.epoch
         for epoch in range(start_epoch, self.config.epochs):
             self.state.epoch = epoch
             self.state.reset_epoch_metrics()
-            
+
             # Epoch training loop
             for batch_idx, batch in enumerate(train_loader):
                 # Training step
                 step_metrics = self.train_step(batch)
-                
-                # Periodic logging
+
+                # Periodic logging (always log to callback, only print if not quiet)
                 if self.state.step % self.config.log_every == 0:
                     step_metrics["epoch"] = epoch
                     step_metrics["step"] = self.state.step
                     self._log(step_metrics)
-                    
-                    # Print progress
-                    loss_str = f"loss={step_metrics['total_loss']:.4f}"
-                    acc_str = f"acc={step_metrics['acc']:.3f}"
-                    lr_str = f"lr={step_metrics['lr']:.2e}"
-                    print(f"  Step {self.state.step}: {loss_str}, {acc_str}, {lr_str}")
-                
+
+                    if not quiet:
+                        loss_str = f"loss={step_metrics['total_loss']:.4f}"
+                        acc_str = f"acc={step_metrics['acc']:.3f}"
+                        lr_str = f"lr={step_metrics['lr']:.2e}"
+                        print(f"  Step {self.state.step}: {loss_str}, {acc_str}, {lr_str}")
+
                 # Periodic validation
                 if (
                     val_loader is not None
@@ -704,53 +860,72 @@ class Trainer:
                     val_metrics = self.validate(val_loader)
                     val_metrics["step"] = self.state.step
                     self._log(val_metrics)
-                    
-                    print(f"  Validation: loss={val_metrics['val_loss']:.4f}, acc={val_metrics['val_acc']:.3f}")
-                    
+
+                    if not quiet:
+                        print(f"  Validation: loss={val_metrics['val_loss']:.4f}, acc={val_metrics['val_acc']:.3f}")
+
                     # Check for improvement and save checkpoint
                     is_best = self._is_best(val_metrics)
                     if is_best:
                         self._save_checkpoint(val_metrics, is_best=True)
-                    
-                    # Early stopping check
+
+                    # Early stopping check — ALWAYS printed
                     if self._check_early_stopping(val_metrics):
                         print(f"Early stopping at step {self.state.step}")
                         self.state.should_stop = True
                         break
-            
-            # End of epoch
+
+            # End of epoch — always build metrics, print in appropriate format
             epoch_metrics = self.state.get_epoch_metrics()
-            print(f"Epoch {epoch} complete: loss={epoch_metrics['epoch_loss']:.4f}, "
-                  f"acc={epoch_metrics['epoch_acc']:.3f}, time={epoch_metrics['epoch_time']:.1f}s")
-            
+
             # End-of-epoch validation
+            val_metrics_epoch = None
+            is_best = False
             if val_loader is not None and self.config.eval_every_epoch:
-                val_metrics = self.validate(val_loader)
-                val_metrics["epoch"] = epoch
-                self._log(val_metrics)
-                
-                print(f"  Epoch validation: loss={val_metrics['val_loss']:.4f}, acc={val_metrics['val_acc']:.3f}")
-                
+                val_metrics_epoch = self.validate(val_loader)
+                val_metrics_epoch["epoch"] = epoch
+                self._log(val_metrics_epoch)
+
                 # Check for improvement
-                is_best = self._is_best(val_metrics)
+                is_best = self._is_best(val_metrics_epoch)
                 if is_best:
-                    self._save_checkpoint(val_metrics, is_best=True)
-                    print(f"  New best model! (val_acc={val_metrics['val_acc']:.4f})")
-                
-                # Early stopping
-                if self._check_early_stopping(val_metrics):
+                    self._save_checkpoint(val_metrics_epoch, is_best=True)
+
+                # Early stopping — ALWAYS printed
+                if self._check_early_stopping(val_metrics_epoch):
                     print(f"Early stopping at epoch {epoch}")
                     self.state.should_stop = True
-            
+
+            # Print epoch summary
+            if quiet:
+                # Compact single-line format
+                parts = [f"Epoch {epoch+1:3d}/{self.config.epochs}"]
+                parts.append(f"train_acc={epoch_metrics['epoch_acc']:.3f}")
+                if val_metrics_epoch is not None:
+                    parts.append(f"val_acc={val_metrics_epoch['val_acc']:.3f}")
+                    parts.append(f"val_loss={val_metrics_epoch['val_loss']:.4f}")
+                parts.append(f"{epoch_metrics['epoch_time']:.1f}s")
+                line = " | ".join(parts)
+                if val_metrics_epoch is not None and is_best:
+                    line += "  \u2605 best"
+                print(line)
+            else:
+                print(f"Epoch {epoch} complete: loss={epoch_metrics['epoch_loss']:.4f}, "
+                      f"acc={epoch_metrics['epoch_acc']:.3f}, time={epoch_metrics['epoch_time']:.1f}s")
+                if val_metrics_epoch is not None:
+                    print(f"  Epoch validation: loss={val_metrics_epoch['val_loss']:.4f}, acc={val_metrics_epoch['val_acc']:.3f}")
+                    if is_best:
+                        print(f"  New best model! (val_acc={val_metrics_epoch['val_acc']:.4f})")
+
             # Periodic checkpoint
             if self.config.save_every_epoch:
-                self._save_checkpoint(val_metrics if val_loader else {}, force=True)
-            
+                self._save_checkpoint(val_metrics_epoch if val_loader else {}, force=True)
+
             # Check if should stop
             if self.state.should_stop:
                 break
-        
-        # Final summary
+
+        # Final summary — ALWAYS printed
         print(f"\nTraining complete!")
         print(f"  Best val_loss: {self.state.best_val_loss:.4f} (epoch {self.state.best_epoch})")
         print(f"  Best val_acc: {self.state.best_val_acc:.4f}")
