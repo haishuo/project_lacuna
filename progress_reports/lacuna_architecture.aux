@@ -1,0 +1,103 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{devlin2019bert}
+\citation{devlin2019bert}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction and Relationship to BERT}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Input Representation}{2}{section.2}\protected@file@percent }
+\newlabel{sec:input}{{2}{2}{Input Representation}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Token Structure}{2}{subsection.2.1}\protected@file@percent }
+\newlabel{eq:token}{{1}{2}{Token Structure}{equation.1}{}}
+\@writefile{toc}{\contentsline {paragraph}{Comparison to BERT.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Token Embedding Layer}{2}{section.3}\protected@file@percent }
+\newlabel{sec:embedding}{{3}{2}{Token Embedding Layer}{section.3}{}}
+\newlabel{eq:val_emb}{{2}{2}{Token Embedding Layer}{equation.2}{}}
+\newlabel{eq:obs_emb}{{3}{2}{Token Embedding Layer}{equation.3}{}}
+\newlabel{eq:mask_emb}{{4}{2}{Token Embedding Layer}{equation.4}{}}
+\newlabel{eq:pos_emb}{{5}{2}{Token Embedding Layer}{equation.5}{}}
+\newlabel{eq:token_embed}{{6}{2}{Token Embedding Layer}{equation.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{Comparison to BERT.}{3}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Transformer Encoder}{3}{section.4}\protected@file@percent }
+\newlabel{sec:encoder}{{4}{3}{Transformer Encoder}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Architecture Overview}{3}{subsection.4.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Encoder hyperparameters for the three model variants.}}{3}{table.caption.3}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{tab:encoder_config}{{1}{3}{Encoder hyperparameters for the three model variants}{table.caption.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Row-Wise Multi-Head Self-Attention}{3}{subsection.4.2}\protected@file@percent }
+\newlabel{eq:prenorm_attn}{{7}{3}{Row-Wise Multi-Head Self-Attention}{equation.7}{}}
+\newlabel{eq:qkv}{{8}{3}{Row-Wise Multi-Head Self-Attention}{equation.8}{}}
+\newlabel{eq:attention}{{10}{4}{Row-Wise Multi-Head Self-Attention}{equation.10}{}}
+\newlabel{eq:mha_output}{{11}{4}{Row-Wise Multi-Head Self-Attention}{equation.11}{}}
+\newlabel{eq:attn_residual}{{12}{4}{Row-Wise Multi-Head Self-Attention}{equation.12}{}}
+\@writefile{toc}{\contentsline {paragraph}{Why row-wise, not full-dataset attention?}{4}{section*.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Position-Wise Feedforward Network}{4}{subsection.4.3}\protected@file@percent }
+\newlabel{eq:prenorm_ff}{{13}{4}{Position-Wise Feedforward Network}{equation.13}{}}
+\newlabel{eq:ffn}{{14}{4}{Position-Wise Feedforward Network}{equation.14}{}}
+\newlabel{eq:ff_residual}{{15}{4}{Position-Wise Feedforward Network}{equation.15}{}}
+\@writefile{toc}{\contentsline {paragraph}{Comparison to BERT.}{4}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Hierarchical Attention Pooling}{4}{section.5}\protected@file@percent }
+\newlabel{sec:pooling}{{5}{4}{Hierarchical Attention Pooling}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Stage 1: Row Pooling (Features $\to $ Rows)}{5}{subsection.5.1}\protected@file@percent }
+\newlabel{eq:row_pool_weights}{{16}{5}{Stage 1: Row Pooling (Features $\to $ Rows)}{equation.16}{}}
+\newlabel{eq:row_pool}{{17}{5}{Stage 1: Row Pooling (Features $\to $ Rows)}{equation.17}{}}
+\newlabel{eq:attn_scorer}{{18}{5}{Stage 1: Row Pooling (Features $\to $ Rows)}{equation.18}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Stage 2: Dataset Pooling (Rows $\to $ Dataset)}{5}{subsection.5.2}\protected@file@percent }
+\newlabel{eq:dataset_pool_weights}{{19}{5}{Stage 2: Dataset Pooling (Rows $\to $ Dataset)}{equation.19}{}}
+\newlabel{eq:evidence}{{20}{5}{Stage 2: Dataset Pooling (Rows $\to $ Dataset)}{equation.20}{}}
+\@writefile{toc}{\contentsline {paragraph}{Why not a [CLS] token?}{5}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Reconstruction Heads}{5}{section.6}\protected@file@percent }
+\newlabel{sec:reconstruction}{{6}{5}{Reconstruction Heads}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}MCAR Head}{6}{subsection.6.1}\protected@file@percent }
+\newlabel{eq:mcar_head}{{21}{6}{MCAR Head}{equation.21}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}MAR Head (Cross-Attention to Raw Observed Values)}{6}{subsection.6.2}\protected@file@percent }
+\newlabel{eq:mar_q}{{22}{6}{MAR Head (Cross-Attention to Raw Observed Values)}{equation.22}{}}
+\newlabel{eq:mar_k}{{23}{6}{MAR Head (Cross-Attention to Raw Observed Values)}{equation.23}{}}
+\newlabel{eq:mar_v}{{24}{6}{MAR Head (Cross-Attention to Raw Observed Values)}{equation.24}{}}
+\newlabel{eq:mar_attn}{{25}{6}{MAR Head (Cross-Attention to Raw Observed Values)}{equation.25}{}}
+\newlabel{eq:mar_pred}{{26}{6}{MAR Head (Cross-Attention to Raw Observed Values)}{equation.26}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}MNAR Self-Censoring Head}{6}{subsection.6.3}\protected@file@percent }
+\newlabel{eq:mnar_base}{{27}{6}{MNAR Self-Censoring Head}{equation.27}{}}
+\newlabel{eq:mnar_censor}{{28}{6}{MNAR Self-Censoring Head}{equation.28}{}}
+\newlabel{eq:mnar_pred}{{29}{6}{MNAR Self-Censoring Head}{equation.29}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Discrimination Signal}{7}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Missingness Feature Extractor}{7}{section.7}\protected@file@percent }
+\newlabel{sec:missingness_features}{{7}{7}{Missingness Feature Extractor}{section.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Missingness pattern features (16 total, non-learnable).}}{7}{table.caption.7}\protected@file@percent }
+\newlabel{tab:miss_features}{{2}{7}{Missingness pattern features (16 total, non-learnable)}{table.caption.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Mixture of Experts and Classification}{7}{section.8}\protected@file@percent }
+\newlabel{sec:moe}{{8}{7}{Mixture of Experts and Classification}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Gating Network}{7}{subsection.8.1}\protected@file@percent }
+\newlabel{eq:gate_input}{{30}{7}{Gating Network}{equation.30}{}}
+\newlabel{eq:gate_hidden}{{31}{8}{Gating Network}{equation.31}{}}
+\newlabel{eq:gate_logits}{{32}{8}{Gating Network}{equation.32}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Temperature-Scaled Softmax}{8}{subsection.8.2}\protected@file@percent }
+\newlabel{eq:temp_softmax}{{33}{8}{Temperature-Scaled Softmax}{equation.33}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Expert-to-Class Mapping}{8}{subsection.8.3}\protected@file@percent }
+\newlabel{eq:class_posterior}{{34}{8}{Expert-to-Class Mapping}{equation.34}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.4}Bayes-Optimal Decision Rule}{8}{subsection.8.4}\protected@file@percent }
+\newlabel{eq:bayes_decision}{{35}{8}{Bayes-Optimal Decision Rule}{equation.35}{}}
+\newlabel{eq:loss_matrix}{{36}{8}{Bayes-Optimal Decision Rule}{equation.36}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Training}{8}{section.9}\protected@file@percent }
+\newlabel{sec:training}{{9}{8}{Training}{section.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}Multi-Task Loss}{8}{subsection.9.1}\protected@file@percent }
+\newlabel{eq:total_loss}{{37}{8}{Multi-Task Loss}{equation.37}{}}
+\bibcite{devlin2019bert}{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}Training Configuration}{9}{subsection.9.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Production training configuration.}}{9}{table.caption.8}\protected@file@percent }
+\newlabel{tab:training}{{3}{9}{Production training configuration}{table.caption.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {10}Complete Forward Pass}{9}{section.10}\protected@file@percent }
+\newlabel{sec:forward}{{10}{9}{Complete Forward Pass}{section.10}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {11}Summary of Architectural Dimensions}{9}{section.11}\protected@file@percent }
+\newlabel{sec:dimensions}{{11}{9}{Summary of Architectural Dimensions}{section.11}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {12}Figures}{9}{section.12}\protected@file@percent }
+\newlabel{sec:figures}{{12}{9}{Figures}{section.12}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Complete \textsc  {Lacuna}{}-Base architecture diagram showing the five-stage pipeline: (1)~token embedding, (2)~transformer encoder with row-wise attention, (3)~hierarchical pooling, (4)~reconstruction heads and missingness feature extraction, and (5)~MoE gating with Bayes-optimal decision. Tensor shapes are annotated at each stage. The base model uses hidden dimension $h = 128$, evidence dimension $p = 64$, $L = 4$ transformer layers, and $H = 4$ attention heads.}}{10}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:architecture}{{1}{10}{Complete \lacuna {}-Base architecture diagram showing the five-stage pipeline: (1)~token embedding, (2)~transformer encoder with row-wise attention, (3)~hierarchical pooling, (4)~reconstruction heads and missingness feature extraction, and (5)~MoE gating with Bayes-optimal decision. Tensor shapes are annotated at each stage. The base model uses hidden dimension $h = 128$, evidence dimension $p = 64$, $L = 4$ transformer layers, and $H = 4$ attention heads}{figure.caption.10}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Side-by-side architectural comparison of BERT-Base and \textsc  {Lacuna}{}-Base. Shared design elements (blue shading) include bidirectional self-attention, pre-norm transformer layers, and residual connections. Key adaptations for the tabular domain (purple shading) include 4D cell tokens, row-wise attention scope, hierarchical attention pooling, and mechanism-specific reconstruction heads. \textsc  {Lacuna}{} is approximately 122$\times $ smaller than BERT-Base (901K vs.\ 110M parameters) while sharing the same fundamental transformer architecture.}}{11}{figure.caption.11}\protected@file@percent }
+\newlabel{fig:comparison}{{2}{11}{Side-by-side architectural comparison of BERT-Base and \lacuna {}-Base. Shared design elements (blue shading) include bidirectional self-attention, pre-norm transformer layers, and residual connections. Key adaptations for the tabular domain (purple shading) include 4D cell tokens, row-wise attention scope, hierarchical attention pooling, and mechanism-specific reconstruction heads. \lacuna {} is approximately 122$\times $ smaller than BERT-Base (901K vs.\ 110M parameters) while sharing the same fundamental transformer architecture}{figure.caption.11}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces \textsc  {Lacuna}{} Forward Pass (Base Configuration)}}{12}{algorithm.1}\protected@file@percent }
+\newlabel{alg:forward}{{1}{12}{\lacuna {} Forward Pass (Base Configuration)}{algorithm.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Tensor shapes through the \textsc  {Lacuna}{}-Base forward pass.}}{12}{table.caption.9}\protected@file@percent }
+\newlabel{tab:dimensions}{{4}{12}{Tensor shapes through the \lacuna {}-Base forward pass}{table.caption.9}{}}
+\gdef \@abspage@last{12}
