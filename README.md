@@ -385,6 +385,27 @@ The gating network includes a learned `log_temperature` parameter. During post-h
 
 **Why symmetric 1/1/1 experts?** See the [Design Decisions](#key-design-decisions-and-rationale) section for the critical story of how asymmetric experts (1/1/3) caused 16+ percentage points of MAR underdetection.
 
+**Load Balancing:**
+Without intervention, a MoE gating network can collapse: one expert wins all the routing weight and the others degenerate to unused parameters. Two complementary mechanisms prevent this.
+
+*Switch Transformer loss* (used during training, `lacuna/training/loss.py`): For each batch, compute the fraction of samples hard-routed to each expert (`f_i`) and the average soft probability assigned to each expert (`p_i`). The loss is their dot product scaled by the number of experts:
+
+```
+load_balance_loss = n_experts × Σᵢ (fᵢ × pᵢ)
+```
+
+`fᵢ` counts hard assignments (argmax); `pᵢ` is the mean softmax probability. When routing is uniform, both are `1/n_experts` and the loss equals 1. Imbalanced routing raises the product, penalizing it. This formulation comes directly from the [Switch Transformer paper (Fedus et al., 2021)](https://arxiv.org/abs/2101.03961).
+
+*KL divergence loss* (used in the MoE layer itself, `lacuna/models/moe.py`): Computes the KL divergence of the mean gating probability distribution from a uniform target:
+
+```
+avg_probs = gate_probs.mean(dim=0)       # mean probability per expert across batch
+target    = uniform distribution (1/n_experts each)
+loss      = KL(avg_probs ‖ target)
+```
+
+Both losses are weighted by `load_balance_weight` (default `0.01`) and added to the total training loss. With only 3 experts, expert collapse is less catastrophic than in large-scale MoE models, but the regularization still meaningfully stabilizes training.
+
 ---
 
 ### Bayes-Optimal Decision Rule

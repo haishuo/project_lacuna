@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #f5f3ef; }
+  svg { display: block; margin: 0 auto; }
+  .box-gray-fill { fill: #e8e6e0; stroke: #888; stroke-width: 0.8; }
+  .box-coral-fill { fill: #f5c4b3; stroke: #c0603a; stroke-width: 0.8; }
+  .box-purple-fill { fill: #d0ccf0; stroke: #6055b0; stroke-width: 0.8; }
+  .box-teal-fill { fill: #a0dfc8; stroke: #1a8060; stroke-width: 0.8; }
+  .box-inner-teal { fill: #c2edd8; stroke: #1a8060; stroke-width: 0.6; }
+  .box-inner-purple { fill: #e0dcf8; stroke: #6055b0; stroke-width: 0.6; }
+  .box-inner-gray { fill: #f0ede8; stroke: #888; stroke-width: 0.6; }
+  .label-title { font-size: 13px; font-weight: bold; fill: #222; }
+  .label-sub { font-size: 11px; fill: #444; }
+  .label-side { font-size: 10px; fill: #777; }
+  .arr { stroke: #555; stroke-width: 1.2; fill: none; }
+  .arr-dashed { stroke: #888; stroke-width: 1; fill: none; stroke-dasharray: 5 3; }
+  .backprop { stroke: #999; stroke-width: 1; fill: none; stroke-dasharray: 5 3; }
+</style>
+</head>
+<body>
+<svg width="700" viewBox="0 0 700 2060" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M1 1L9 5L1 9" fill="none" stroke="#555" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+  <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M1 1L9 5L1 9" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round"/>
+  </marker>
+</defs>
+
+<!-- ── INPUT ── -->
+<rect x="225" y="20" width="250" height="72" rx="8" class="box-gray-fill"/>
+<text class="label-title" x="350" y="42" text-anchor="middle">Input data: tabular</text>
+<text class="label-sub" x="350" y="59" text-anchor="middle">X ∈ ℝⁿˣᵈ,  n observations × d features</text>
+<text class="label-sub" x="350" y="76" text-anchor="middle">padded to n_max=256, d_max=32</text>
+<text class="label-side" x="638" y="60" text-anchor="end">input</text>
+
+<!-- arrow -->
+<line x1="350" y1="92" x2="350" y2="114" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── TOKENIZATION ── -->
+<rect x="185" y="114" width="330" height="76" rx="8" class="box-coral-fill"/>
+<text class="label-title" x="350" y="136" text-anchor="middle">Cell-level tokens</text>
+<text class="label-sub" x="350" y="154" text-anchor="middle">T_{i,j} = (value, is_observed, mask_type, feature_id)</text>
+<text class="label-sub" x="350" y="172" text-anchor="middle">T ∈ ℝⁿˣᵈˣ⁴  (4D token tensor)</text>
+<text class="label-side" x="638" y="155" text-anchor="end">tokenize</text>
+
+<line x1="350" y1="190" x2="350" y2="212" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── TOKEN EMBEDDING ── -->
+<rect x="145" y="212" width="410" height="136" rx="8" class="box-purple-fill"/>
+<text class="label-title" x="350" y="234" text-anchor="middle">Token embedding layer</text>
+<text class="label-sub" x="350" y="252" text-anchor="middle">4 components → concat → project + LayerNorm</text>
+<!-- 4 inner boxes -->
+<rect x="158" y="263" width="84" height="50" rx="4" class="box-inner-purple"/>
+<text class="label-sub" x="200" y="282" text-anchor="middle">value proj</text>
+<text class="label-sub" x="200" y="298" text-anchor="middle">linear → h/4</text>
+<rect x="252" y="263" width="84" height="50" rx="4" class="box-inner-purple"/>
+<text class="label-sub" x="294" y="282" text-anchor="middle">obs embed</text>
+<text class="label-sub" x="294" y="298" text-anchor="middle">lookup → h/4</text>
+<rect x="346" y="263" width="84" height="50" rx="4" class="box-inner-purple"/>
+<text class="label-sub" x="388" y="282" text-anchor="middle">mask embed</text>
+<text class="label-sub" x="388" y="298" text-anchor="middle">lookup → h/4</text>
+<rect x="440" y="263" width="100" height="50" rx="4" class="box-inner-purple"/>
+<text class="label-sub" x="490" y="282" text-anchor="middle">pos embed</text>
+<text class="label-sub" x="490" y="298" text-anchor="middle">lookup → h/4</text>
+<text class="label-sub" x="350" y="336" text-anchor="middle">→ concat + proj + LayerNorm: e ∈ ℝⁿˣᵈˣ¹²⁸   (h=128 = 4×32)</text>
+<text class="label-side" x="638" y="280" text-anchor="end">embed</text>
+
+<line x1="350" y1="348" x2="350" y2="370" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── TRANSFORMER ENCODER ── -->
+<rect x="125" y="370" width="450" height="238" rx="8" class="box-teal-fill"/>
+<text class="label-title" x="350" y="392" text-anchor="middle">Transformer encoder (×4 layers, row-wise)</text>
+<text class="label-sub" x="350" y="410" text-anchor="middle">each row processed independently as a feature sequence</text>
+<!-- attention sublayer -->
+<rect x="140" y="420" width="420" height="104" rx="6" class="box-inner-teal"/>
+<text class="label-title" x="350" y="440" text-anchor="middle">Multi-head self-attention  (4 heads)</text>
+<text class="label-sub" x="350" y="458" text-anchor="middle">Q_i = eW_Q^i ∈ ℝⁿˣᵈˣ³²,  K_i = eW_K^i ∈ ℝⁿˣᵈˣ³²,  V_i = eW_V^i ∈ ℝⁿˣᵈˣ³²</text>
+<text class="label-sub" x="350" y="476" text-anchor="middle">W_{Q,K,V}^i ∈ ℝ¹²⁸ˣ³²,   d_i = 128/4 = 32</text>
+<text class="label-sub" x="350" y="494" text-anchor="middle">concat heads → r ∈ ℝⁿˣᵈˣ¹²⁸</text>
+<text class="label-sub" x="350" y="512" text-anchor="middle">+ residual + LayerNorm  (pre-norm architecture)</text>
+<!-- ffn sublayer -->
+<rect x="140" y="532" width="420" height="50" rx="6" class="box-inner-teal"/>
+<text class="label-title" x="350" y="552" text-anchor="middle">Feedforward sublayer (per-position)</text>
+<text class="label-sub" x="350" y="570" text-anchor="middle">Linear(128→512) → GELU → Linear(512→128) + residual + LayerNorm</text>
+<text class="label-side" x="638" y="490" text-anchor="end">encode</text>
+
+<line x1="350" y1="608" x2="350" y2="630" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── TWO-STAGE POOLING ── -->
+<rect x="125" y="630" width="450" height="108" rx="8" class="box-teal-fill"/>
+<text class="label-title" x="350" y="652" text-anchor="middle">Two-stage attention pooling</text>
+<!-- stage 1 -->
+<rect x="140" y="662" width="200" height="62" rx="6" class="box-inner-teal"/>
+<text class="label-title" x="240" y="682" text-anchor="middle">Stage 1: row pooling</text>
+<text class="label-sub" x="240" y="700" text-anchor="middle">features → row repr ∈ ℝⁿˣ¹²⁸</text>
+<text class="label-sub" x="240" y="716" text-anchor="middle">(learned attn over cols)</text>
+<!-- arrow between stages -->
+<line x1="340" y1="693" x2="358" y2="693" class="arr" marker-end="url(#arr)"/>
+<!-- stage 2 -->
+<rect x="358" y="662" width="200" height="62" rx="6" class="box-inner-teal"/>
+<text class="label-title" x="458" y="682" text-anchor="middle">Stage 2: dataset pooling</text>
+<text class="label-sub" x="458" y="700" text-anchor="middle">rows → evidence e ∈ ℝ¹ˣ⁶⁴</text>
+<text class="label-sub" x="458" y="716" text-anchor="middle">(learned attn over rows)</text>
+<text class="label-side" x="638" y="690" text-anchor="end">pool</text>
+
+<!-- fork -->
+<line x1="350" y1="738" x2="350" y2="762" class="arr" marker-end="url(#arr)"/>
+
+<!-- branch left: recon heads -->
+<line x1="230" y1="750" x2="148" y2="750" class="arr-dashed"/>
+<line x1="148" y1="750" x2="148" y2="810" class="arr-dashed" marker-end="url(#arr2)"/>
+<rect x="52" y="810" width="192" height="66" rx="8" class="box-inner-gray"/>
+<text class="label-title" x="148" y="832" text-anchor="middle">Reconstruction heads</text>
+<text class="label-sub" x="148" y="850" text-anchor="middle">3 heads (MCAR, MAR, MNAR)</text>
+<text class="label-sub" x="148" y="866" text-anchor="middle">predict masked values</text>
+<!-- recon errors arrow into combine -->
+<line x1="244" y1="843" x2="298" y2="878" class="arr-dashed" marker-end="url(#arr2)"/>
+<text class="label-sub" x="242" y="872" text-anchor="middle">errors ∈ ℝ¹ˣ³</text>
+
+<!-- branch right: missingness features -->
+<line x1="470" y1="750" x2="552" y2="750" class="arr-dashed"/>
+<line x1="552" y1="750" x2="552" y2="810" class="arr-dashed" marker-end="url(#arr2)"/>
+<rect x="456" y="810" width="192" height="66" rx="8" class="box-inner-gray"/>
+<text class="label-title" x="552" y="832" text-anchor="middle">Missingness features</text>
+<text class="label-sub" x="552" y="850" text-anchor="middle">16 stats: missing rates,</text>
+<text class="label-sub" x="552" y="866" text-anchor="middle">point-biserial corr, Little's test…</text>
+<text class="label-sub" x="552" y="896" text-anchor="middle">f ∈ ℝ¹ˣ¹⁶</text>
+<!-- features arrow into combine -->
+<line x1="456" y1="850" x2="402" y2="878" class="arr-dashed" marker-end="url(#arr2)"/>
+
+<!-- ── COMBINE ── -->
+<rect x="185" y="762" width="330" height="66" rx="8" class="box-coral-fill"/>
+<text class="label-title" x="350" y="784" text-anchor="middle">Combine all evidence signals</text>
+<text class="label-sub" x="350" y="802" text-anchor="middle">z = [ e ∈ ℝ⁶⁴  ‖  recon_errors ∈ ℝ³  ‖  f ∈ ℝ¹⁶ ]</text>
+<text class="label-sub" x="350" y="820" text-anchor="middle">z ∈ ℝ¹ˣ⁸³  (gating network input)</text>
+
+<line x1="350" y1="828" x2="350" y2="916" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── MoE GATING ── -->
+<rect x="145" y="916" width="410" height="146" rx="8" class="box-purple-fill"/>
+<text class="label-title" x="350" y="938" text-anchor="middle">MoE gating network (FNN) — symmetric 1/1/1</text>
+<text class="label-sub" x="350" y="956" text-anchor="middle">83 → LayerNorm → GELU → 64 → LayerNorm → GELU → 3 experts</text>
+<!-- 3 equal expert boxes -->
+<rect x="162" y="968" width="106" height="60" rx="4" class="box-inner-purple"/>
+<text class="label-title" x="215" y="990" text-anchor="middle">MCAR expert</text>
+<text class="label-sub" x="215" y="1007" text-anchor="middle">1 logit</text>
+<text class="label-sub" x="215" y="1022" text-anchor="middle">→ p_MCAR</text>
+<rect x="297" y="968" width="106" height="60" rx="4" class="box-inner-purple"/>
+<text class="label-title" x="350" y="990" text-anchor="middle">MAR expert</text>
+<text class="label-sub" x="350" y="1007" text-anchor="middle">1 logit</text>
+<text class="label-sub" x="350" y="1022" text-anchor="middle">→ p_MAR</text>
+<rect x="432" y="968" width="106" height="60" rx="4" class="box-inner-purple"/>
+<text class="label-title" x="485" y="990" text-anchor="middle">MNAR expert</text>
+<text class="label-sub" x="485" y="1007" text-anchor="middle">1 logit (self_censoring)</text>
+<text class="label-sub" x="485" y="1022" text-anchor="middle">→ p_MNAR</text>
+<text class="label-sub" x="350" y="1052" text-anchor="middle">1:1:1 symmetry — equal gradient mass per class, direct mapping, no aggregation</text>
+<text class="label-side" x="638" y="984" text-anchor="end">MoE gate</text>
+
+<text class="label-sub" x="350" y="1078" text-anchor="middle">output logits  (l_MCAR, l_MAR, l_MNAR)</text>
+<line x1="350" y1="1086" x2="350" y2="1108" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── TEMPERATURE SCALING ── -->
+<rect x="215" y="1108" width="270" height="50" rx="8" class="box-inner-gray"/>
+<text class="label-title" x="350" y="1128" text-anchor="middle">Temperature scaling</text>
+<text class="label-sub" x="350" y="1146" text-anchor="middle">l_i / τ   (τ learned post-hoc,  ECE ≈ 0.042)</text>
+
+<line x1="350" y1="1158" x2="350" y2="1180" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── PROBABILITIES ── -->
+<rect x="165" y="1180" width="370" height="68" rx="8" class="box-coral-fill"/>
+<text class="label-title" x="350" y="1202" text-anchor="middle">Calibrated posteriors</text>
+<text class="label-sub" x="350" y="1220" text-anchor="middle">(p_MCAR, p_MAR, p_MNAR)</text>
+<text class="label-sub" x="350" y="1238" text-anchor="middle">p_i = P(i | X_obs, R) := softmax(l_i / τ) = e^{l_i} / Σ e^{l_j}</text>
+<text class="label-side" x="638" y="1220" text-anchor="end">output</text>
+
+<line x1="350" y1="1248" x2="350" y2="1270" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── BAYES DECISION ── -->
+<rect x="165" y="1270" width="370" height="66" rx="8" class="box-teal-fill"/>
+<text class="label-title" x="350" y="1292" text-anchor="middle">Bayes-optimal decision rule</text>
+<text class="label-sub" x="350" y="1310" text-anchor="middle">a* = argmin_a  Σ_c  L(a,c) · p_c</text>
+<text class="label-sub" x="350" y="1328" text-anchor="middle">loss matrix L encodes asymmetric MNAR costs</text>
+
+<line x1="350" y1="1336" x2="350" y2="1358" class="arr" marker-end="url(#arr)"/>
+
+<!-- ── LOSS ── -->
+<rect x="145" y="1358" width="410" height="90" rx="8" class="box-coral-fill"/>
+<text class="label-title" x="350" y="1380" text-anchor="middle">Combined loss (training)</text>
+<text class="label-sub" x="350" y="1400" text-anchor="middle">L = λ_class · L_CE  +  λ_recon · L_MSE  +  λ_balance · L_balance</text>
+<text class="label-sub" x="350" y="1418" text-anchor="middle">L_CE = cross-entropy over mechanism classes</text>
+<text class="label-sub" x="350" y="1436" text-anchor="middle">L_MSE = masked value reconstruction error</text>
+<text class="label-side" x="638" y="1400" text-anchor="end">loss</text>
+
+<!-- ── BACKPROP ── -->
+<path d="M145 1403 L88 1403 L88 610 L123 610" class="backprop" marker-end="url(#arr2)"/>
+<text class="label-side" x="76" y="1010" text-anchor="middle" transform="rotate(-90 76 1010)">backpropagation — update all weights</text>
+
+</svg>
+</body>
+</html>
