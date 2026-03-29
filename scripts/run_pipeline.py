@@ -172,6 +172,15 @@ def generate_figures(run_dir, predictions_path):
         subprocess.run(roc_cmd, cwd=str(PROJECT_ROOT))
         print(f"  ROC curves: {figures_dir}/roc_curves.pdf/png")
 
+    # --- Per-run dissertation figures (confusion matrix, calibration, etc.) ---
+    run_figs_cmd = [
+        PYTHON, str(PROJECT_ROOT / "scripts" / "generate_run_figures.py"),
+        "--run-dir", str(run_dir),
+        "--output-dir", str(figures_dir),
+    ]
+    subprocess.run(run_figs_cmd, cwd=str(PROJECT_ROOT))
+    print(f"  Run figures: {figures_dir}/confusion_matrix, per_class_metrics, ...")
+
 
 def main():
     args = parse_args()
