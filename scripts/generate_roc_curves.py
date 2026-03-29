@@ -25,14 +25,14 @@ Mode 2 — run evaluation inline then plot (requires a checkpoint + config):
 
 Options
 -------
---output-dir   Where to save the figures (default: docs/figures)
+--output-dir   Where to save the figures (default: current directory)
 --batches      Number of eval batches for inline evaluation (default: 50)
 --mnar-variants  MNAR expert variants, must match checkpoint (default: self_censoring)
 
 Outputs
 -------
-docs/figures/roc_curves.pdf   — vector, for LaTeX / dissertation
-docs/figures/roc_curves.png   — raster 300 dpi, for README / web
+roc_curves.pdf   — vector, for LaTeX / dissertation
+roc_curves.png   — raster 300 dpi, for README / web
 """
 
 import argparse
@@ -403,9 +403,9 @@ def parse_args() -> argparse.Namespace:
     # --- Output ---
     p.add_argument(
         "--output-dir", type=str,
-        default=str(PROJECT_ROOT / "docs" / "figures"),
+        default=".",
         metavar="DIR",
-        help="Directory to write roc_curves.{pdf,png} (default: docs/figures)",
+        help="Directory to write roc_curves.{pdf,png} (default: current directory)",
     )
 
     return p.parse_args()

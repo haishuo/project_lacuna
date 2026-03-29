@@ -8,9 +8,7 @@ Produces:
   - Matplotlib figures (PDF + PNG)
 
 Usage:
-    python scripts/generate_dissertation_figures.py
-    python scripts/generate_dissertation_figures.py --data docs/data/all_experiments.json
-    python scripts/generate_dissertation_figures.py --output-dir docs/figures
+    python scripts/generate_dissertation_figures.py --data all_experiments.json --output-dir figures/
 """
 
 import argparse

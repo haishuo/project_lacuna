@@ -169,6 +169,19 @@ def append_journal_entry(journal_path: Path, report: dict, exp_dir: Path,
     return journal_path
 
 
+def _load_run_registry():
+    """Load the run registry, returning (registry, md_path) or (None, None)."""
+    try:
+        from lacuna.experiments.registry import RunRegistry
+        from lacuna.experiments.registry_render import write_registry_markdown
+        reg_path = PROJECT_ROOT / "experiments" / "registry.json"
+        reg = RunRegistry(reg_path)
+        reg.load()
+        return reg, PROJECT_ROOT / "experiments" / "REGISTRY.md"
+    except Exception:
+        return None, None
+
+
 def main():
     args = parse_args()
     quiet = args.quiet
@@ -203,6 +216,26 @@ def main():
     }
     with open(exp_dir / "experiment_meta.json", "w") as f:
         json.dump(exp_meta, f, indent=2)
+
+    # Register run (registry failures must not crash training)
+    run_registry, registry_md_path = _load_run_registry()
+    run_entry_id = None
+    if run_registry is not None:
+        try:
+            from lacuna.experiments.registry_render import write_registry_markdown
+            n_exp = 2 + len(mnar_variants or ["self_censoring"])
+            entry = run_registry.register(
+                folder_path=str(exp_dir),
+                timestamp=exp_meta["timestamp"],
+                config_path=args.config,
+                status="training",
+                description=exp_dir.name,
+                mnar_variants=mnar_variants or ["self_censoring"],
+                n_experts=n_exp,
+            )
+            run_entry_id = entry.run_id
+        except Exception as e:
+            print(f"Warning: registry register failed: {e}")
 
     # Set seed
     torch.manual_seed(config.seed)
@@ -376,6 +409,15 @@ def main():
     if not quiet:
         print(f"\nCheckpoints saved to: {exp_dir / 'checkpoints'}")
 
+    # Update registry with training metrics
+    if run_registry is not None and run_entry_id is not None:
+        try:
+            run_registry.update(run_entry_id, metrics={
+                "accuracy": result["best_val_acc"],
+            })
+        except Exception as e:
+            print(f"Warning: registry update failed: {e}")
+
     # Generate detailed evaluation report (optional, via --report)
     if args.report:
         print("\nGenerating evaluation report...")
@@ -436,6 +478,19 @@ def main():
                 print(f"Journal: {saved_path}")
             except Exception as e:
                 print(f"Warning: Could not append journal entry: {e}")
+
+        # Update registry with eval metrics
+        if run_registry is not None and run_entry_id is not None:
+            try:
+                from lacuna.experiments.registry_render import write_registry_markdown
+                run_registry.update(run_entry_id, status="evaluated", metrics={
+                    "accuracy": report["summary"]["accuracy"],
+                    "mar_acc": report["summary"].get("mar_acc", 0.0),
+                    "mnar_acc": report["summary"].get("mnar_acc", 0.0),
+                })
+                write_registry_markdown(run_registry, registry_md_path)
+            except Exception as e:
+                print(f"Warning: registry eval update failed: {e}")
     else:
         if not quiet:
             print("\nDone! (use --report to generate detailed evaluation)")

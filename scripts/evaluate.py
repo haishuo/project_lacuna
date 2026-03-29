@@ -236,6 +236,27 @@ def main():
     # Print console summary
     print_eval_summary(report)
 
+    # Update run registry
+    try:
+        from lacuna.experiments.registry import RunRegistry
+        from lacuna.experiments.registry_render import write_registry_markdown
+        reg_path = PROJECT_ROOT / "experiments" / "registry.json"
+        run_registry = RunRegistry(reg_path)
+        run_registry.load()
+        folder_name = ckpt_path.parent.parent.name
+        reg_entry = run_registry.find_by_folder(folder_name)
+        if reg_entry is not None:
+            new_metrics = {
+                "accuracy": report["summary"]["accuracy"],
+                "mar_acc": report["summary"].get("mar_acc", 0.0),
+                "mnar_acc": report["summary"].get("mnar_acc", 0.0),
+            }
+            run_registry.update(reg_entry.run_id, status="evaluated", metrics=new_metrics)
+            write_registry_markdown(run_registry, reg_path.parent / "REGISTRY.md")
+            print(f"Registry updated: {reg_entry.run_id} -> evaluated")
+    except Exception as e:
+        print(f"Warning: registry update failed: {e}")
+
     print(f"\nFull report: {json_path}")
     print(f"Raw predictions: {pt_path}")
 

@@ -2,12 +2,11 @@
 """
 Consolidate all experiment results into a single portable JSON file.
 
-Run this on Forge where the experiment artifacts live, then copy the
-output to docs/data/ for dissertation use.
+Run this on Forge where the experiment artifacts live.
 
 Usage:
     python scripts/consolidate_results.py --runs-dir /mnt/artifacts/project_lacuna/runs
-    python scripts/consolidate_results.py --runs-dir /mnt/artifacts/project_lacuna/runs --output docs/data/all_experiments.json
+    python scripts/consolidate_results.py --runs-dir /mnt/artifacts/project_lacuna/runs --output all_experiments.json
 """
 
 import argparse

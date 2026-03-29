@@ -310,6 +310,25 @@ def main():
         json.dump(cal_info, f, indent=2)
     print(f"Calibration info saved: {info_path}")
 
+    # Update run registry
+    try:
+        from lacuna.experiments.registry import RunRegistry
+        from lacuna.experiments.registry_render import write_registry_markdown
+        reg_path = PROJECT_ROOT / "experiments" / "registry.json"
+        run_registry = RunRegistry(reg_path)
+        run_registry.load()
+        folder_name = ckpt_path.parent.parent.name
+        entry = run_registry.find_by_folder(folder_name)
+        if entry is not None:
+            run_registry.update(entry.run_id, status="calibrated", metrics={
+                **entry.metrics,
+                "ece_calibrated": round(info["ece_after"], 6),
+            })
+            write_registry_markdown(run_registry, reg_path.parent / "REGISTRY.md")
+            print(f"Registry updated: {entry.run_id} -> calibrated")
+    except Exception as e:
+        print(f"Warning: registry update failed: {e}")
+
     print(f"\nNext step: evaluate calibrated model with:")
     print(f"  python scripts/evaluate.py --checkpoint {output_path} --config {args.config}")
 
