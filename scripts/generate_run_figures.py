@@ -48,16 +48,24 @@ _METRIC_COLORS = {"Precision": "#2196F3", "Recall": "#F44336", "F1": "#4CAF50"}
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_report(run_dir: Path) -> dict:
+def load_report(run_dir: Path, report_path: Path | None = None) -> dict:
     """
     Return the best available eval report for this run.
 
-    Priority:
+    If report_path is given explicitly, load that file directly.
+
+    Otherwise, search in priority order:
       1. checkpoints/eval_report.json  (calibrated model — preferred)
       2. eval_report.json              (pre-calibration)
 
-    Raises FileNotFoundError if neither exists.
+    Raises FileNotFoundError if no report is found.
     """
+    if report_path is not None:
+        if not report_path.exists():
+            raise FileNotFoundError(f"Report not found: {report_path}")
+        with open(report_path) as fh:
+            return json.load(fh)
+
     candidates = [
         run_dir / "checkpoints" / "eval_report.json",
         run_dir / "eval_report.json",
@@ -340,9 +348,9 @@ def _save(fig, stem: Path) -> None:
 # Orchestration
 # ---------------------------------------------------------------------------
 
-def generate_all(run_dir: Path, output_dir: Path) -> None:
+def generate_all(run_dir: Path, output_dir: Path, report_path: Path | None = None) -> None:
     """Load report and run all figure generators."""
-    report = load_report(run_dir)
+    report = load_report(run_dir, report_path)
 
     ckpt = report.get("checkpoint", "?")
     acc  = report.get("summary", {}).get("accuracy")
@@ -375,6 +383,10 @@ def parse_args() -> argparse.Namespace:
         "--output-dir", type=str, default=None, metavar="PATH",
         help="Where to save figures (default: <run-dir>/figures/)",
     )
+    p.add_argument(
+        "--report", type=str, default=None, metavar="PATH",
+        help="Explicit path to eval_report.json (overrides automatic search)",
+    )
     return p.parse_args()
 
 
@@ -394,7 +406,8 @@ def main() -> None:
     output_dir = Path(args.output_dir) if args.output_dir else run_dir / "figures"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    generate_all(run_dir, output_dir)
+    report_path = Path(args.report) if args.report else None
+    generate_all(run_dir, output_dir, report_path)
     print(f"\nDone. All figures in: {output_dir}")
 
 

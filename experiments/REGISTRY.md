@@ -2,7 +2,7 @@
 
 # Lacuna Run Registry
 
-Generated: 2026-03-29 03:57:03  
+Generated: 2026-03-29 06:27:40  
 Total runs: 54
 
 ## Summary
@@ -62,4 +62,4 @@ Total runs: 54
 | RUN-051 | 2026-03-29 | training | - | - | - | semi_27datasets |
 | RUN-052 | 2026-03-29 | training | - | - | - | semi_full |
 | RUN-053 | 2026-03-29 | training | - | - | - | test_semi |
-| RUN-054 | 2026-03-29 | evaluated | 82.6% | 73.6% | - | lacuna_semisyn_20260329_032848 |
+| RUN-054 | 2026-03-29 | evaluated | 81.5% | 71.8% | - | lacuna_semisyn_20260329_032848 |
