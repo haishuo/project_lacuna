@@ -26,34 +26,28 @@ Design:
 """
 
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.cuda.amp import GradScaler, autocast
-from dataclasses import dataclass, field
+from torch.cuda.amp import GradScaler
+from dataclasses import dataclass
 from typing import Optional, Callable, Dict, List, Tuple, Any, Union
 from pathlib import Path
 import time
-import json
-import math
-import numpy as np
 
-from lacuna.core.types import TokenBatch, LacunaOutput
-from lacuna.core.exceptions import NumericalError, CheckpointError
+from lacuna.core.types import TokenBatch
+from lacuna.core.exceptions import CheckpointError
 from lacuna.models.assembly import LacunaModel
 from lacuna.training.loss import (
     LacunaLoss,
     LossConfig,
-    create_loss_function,
-    create_joint_loss,
-    compute_class_accuracy,
-    compute_mechanism_accuracy,
-    compute_per_class_accuracy,
 )
 from lacuna.training.checkpoint import (
     save_checkpoint,
     load_checkpoint,
     CheckpointData,
 )
+from lacuna.training.scheduling import LRScheduler
+from lacuna.training.early_stopping import EarlyStopping
+from lacuna.training.training_step import TrainingStepExecutor, DetailedValResult
 
 
 # =============================================================================
@@ -158,17 +152,7 @@ class TrainerState:
     step: int = 0                       # Global step counter
     epoch: int = 0                      # Current epoch
     samples_seen: int = 0               # Total samples processed
-    
-    # === Best Metrics ===
-    best_val_loss: float = float("inf")
-    best_val_acc: float = 0.0
-    best_epoch: int = 0
-    best_step: int = 0
-    
-    # === Early Stopping ===
-    patience_counter: int = 0
-    should_stop: bool = False
-    
+
     # === Epoch Metrics ===
     epoch_loss_sum: float = 0.0
     epoch_samples: int = 0
@@ -183,102 +167,16 @@ class TrainerState:
         self.epoch_loss_sum = 0.0
         self.epoch_samples = 0
         self.epoch_correct = 0
-        self.epoch_start_time = time.time()
-    
+        self.epoch_start_time = time.time()  # NON-DETERMINISTIC: wall-clock timing for diagnostics only
+
     def get_epoch_metrics(self) -> Dict[str, float]:
         """Compute epoch-level metrics."""
         n = max(self.epoch_samples, 1)
         return {
             "epoch_loss": self.epoch_loss_sum / n,
             "epoch_acc": self.epoch_correct / n,
-            "epoch_time": time.time() - self.epoch_start_time,
+            "epoch_time": time.time() - self.epoch_start_time,  # NON-DETERMINISTIC: wall-clock timing
         }
-
-
-@dataclass
-class DetailedValResult:
-    """Rich validation results for evaluation and reporting.
-
-    All tensor fields are on CPU to avoid GPU memory accumulation.
-    This is evaluation-only and does NOT affect the training loop.
-    """
-    metrics: Dict[str, float]           # Same as validate() returns
-    confusion_matrix: np.ndarray        # [3, 3] - rows=true, cols=pred
-    all_p_class: torch.Tensor           # [N_total, 3] - all probability predictions (CPU)
-    all_true_class: torch.Tensor        # [N_total] - all ground truth labels (CPU)
-    all_generator_ids: torch.Tensor     # [N_total] - generator that produced each sample (CPU)
-    per_generator_acc: Dict[int, float] # generator_id -> accuracy
-    per_generator_count: Dict[int, int] # generator_id -> sample count
-    n_samples: int
-
-
-# =============================================================================
-# Learning Rate Scheduling
-# =============================================================================
-
-class LRScheduler:
-    """
-    Learning rate scheduler with warmup and decay.
-    
-    Supports:
-        - Linear warmup
-        - Cosine annealing
-        - Linear decay
-        - Constant (after warmup)
-    """
-    
-    def __init__(
-        self,
-        optimizer: torch.optim.Optimizer,
-        config: TrainerConfig,
-        total_steps: int,
-    ):
-        self.optimizer = optimizer
-        self.config = config
-        self.total_steps = total_steps
-        
-        self.base_lr = config.lr
-        self.min_lr = config.min_lr
-        self.warmup_steps = config.warmup_steps
-        
-        # If warmup_epochs is set, compute warmup_steps
-        # (will be updated when we know steps_per_epoch)
-        self.warmup_epochs = config.warmup_epochs
-    
-    def update_warmup_steps(self, steps_per_epoch: int):
-        """Update warmup steps based on epochs."""
-        if self.warmup_epochs > 0:
-            self.warmup_steps = int(self.warmup_epochs * steps_per_epoch)
-    
-    def get_lr(self, step: int) -> float:
-        """Compute learning rate for given step."""
-        # Warmup phase
-        if step < self.warmup_steps:
-            return self.base_lr * (step + 1) / self.warmup_steps
-        
-        # Post-warmup phase
-        progress = (step - self.warmup_steps) / max(self.total_steps - self.warmup_steps, 1)
-        progress = min(progress, 1.0)
-        
-        if self.config.lr_schedule == "constant":
-            return self.base_lr
-        
-        elif self.config.lr_schedule == "cosine":
-            # Cosine annealing to min_lr
-            return self.min_lr + 0.5 * (self.base_lr - self.min_lr) * (1 + math.cos(math.pi * progress))
-        
-        elif self.config.lr_schedule == "linear":
-            # Linear decay to min_lr
-            return self.base_lr - (self.base_lr - self.min_lr) * progress
-        
-        return self.base_lr
-    
-    def step(self, current_step: int):
-        """Update optimizer learning rate."""
-        lr = self.get_lr(current_step)
-        for param_group in self.optimizer.param_groups:
-            param_group["lr"] = lr
-        return lr
 
 
 # =============================================================================
@@ -350,7 +248,15 @@ class Trainer:
         
         # Initialize state
         self.state = TrainerState()
-        
+
+        # Initialize early stopping
+        self.early_stopping = EarlyStopping(
+            patience=config.patience,
+            min_delta=config.min_delta,
+            early_stop_metric=config.early_stop_metric,
+            early_stop_mode=config.early_stop_mode,
+        )
+
         # Create loss function
         self.loss_fn = LacunaLoss(config.get_loss_config())
         
@@ -378,351 +284,40 @@ class Trainer:
         
         # Track saved checkpoints for cleanup
         self.saved_checkpoints: List[Path] = []
+
+        # Initialize step executor for training/validation
+        self.step_executor = TrainingStepExecutor(
+            model=self.model,
+            loss_fn=self.loss_fn,
+            optimizer=self.optimizer,
+            use_amp=config.use_amp,
+            grad_clip=config.grad_clip,
+            device=device,
+            scaler=self.scaler,
+        )
     
     def _log(self, metrics: Dict[str, Any]):
         """Log metrics via callback if set."""
         if self.log_fn is not None:
             self.log_fn(metrics)
     
-    def _to_device(self, batch: TokenBatch) -> TokenBatch:
-        """Move batch to training device."""
-        return batch.to(self.device)
-    
     def train_step(self, batch: TokenBatch) -> Dict[str, float]:
-        """
-        Execute single training step.
-        
-        Args:
-            batch: TokenBatch with training data.
-        
-        Returns:
-            Dict with loss values and metrics.
-        """
-        self.model.train()
-        batch = self._to_device(batch)
-        
-        self.optimizer.zero_grad()
-        
-        # Forward pass (with optional mixed precision)
-        if self.config.use_amp:
-            with autocast():
-                output = self.model(batch)
-                total_loss, loss_dict = self.loss_fn(output, batch)
-        else:
-            output = self.model(batch)
-            total_loss, loss_dict = self.loss_fn(output, batch)
-        
-        # Check for NaN
-        if torch.isnan(total_loss):
-            raise NumericalError("NaN loss detected during training")
-        
-        # Backward pass
-        if self.config.use_amp:
-            self.scaler.scale(total_loss).backward()
-            
-            if self.config.grad_clip > 0:
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.grad_clip,
-                )
-            
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-        else:
-            total_loss.backward()
-            
-            if self.config.grad_clip > 0:
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    self.config.grad_clip,
-                )
-            
-            self.optimizer.step()
-        
-        # Update learning rate
-        if self.scheduler is not None:
-            self.state.current_lr = self.scheduler.step(self.state.step)
-        
-        # Compute accuracy
-        if batch.class_ids is not None:
-            acc = compute_class_accuracy(output.posterior.p_class, batch.class_ids)
-        else:
-            acc = torch.tensor(0.0)
-        
-        # Update state
-        self.state.step += 1
-        self.state.samples_seen += batch.batch_size
-        self.state.epoch_loss_sum += total_loss.item() * batch.batch_size
-        self.state.epoch_samples += batch.batch_size
-        if batch.class_ids is not None:
-            preds = output.posterior.p_class.argmax(dim=-1)
-            self.state.epoch_correct += (preds == batch.class_ids).sum().item()
-        
-        # Return metrics
-        metrics = {k: v.item() if torch.is_tensor(v) else v for k, v in loss_dict.items()}
-        metrics["acc"] = acc.item()
-        metrics["lr"] = self.state.current_lr
-        
-        return metrics
-    
-    @torch.no_grad()
-    def validate(self, val_loader: DataLoader) -> Dict[str, float]:
-        """
-        Run validation on entire validation set.
-        
-        Args:
-            val_loader: DataLoader for validation data.
-        
-        Returns:
-            Dict with validation metrics.
-        """
-        self.model.eval()
-        
-        total_loss = 0.0
-        total_samples = 0
-        total_correct = 0
-        
-        # Per-class tracking
-        class_correct = {0: 0, 1: 0, 2: 0}
-        class_total = {0: 0, 1: 0, 2: 0}
-        
-        # Loss component tracking
-        loss_sums = {}
-        
-        for batch in val_loader:
-            batch = self._to_device(batch)
-            
-            # Forward pass
-            if self.config.use_amp:
-                with autocast():
-                    output = self.model(batch)
-                    loss, loss_dict = self.loss_fn(output, batch)
-            else:
-                output = self.model(batch)
-                loss, loss_dict = self.loss_fn(output, batch)
-            
-            B = batch.batch_size
-            total_loss += loss.item() * B
-            total_samples += B
-            
-            # Track loss components
-            for k, v in loss_dict.items():
-                val = v.item() if torch.is_tensor(v) else v
-                loss_sums[k] = loss_sums.get(k, 0.0) + val * B
-            
-            # Accuracy
-            if batch.class_ids is not None:
-                preds = output.posterior.p_class.argmax(dim=-1)
-                total_correct += (preds == batch.class_ids).sum().item()
-                
-                # Per-class accuracy
-                for class_idx in range(3):
-                    mask = batch.class_ids == class_idx
-                    if mask.sum() > 0:
-                        class_total[class_idx] += mask.sum().item()
-                        class_correct[class_idx] += (preds[mask] == class_idx).sum().item()
-        
-        # Compute averages
-        n = max(total_samples, 1)
-        metrics = {
-            "val_loss": total_loss / n,
-            "val_acc": total_correct / n,
-        }
-        
-        # Per-class accuracy
-        class_names = ["mcar", "mar", "mnar"]
-        for class_idx, class_name in enumerate(class_names):
-            if class_total[class_idx] > 0:
-                metrics[f"val_{class_name}_acc"] = class_correct[class_idx] / class_total[class_idx]
-            else:
-                metrics[f"val_{class_name}_acc"] = 0.0
-        
-        # Loss components
-        for k, v in loss_sums.items():
-            if k != "total_loss":
-                metrics[f"val_{k}"] = v / n
-        
-        return metrics
-
-    @torch.no_grad()
-    def validate_detailed(self, val_loader: DataLoader) -> DetailedValResult:
-        """
-        Run detailed validation for evaluation/reporting.
-
-        Unlike validate(), this collects full probability predictions,
-        confusion matrix, and per-generator accuracy. All tensors are
-        moved to CPU immediately to avoid GPU memory accumulation.
-
-        This method is evaluation-only and does NOT affect training state.
-
-        Args:
-            val_loader: DataLoader for validation/test data.
-
-        Returns:
-            DetailedValResult with comprehensive metrics.
-        """
-        self.model.eval()
-
-        total_loss = 0.0
-        total_samples = 0
-        total_correct = 0
-
-        # Per-class tracking
-        class_correct = {0: 0, 1: 0, 2: 0}
-        class_total = {0: 0, 1: 0, 2: 0}
-
-        # Loss component tracking
-        loss_sums = {}
-
-        # Collect all predictions on CPU
-        all_p_class_list = []
-        all_true_class_list = []
-        all_generator_ids_list = []
-
-        for batch in val_loader:
-            batch = self._to_device(batch)
-
-            # Forward pass
-            if self.config.use_amp:
-                with autocast():
-                    output = self.model(batch)
-                    loss, loss_dict = self.loss_fn(output, batch)
-            else:
-                output = self.model(batch)
-                loss, loss_dict = self.loss_fn(output, batch)
-
-            B = batch.batch_size
-            total_loss += loss.item() * B
-            total_samples += B
-
-            # Track loss components
-            for k, v in loss_dict.items():
-                val = v.item() if torch.is_tensor(v) else v
-                loss_sums[k] = loss_sums.get(k, 0.0) + val * B
-
-            # Collect predictions — move to CPU immediately
-            p_class = output.posterior.p_class.detach().cpu()  # [B, 3]
-            all_p_class_list.append(p_class)
-
-            if batch.class_ids is not None:
-                true_class = batch.class_ids.detach().cpu()  # [B]
-                all_true_class_list.append(true_class)
-
-                preds = p_class.argmax(dim=-1)
-                total_correct += (preds == true_class).sum().item()
-
-                # Per-class accuracy
-                for class_idx in range(3):
-                    mask = true_class == class_idx
-                    if mask.sum() > 0:
-                        class_total[class_idx] += mask.sum().item()
-                        class_correct[class_idx] += (preds[mask] == class_idx).sum().item()
-
-            if batch.generator_ids is not None:
-                gen_ids = batch.generator_ids.detach().cpu()  # [B]
-                all_generator_ids_list.append(gen_ids)
-
-        # Concatenate all collected tensors
-        all_p_class = torch.cat(all_p_class_list, dim=0)  # [N_total, 3]
-        all_true_class = torch.cat(all_true_class_list, dim=0) if all_true_class_list else torch.zeros(total_samples, dtype=torch.long)
-        all_generator_ids = torch.cat(all_generator_ids_list, dim=0) if all_generator_ids_list else torch.zeros(total_samples, dtype=torch.long)
-
-        all_preds = all_p_class.argmax(dim=-1)  # [N_total]
-
-        # Compute confusion matrix [3, 3] — rows=true, cols=pred
-        confusion = np.zeros((3, 3), dtype=np.int64)
-        for true_idx in range(3):
-            for pred_idx in range(3):
-                confusion[true_idx, pred_idx] = (
-                    (all_true_class == true_idx) & (all_preds == pred_idx)
-                ).sum().item()
-
-        # Per-generator accuracy
-        per_generator_acc = {}
-        per_generator_count = {}
-        unique_gens = all_generator_ids.unique().tolist()
-        for gen_id in unique_gens:
-            gen_mask = all_generator_ids == gen_id
-            gen_count = gen_mask.sum().item()
-            gen_correct = (all_preds[gen_mask] == all_true_class[gen_mask]).sum().item()
-            per_generator_count[gen_id] = gen_count
-            per_generator_acc[gen_id] = gen_correct / gen_count if gen_count > 0 else 0.0
-
-        # Compute summary metrics (same format as validate())
-        n = max(total_samples, 1)
-        metrics = {
-            "val_loss": total_loss / n,
-            "val_acc": total_correct / n,
-        }
-
-        class_names = ["mcar", "mar", "mnar"]
-        for class_idx, class_name in enumerate(class_names):
-            if class_total[class_idx] > 0:
-                metrics[f"val_{class_name}_acc"] = class_correct[class_idx] / class_total[class_idx]
-            else:
-                metrics[f"val_{class_name}_acc"] = 0.0
-
-        for k, v in loss_sums.items():
-            if k != "total_loss":
-                metrics[f"val_{k}"] = v / n
-
-        return DetailedValResult(
-            metrics=metrics,
-            confusion_matrix=confusion,
-            all_p_class=all_p_class,
-            all_true_class=all_true_class,
-            all_generator_ids=all_generator_ids,
-            per_generator_acc=per_generator_acc,
-            per_generator_count=per_generator_count,
-            n_samples=total_samples,
+        """Execute single training step (delegates to TrainingStepExecutor)."""
+        return self.step_executor.train_step(
+            batch, scheduler=self.scheduler, state=self.state,
         )
 
-    def _check_early_stopping(
-        self,
-        val_metrics: Dict[str, float],
-    ) -> bool:
-        """
-        Check if training should stop early.
-        
-        Updates best metrics and patience counter based on validation results.
-        
-        Args:
-            val_metrics: Validation metrics from validate().
-        
-        Returns:
-            True if training should stop, False otherwise.
-        """
-        val_loss = val_metrics.get("val_loss", float("inf"))
-        val_acc = val_metrics.get("val_acc", 0.0)
-        
-        # Always track best of both metrics (regardless of which is used for early stopping)
-        loss_improved = val_loss < (self.state.best_val_loss - self.config.min_delta)
-        acc_improved = val_acc > (self.state.best_val_acc + self.config.min_delta)
-        
-        if loss_improved:
-            self.state.best_val_loss = val_loss
-        if acc_improved:
-            self.state.best_val_acc = val_acc
-        
-        # Determine if the tracked metric improved (for early stopping decision)
-        if self.config.early_stop_mode == "min":
-            metric = val_metrics.get(self.config.early_stop_metric, val_loss)
-            improved = metric < (self.state.best_val_loss + self.config.min_delta)
-        else:  # max
-            metric = val_metrics.get(self.config.early_stop_metric, val_acc)
-            improved = metric > (self.state.best_val_acc - self.config.min_delta)
-        
-        if improved:
-            self.state.patience_counter = 0
-            self.state.best_epoch = self.state.epoch
-            self.state.best_step = self.state.step
-            return False
-        else:
-            self.state.patience_counter += 1
-            if self.state.patience_counter >= self.config.patience:
-                return True
-            return False
+    def validate(self, val_loader: DataLoader) -> Dict[str, float]:
+        """Run validation on entire validation set."""
+        return self.step_executor.validate(val_loader)
+
+    def validate_detailed(self, val_loader: DataLoader) -> DetailedValResult:
+        """Run detailed validation for evaluation/reporting."""
+        return self.step_executor.validate_detailed(val_loader)
+
+    def evaluate(self, test_loader: DataLoader) -> Dict[str, float]:
+        """Evaluate model on test set."""
+        return self.step_executor.evaluate(test_loader)
 
     def _save_checkpoint(
         self,
@@ -745,8 +340,8 @@ class Trainer:
             scheduler_state=None,  # We track LR in TrainerState
             step=self.state.step,
             epoch=self.state.epoch,
-            best_val_loss=self.state.best_val_loss,
-            best_val_acc=self.state.best_val_acc,
+            best_val_loss=self.early_stopping.best_val_loss,
+            best_val_acc=self.early_stopping.best_val_acc,
             config=self.config.__dict__,
             metrics=val_metrics,
         )
@@ -783,8 +378,8 @@ class Trainer:
         
         self.state.step = checkpoint.step
         self.state.epoch = checkpoint.epoch
-        self.state.best_val_loss = checkpoint.best_val_loss
-        self.state.best_val_acc = checkpoint.best_val_acc
+        self.early_stopping.best_val_loss = checkpoint.best_val_loss
+        self.early_stopping.best_val_acc = checkpoint.best_val_acc
     
     def fit(
         self,
@@ -813,7 +408,15 @@ class Trainer:
         total_steps = steps_per_epoch * self.config.epochs
         
         # Initialize scheduler
-        self.scheduler = LRScheduler(self.optimizer, self.config, total_steps)
+        self.scheduler = LRScheduler(
+            optimizer=self.optimizer,
+            lr=self.config.lr,
+            min_lr=self.config.min_lr,
+            warmup_steps=self.config.warmup_steps,
+            warmup_epochs=self.config.warmup_epochs,
+            lr_schedule=self.config.lr_schedule,
+            total_steps=total_steps,
+        )
         self.scheduler.update_warmup_steps(steps_per_epoch)
         
         # Initialize learning rate
@@ -867,14 +470,13 @@ class Trainer:
                         print(f"  Validation: loss={val_metrics['val_loss']:.4f}, acc={val_metrics['val_acc']:.3f}")
 
                     # Check for improvement and save checkpoint
-                    is_best = self._is_best(val_metrics)
+                    is_best = self.early_stopping.is_best(val_metrics)
                     if is_best:
                         self._save_checkpoint(val_metrics, is_best=True)
 
                     # Early stopping check — ALWAYS printed
-                    if self._check_early_stopping(val_metrics):
+                    if self.early_stopping.check(val_metrics, self.state.epoch, self.state.step):
                         print(f"Early stopping at step {self.state.step}")
-                        self.state.should_stop = True
                         break
 
             # End of epoch — always build metrics, print in appropriate format
@@ -889,14 +491,13 @@ class Trainer:
                 self._log(val_metrics_epoch)
 
                 # Check for improvement
-                is_best = self._is_best(val_metrics_epoch)
+                is_best = self.early_stopping.is_best(val_metrics_epoch)
                 if is_best:
                     self._save_checkpoint(val_metrics_epoch, is_best=True)
 
                 # Early stopping — ALWAYS printed
-                if self._check_early_stopping(val_metrics_epoch):
+                if self.early_stopping.check(val_metrics_epoch, self.state.epoch, self.state.step):
                     print(f"Early stopping at epoch {epoch}")
-                    self.state.should_stop = True
 
             # Print epoch summary
             if quiet:
@@ -924,44 +525,21 @@ class Trainer:
                 self._save_checkpoint(val_metrics_epoch if val_loader else {}, force=True)
 
             # Check if should stop
-            if self.state.should_stop:
+            if self.early_stopping.should_stop:
                 break
 
         # Final summary — ALWAYS printed
         print(f"\nTraining complete!")
-        print(f"  Best val_loss: {self.state.best_val_loss:.4f} (epoch {self.state.best_epoch})")
-        print(f"  Best val_acc: {self.state.best_val_acc:.4f}")
-        
+        print(f"  Best val_loss: {self.early_stopping.best_val_loss:.4f} (epoch {self.early_stopping.best_epoch})")
+        print(f"  Best val_acc: {self.early_stopping.best_val_acc:.4f}")
+
         return {
-            "best_val_loss": self.state.best_val_loss,
-            "best_val_acc": self.state.best_val_acc,
-            "best_epoch": self.state.best_epoch,
+            "best_val_loss": self.early_stopping.best_val_loss,
+            "best_val_acc": self.early_stopping.best_val_acc,
+            "best_epoch": self.early_stopping.best_epoch,
             "final_epoch": self.state.epoch,
             "total_steps": self.state.step,
         }
-    
-    def _is_best(self, val_metrics: Dict[str, float]) -> bool:
-        """Check if current metrics are best so far."""
-        if self.config.early_stop_mode == "min":
-            metric = val_metrics.get(self.config.early_stop_metric, val_metrics["val_loss"])
-            return metric < self.state.best_val_loss
-        else:
-            metric = val_metrics.get(self.config.early_stop_metric, val_metrics["val_acc"])
-            return metric > self.state.best_val_acc
-    
-    def evaluate(self, test_loader: DataLoader) -> Dict[str, float]:
-        """
-        Evaluate model on test set.
-        
-        Args:
-            test_loader: DataLoader for test data.
-        
-        Returns:
-            Dict with test metrics.
-        """
-        metrics = self.validate(test_loader)
-        # Rename val_ to test_
-        return {k.replace("val_", "test_"): v for k, v in metrics.items()}
 
 
 # =============================================================================

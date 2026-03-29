@@ -1,1 +1,0 @@
-"""lacuna-infer command."""

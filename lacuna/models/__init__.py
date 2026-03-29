@@ -49,8 +49,6 @@ from lacuna.models.reconstruction import (
     MCARHead,
     MARHead,
     MNARSelfCensoringHead,
-    MNARThresholdHead,
-    MNARLatentHead,
     # Registry
     HEAD_REGISTRY,
     create_head,
@@ -100,8 +98,6 @@ __all__ = [
     "MCARHead",
     "MARHead",
     "MNARSelfCensoringHead",
-    "MNARThresholdHead",
-    "MNARLatentHead",
     "HEAD_REGISTRY",
     "create_head",
     "ReconstructionHeads",

@@ -341,13 +341,13 @@ class TestGatingNetwork:
             use_missingness_features=False,
         )
         gating = GatingNetwork(config)
-        
+
         evidence = sample_row_level_inputs["evidence"]  # [B, max_rows, hidden_dim]
         logits, probs = gating(evidence)
-        
+
         B, max_rows = evidence.shape[:2]
-        n_experts = 5
-        
+        n_experts = 3
+
         assert logits.shape == (B, max_rows, n_experts)
         assert probs.shape == (B, max_rows, n_experts)
 
@@ -430,13 +430,13 @@ class TestExpertHeads:
             use_missingness_features=False,
         )
         heads = ExpertHeads(config)
-        
+
         evidence = sample_row_level_inputs["evidence"]  # [B, max_rows, hidden_dim]
         adjustments = heads(evidence)
-        
+
         B, max_rows = evidence.shape[:2]
-        n_experts = 5
-        
+        n_experts = 3
+
         assert adjustments.shape == (B, max_rows, n_experts)
 
 
@@ -748,7 +748,7 @@ class TestCreateMoe:
         moe = create_moe(evidence_dim=64)
 
         assert isinstance(moe, MixtureOfExperts)
-        assert moe.config.n_experts == 5  # MCAR + MAR + 3 MNAR variants
+        assert moe.config.n_experts == 3  # MCAR + MAR + 1 MNAR variant
 
     def test_with_custom_mnar_variants(self):
         """Test creating MoE with custom MNAR variants."""
@@ -803,7 +803,7 @@ class TestCreateMoe:
         output = moe(sample_evidence)
 
         assert isinstance(output, MoEOutput)
-        assert output.gate_probs.shape == (4, 5)
+        assert output.gate_probs.shape == (4, 3)
 
 
 # =============================================================================

@@ -51,7 +51,6 @@ def parse_args():
     parser.add_argument("--name", type=str, default=None, help="Experiment name")
     parser.add_argument("--device", type=str, default=None, help="Override device (cpu/cuda)")
     parser.add_argument("--seed", type=int, default=None, help="Override random seed")
-    parser.add_argument("--wandb", action="store_true", help="Enable W&B logging")
     parser.add_argument("--generators", type=str, default=None,
                         help="Generator config name or YAML path (overrides training config)")
     parser.add_argument("--quiet", action="store_true",

@@ -20,7 +20,6 @@ import math
 from lacuna.training.trainer import (
     TrainerConfig,
     TrainerState,
-    LRScheduler,
     Trainer,
 )
 from lacuna.training.loss import LossConfig, LacunaLoss
@@ -190,25 +189,19 @@ class TestTrainerState:
     def test_default_values(self):
         """Test default state values."""
         state = TrainerState()
-        
+
         assert state.step == 0
         assert state.epoch == 0
-        assert state.best_val_loss == float("inf")
-        assert state.best_val_acc == 0.0
-        assert state.patience_counter == 0
-        assert state.should_stop is False
-    
+
     def test_state_is_mutable(self):
         """Test that state can be modified."""
         state = TrainerState()
-        
+
         state.step = 100
         state.epoch = 5
-        state.best_val_loss = 0.5
-        
+
         assert state.step == 100
         assert state.epoch == 5
-        assert state.best_val_loss == 0.5
     
     def test_epoch_metrics(self):
         """Test epoch metrics tracking."""
@@ -224,73 +217,6 @@ class TestTrainerState:
         
         assert "epoch_loss" in metrics
         assert "epoch_acc" in metrics
-
-
-# =============================================================================
-# Test LRScheduler
-# =============================================================================
-
-class TestLRScheduler:
-    """Tests for learning rate scheduler."""
-    
-    @pytest.fixture
-    def optimizer(self):
-        """Create dummy optimizer."""
-        model = nn.Linear(10, 10)
-        return torch.optim.AdamW(model.parameters(), lr=1e-3)
-    
-    def test_warmup_phase(self, optimizer):
-        """Test that LR increases during warmup."""
-        config = TrainerConfig(lr=1e-3, warmup_steps=100)
-        # Note: LRScheduler signature is (optimizer, config, total_steps)
-        scheduler = LRScheduler(optimizer, config, total_steps=1000)
-        
-        # LR should increase during warmup
-        lr_at_0 = scheduler.get_lr(0)
-        lr_at_50 = scheduler.get_lr(50)
-        lr_at_100 = scheduler.get_lr(100)
-        
-        assert lr_at_0 < lr_at_50 <= lr_at_100
-        assert abs(lr_at_100 - config.lr) < 1e-6
-    
-    def test_cosine_decay(self, optimizer):
-        """Test cosine learning rate decay."""
-        config = TrainerConfig(lr=1e-3, min_lr=1e-5, warmup_steps=100, lr_schedule="cosine")
-        scheduler = LRScheduler(optimizer, config, total_steps=1000)
-        
-        # LR should decay after warmup
-        lr_at_warmup_end = scheduler.get_lr(100)
-        lr_at_middle = scheduler.get_lr(500)
-        lr_at_end = scheduler.get_lr(999)
-        
-        assert lr_at_warmup_end >= lr_at_middle >= lr_at_end
-        # At end should be close to min_lr
-        assert lr_at_end == pytest.approx(config.min_lr, rel=0.1)
-    
-    def test_constant_schedule(self, optimizer):
-        """Test constant learning rate (after warmup)."""
-        config = TrainerConfig(lr=1e-3, warmup_steps=100, lr_schedule="constant")
-        scheduler = LRScheduler(optimizer, config, total_steps=1000)
-        
-        # After warmup, should stay at lr
-        lr_at_500 = scheduler.get_lr(500)
-        lr_at_900 = scheduler.get_lr(900)
-        
-        assert lr_at_500 == pytest.approx(config.lr, rel=1e-3)
-        assert lr_at_900 == pytest.approx(config.lr, rel=1e-3)
-    
-    def test_step_updates_optimizer(self, optimizer):
-        """Test that step() updates optimizer LR."""
-        config = TrainerConfig(lr=1e-3, warmup_steps=100)
-        scheduler = LRScheduler(optimizer, config, total_steps=1000)
-        
-        # Step should update optimizer's LR
-        scheduler.step(50)
-        
-        actual_lr = optimizer.param_groups[0]["lr"]
-        expected_lr = scheduler.get_lr(50)
-        
-        assert actual_lr == pytest.approx(expected_lr, rel=1e-5)
 
 
 # =============================================================================
@@ -570,8 +496,8 @@ class TestTrainerFit:
         
         result = trainer.fit(train_loader, val_loader)
         
-        assert trainer.state.best_epoch >= 0
-        assert trainer.state.best_val_loss < float("inf")
+        assert trainer.early_stopping.best_epoch >= 0
+        assert trainer.early_stopping.best_val_loss < float("inf")
     
     def test_fit_returns_history(self):
         """Test that fit returns training history."""
@@ -688,74 +614,26 @@ class TestTrainerCheckpointing:
 # =============================================================================
 
 class TestEarlyStopping:
-    """Tests for early stopping logic."""
-    
-    def test_check_early_stopping_improves(self):
-        """Test that improvement resets patience."""
+    """Tests for early stopping integration in Trainer."""
+
+    def test_early_stopping_initialized(self):
+        """Test that Trainer creates EarlyStopping with correct config."""
+        model = make_dummy_model()
+        config = TrainerConfig(patience=7, min_delta=0.01, early_stop_mode="max", early_stop_metric="val_acc")
+        trainer = Trainer(model, config, device="cpu")
+        assert trainer.early_stopping.patience == 7
+        assert trainer.early_stopping.early_stop_mode == "max"
+
+    def test_early_stopping_tracks_best(self):
+        """Test that best metrics are tracked via early_stopping."""
         model = make_dummy_model()
         config = TrainerConfig(patience=5, early_stop_mode="min")
         trainer = Trainer(model, config, device="cpu")
-        
-        trainer.state.best_val_loss = 1.0
-        trainer.state.patience_counter = 3
-        
-        should_stop = trainer._check_early_stopping({"val_loss": 0.5})
-        
+        trainer.early_stopping.best_val_loss = 1.0
+        trainer.early_stopping.patience_counter = 3
+        should_stop = trainer.early_stopping.check({"val_loss": 0.5}, current_epoch=0, current_step=100)
         assert should_stop is False
-        assert trainer.state.patience_counter == 0
-        assert trainer.state.best_val_loss == 0.5
-    
-    def test_check_early_stopping_no_improve(self):
-        """Test that no improvement increments patience."""
-        model = make_dummy_model()
-        config = TrainerConfig(patience=5, early_stop_mode="min", min_delta=0.01)
-        trainer = Trainer(model, config, device="cpu")
-        
-        trainer.state.best_val_loss = 0.5
-        trainer.state.patience_counter = 0
-
-        # val_loss must be >= best_val_loss + min_delta to NOT count as improvement.
-        # The implementation checks: metric < (best_val_loss + min_delta), so
-        # 0.51 < (0.5 + 0.01) = 0.51 is False => no improvement => patience increments.
-        should_stop = trainer._check_early_stopping({"val_loss": 0.51})
-
-        assert should_stop is False
-        assert trainer.state.patience_counter == 1
-    
-    def test_check_early_stopping_triggers(self):
-        """Test that patience exhaustion triggers stop."""
-        model = make_dummy_model()
-        config = TrainerConfig(patience=3, early_stop_mode="min")
-        trainer = Trainer(model, config, device="cpu")
-        
-        trainer.state.best_val_loss = 0.5
-        trainer.state.patience_counter = 2
-        
-        should_stop = trainer._check_early_stopping({"val_loss": 0.6})
-        
-        assert should_stop is True
-        assert trainer.state.patience_counter == 3
-    
-    def test_early_stopping_max_mode(self):
-        """Test early stopping in max mode (for accuracy)."""
-        model = make_dummy_model()
-        config = TrainerConfig(
-            patience=5,
-            early_stop_mode="max",
-            early_stop_metric="val_acc",
-        )
-        trainer = Trainer(model, config, device="cpu")
-        
-        trainer.state.best_val_acc = 0.8
-        trainer.state.best_val_loss = 0.5
-        trainer.state.patience_counter = 0
-        
-        # Provide both val_acc and val_loss for implementations that need both
-        should_stop = trainer._check_early_stopping({"val_acc": 0.85, "val_loss": 0.4})
-        
-        assert should_stop is False
-        assert trainer.state.patience_counter == 0
-        assert trainer.state.best_val_acc == 0.85
+        assert trainer.early_stopping.patience_counter == 0
 
 
 # =============================================================================

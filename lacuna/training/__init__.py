@@ -47,6 +47,10 @@ from .trainer import (
     DetailedValResult,
 )
 
+from .scheduling import LRScheduler
+from .early_stopping import EarlyStopping
+from .training_step import TrainingStepExecutor
+
 from .checkpoint import (
     CheckpointData,
     save_checkpoint,
@@ -116,6 +120,10 @@ __all__ = [
     "TrainerConfig",
     "TrainerState",
     "DetailedValResult",
+    # Scheduling and early stopping
+    "LRScheduler",
+    "EarlyStopping",
+    "TrainingStepExecutor",
     # Checkpoint
     "CheckpointData",
     "save_checkpoint",

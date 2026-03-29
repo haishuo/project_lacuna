@@ -22,8 +22,6 @@ Head Types:
     MCARHead: Simple MLP, no cross-column structure exploited.
     MARHead: Cross-attention using RAW observed values (FIXED).
     MNARSelfCensoringHead: Predicts with censoring score for extreme values.
-    MNARThresholdHead: Learns soft thresholds for truncation patterns.
-    MNARLatentHead: Infers latent confounder driving missingness.
 """
 
 import torch
@@ -310,153 +308,6 @@ class MNARSelfCensoringHead(BaseReconstructionHead):
 
 
 # =============================================================================
-# MNAR Threshold Head
-# =============================================================================
-
-class MNARThresholdHead(BaseReconstructionHead):
-    """
-    MNAR Threshold reconstruction head.
-    
-    Architecture:
-        Learns soft thresholds for each column and adjusts predictions
-        based on which side of the threshold values are likely to be missing.
-    
-    Inductive bias:
-        Values above or below certain thresholds are systematically missing
-        (e.g., income below poverty line, tests above detection limit).
-    
-    Expected behavior:
-        - Under MCAR: Moderate error (thresholds don't help)
-        - Under MAR: Higher error (threshold adjustment not helpful)
-        - Under MNAR threshold: Lower error (matches the pattern)
-    """
-    
-    def __init__(self, config: ReconstructionConfig):
-        super().__init__(config)
-        
-        # Main value prediction
-        self.value_predictor = nn.Sequential(
-            nn.Linear(config.hidden_dim, config.head_hidden_dim),
-            nn.LayerNorm(config.head_hidden_dim),
-            nn.GELU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.head_hidden_dim, 1),
-        )
-        
-        # Threshold estimator: estimates soft threshold for this position
-        self.threshold_estimator = nn.Sequential(
-            nn.Linear(config.hidden_dim, config.head_hidden_dim),
-            nn.LayerNorm(config.head_hidden_dim),
-            nn.GELU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.head_hidden_dim, 2),  # (threshold, direction)
-        )
-    
-    def forward(
-        self,
-        token_repr: torch.Tensor,
-        tokens: torch.Tensor,
-        row_mask: torch.Tensor,
-        col_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        """Predict values with threshold adjustment."""
-        # Base value prediction
-        base_pred = self.value_predictor(token_repr).squeeze(-1)
-        
-        # Estimate threshold parameters
-        thresh_params = self.threshold_estimator(token_repr)  # [B, max_rows, max_cols, 2]
-        threshold = thresh_params[..., 0]  # Threshold value
-        direction = torch.sigmoid(thresh_params[..., 1])  # Direction (0=below, 1=above)
-        
-        # Get observation indicator
-        is_observed = tokens[..., IDX_OBSERVED]
-        
-        # Adjust predictions for missing values based on threshold
-        # If direction > 0.5: values above threshold are missing -> predict above threshold
-        # If direction < 0.5: values below threshold are missing -> predict below threshold
-        adjustment = (direction - 0.5) * 2.0  # Scale to [-1, 1]
-        
-        # Apply adjustment only to missing values
-        predictions = base_pred + adjustment * (1.0 - is_observed)
-        
-        return predictions
-
-
-# =============================================================================
-# MNAR Latent Head
-# =============================================================================
-
-class MNARLatentHead(BaseReconstructionHead):
-    """
-    MNAR Latent reconstruction head.
-    
-    Architecture:
-        Infers a latent variable that explains both the value and the
-        missingness, then uses that to adjust predictions.
-    
-    Inductive bias:
-        There's an unobserved confounder that causes both the value and
-        its missingness (e.g., underlying health status affects both
-        test values and willingness to get tested).
-    
-    Expected behavior:
-        - Under MCAR: Moderate error (no confounding)
-        - Under MAR: Higher error (confounder adjustment not helpful)
-        - Under MNAR latent: Lower error (captures confounding)
-    """
-    
-    def __init__(self, config: ReconstructionConfig):
-        super().__init__(config)
-        
-        self.latent_dim = config.head_hidden_dim // 2
-        
-        # Latent variable encoder
-        self.latent_encoder = nn.Sequential(
-            nn.Linear(config.hidden_dim, config.head_hidden_dim),
-            nn.LayerNorm(config.head_hidden_dim),
-            nn.GELU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.head_hidden_dim, self.latent_dim * 2),  # Mean and log-var
-        )
-        
-        # Value prediction conditioned on latent
-        self.value_decoder = nn.Sequential(
-            nn.Linear(config.hidden_dim + self.latent_dim, config.head_hidden_dim),
-            nn.LayerNorm(config.head_hidden_dim),
-            nn.GELU(),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.head_hidden_dim, 1),
-        )
-    
-    def forward(
-        self,
-        token_repr: torch.Tensor,
-        tokens: torch.Tensor,
-        row_mask: torch.Tensor,
-        col_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        """Predict values via latent variable inference."""
-        # Encode to latent distribution
-        latent_params = self.latent_encoder(token_repr)
-        mu = latent_params[..., :self.latent_dim]
-        log_var = latent_params[..., self.latent_dim:]
-        
-        # Reparameterization trick (sample if training, use mean if eval)
-        if self.training:
-            std = torch.exp(0.5 * log_var)
-            eps = torch.randn_like(std)
-            z = mu + eps * std
-        else:
-            z = mu
-        
-        # Decode to value prediction
-        decoder_input = torch.cat([token_repr, z], dim=-1)
-        predictions = self.value_decoder(decoder_input).squeeze(-1)
-        
-        return predictions
-
-
-# =============================================================================
 # Head Registry
 # =============================================================================
 
@@ -464,8 +315,6 @@ HEAD_REGISTRY = {
     "mcar": MCARHead,
     "mar": MARHead,
     "self_censoring": MNARSelfCensoringHead,
-    "threshold": MNARThresholdHead,
-    "latent": MNARLatentHead,
 }
 
 

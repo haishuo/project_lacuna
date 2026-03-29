@@ -97,6 +97,7 @@ class CheckpointData:
     metrics: Optional[Dict[str, Any]] = None
 
     # Metadata
+    # NON-DETERMINISTIC: timestamp depends on system clock
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     lacuna_version: str = __version__
 

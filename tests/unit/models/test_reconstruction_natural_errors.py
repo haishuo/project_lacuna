@@ -23,7 +23,7 @@ def config():
         head_hidden_dim=32,
         n_head_layers=2,
         dropout=0.0,
-        mnar_variants=["self_censoring", "threshold"],
+        mnar_variants=["self_censoring"],
     )
 
 

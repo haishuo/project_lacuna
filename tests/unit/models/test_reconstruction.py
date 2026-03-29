@@ -6,8 +6,6 @@ Tests the reconstruction heads for self-supervised pretraining:
     - MCARHead: Simple MLP reconstruction
     - MARHead: Cross-attention to observed cells
     - MNARSelfCensoringHead: Censoring-aware reconstruction
-    - MNARThresholdHead: Threshold-aware reconstruction
-    - MNARLatentHead: Latent-conditioned reconstruction
     - ReconstructionHeads: Container for all heads
 """
 
@@ -24,8 +22,6 @@ from lacuna.models.reconstruction import (
     MCARHead,
     MARHead,
     MNARSelfCensoringHead,
-    MNARThresholdHead,
-    MNARLatentHead,
     # Registry
     HEAD_REGISTRY,
     create_head,
@@ -62,14 +58,14 @@ class TestReconstructionConfig:
             head_hidden_dim=128,
             n_head_layers=3,
             dropout=0.2,
-            mnar_variants=["self_censoring", "threshold"],
+            mnar_variants=["self_censoring"],
         )
-        
+
         assert config.hidden_dim == 256
         assert config.head_hidden_dim == 128
         assert config.n_head_layers == 3
         assert config.dropout == 0.2
-        assert config.mnar_variants == ["self_censoring", "threshold"]
+        assert config.mnar_variants == ["self_censoring"]
     
     def test_mnar_variants_default_initialization(self):
         """Test that mnar_variants defaults to single variant if None."""
@@ -90,7 +86,7 @@ def config():
         head_hidden_dim=32,
         n_head_layers=2,
         dropout=0.0,
-        mnar_variants=["self_censoring", "threshold", "latent"],
+        mnar_variants=["self_censoring"],
     )
 
 
@@ -332,169 +328,6 @@ class TestMNARSelfCensoringHead:
 
 
 # =============================================================================
-# Test MNARThresholdHead
-# =============================================================================
-
-class TestMNARThresholdHead:
-    """Tests for MNARThresholdHead."""
-    
-    @pytest.fixture
-    def head(self, config):
-        """Create MNARThresholdHead."""
-        return MNARThresholdHead(config)
-    
-    def test_output_shape(self, head, sample_inputs):
-        """Test output tensor shape."""
-        predictions = head(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["row_mask"],
-            sample_inputs["col_mask"],
-        )
-        
-        B, max_rows, max_cols = 4, 32, 16
-        assert predictions.shape == (B, max_rows, max_cols)
-    
-    def test_no_nan_or_inf(self, head, sample_inputs):
-        """Test that output contains no NaN or Inf values."""
-        predictions = head(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["row_mask"],
-            sample_inputs["col_mask"],
-        )
-        
-        assert not torch.isnan(predictions).any()
-        assert not torch.isinf(predictions).any()
-    
-    def test_has_threshold_components(self, head):
-        """Test that threshold-related components exist."""
-        assert hasattr(head, 'threshold_estimator')
-        assert hasattr(head, 'value_predictor')
-
-    def test_gradients_flow(self, head, sample_inputs):
-        """Test that gradients flow through the head."""
-        sample_inputs["token_repr"].requires_grad_(True)
-        
-        predictions = head(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["row_mask"],
-            sample_inputs["col_mask"],
-        )
-        
-        loss = predictions.sum()
-        loss.backward()
-        
-        assert sample_inputs["token_repr"].grad is not None
-
-
-# =============================================================================
-# Test MNARLatentHead
-# =============================================================================
-
-class TestMNARLatentHead:
-    """Tests for MNARLatentHead."""
-    
-    @pytest.fixture
-    def head(self, config):
-        """Create MNARLatentHead."""
-        return MNARLatentHead(config)
-    
-    def test_output_shape(self, head, sample_inputs):
-        """Test output tensor shape."""
-        predictions = head(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["row_mask"],
-            sample_inputs["col_mask"],
-        )
-        
-        B, max_rows, max_cols = 4, 32, 16
-        assert predictions.shape == (B, max_rows, max_cols)
-    
-    def test_no_nan_or_inf(self, head, sample_inputs):
-        """Test that output contains no NaN or Inf values."""
-        predictions = head(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["row_mask"],
-            sample_inputs["col_mask"],
-        )
-        
-        assert not torch.isnan(predictions).any()
-        assert not torch.isinf(predictions).any()
-    
-    def test_has_latent_components(self, head):
-        """Test that latent-related components exist."""
-        assert hasattr(head, 'latent_encoder')
-        assert hasattr(head, 'value_decoder')
-        # latent_dim = config.head_hidden_dim // 2 = 32 // 2 = 16
-        assert head.latent_dim == 16
-
-    def test_training_uses_reparameterization(self, head, sample_inputs):
-        """Test that training mode uses reparameterization."""
-        head.train()
-        
-        # Run twice - should get different outputs due to sampling
-        pred1 = head(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["row_mask"],
-            sample_inputs["col_mask"],
-        )
-        
-        pred2 = head(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["row_mask"],
-            sample_inputs["col_mask"],
-        )
-        
-        # Predictions should differ due to stochastic sampling
-        assert not torch.allclose(pred1, pred2)
-    
-    def test_eval_uses_mean(self, head, sample_inputs):
-        """Test that eval mode uses mean (deterministic)."""
-        head.eval()
-        
-        with torch.no_grad():
-            pred1 = head(
-                sample_inputs["token_repr"],
-                sample_inputs["tokens"],
-                sample_inputs["row_mask"],
-                sample_inputs["col_mask"],
-            )
-            
-            pred2 = head(
-                sample_inputs["token_repr"],
-                sample_inputs["tokens"],
-                sample_inputs["row_mask"],
-                sample_inputs["col_mask"],
-            )
-        
-        # Predictions should be identical in eval mode
-        assert torch.allclose(pred1, pred2)
-    
-    def test_gradients_flow(self, head, sample_inputs):
-        """Test that gradients flow through the head."""
-        head.train()
-        sample_inputs["token_repr"].requires_grad_(True)
-        
-        predictions = head(
-            sample_inputs["token_repr"],
-            sample_inputs["tokens"],
-            sample_inputs["row_mask"],
-            sample_inputs["col_mask"],
-        )
-        
-        loss = predictions.sum()
-        loss.backward()
-        
-        assert sample_inputs["token_repr"].grad is not None
-
-
-# =============================================================================
 # Test HEAD_REGISTRY and create_head
 # =============================================================================
 
@@ -503,8 +336,8 @@ class TestHeadRegistry:
     
     def test_registry_contains_all_heads(self):
         """Test that registry contains all head types."""
-        expected_heads = ["mcar", "mar", "self_censoring", "threshold", "latent"]
-        
+        expected_heads = ["mcar", "mar", "self_censoring"]
+
         for name in expected_heads:
             assert name in HEAD_REGISTRY
     
@@ -526,18 +359,6 @@ class TestHeadRegistry:
         
         assert isinstance(head, MNARSelfCensoringHead)
     
-    def test_create_head_threshold(self, config):
-        """Test creating threshold head via factory."""
-        head = create_head("threshold", config)
-        
-        assert isinstance(head, MNARThresholdHead)
-    
-    def test_create_head_latent(self, config):
-        """Test creating latent head via factory."""
-        head = create_head("latent", config)
-        
-        assert isinstance(head, MNARLatentHead)
-    
     def test_create_head_invalid_raises(self, config):
         """Test that creating invalid head raises error."""
         with pytest.raises(KeyError, match="Unknown head type"):
@@ -558,12 +379,12 @@ class TestReconstructionHeads:
     
     def test_n_heads_property(self, heads):
         """Test n_heads property."""
-        # MCAR + MAR + 3 MNAR variants = 5
-        assert heads.n_heads == 5
+        # MCAR + MAR + 1 MNAR variant = 3
+        assert heads.n_heads == 3
     
     def test_head_names_property(self, heads):
         """Test head_names ordering."""
-        expected = ["mcar", "mar", "self_censoring", "threshold", "latent"]
+        expected = ["mcar", "mar", "self_censoring"]
         assert heads.head_names == expected
     
     def test_forward_returns_dict(self, heads, sample_inputs):
@@ -576,7 +397,7 @@ class TestReconstructionHeads:
         )
 
         assert isinstance(results, dict)
-        assert len(results) == 5
+        assert len(results) == 3
 
         for name in heads.head_names:
             assert name in results
@@ -629,7 +450,7 @@ class TestReconstructionHeads:
         
         error_tensor = heads.get_error_tensor(results)
         
-        assert error_tensor.shape == (4, 5)  # B, n_heads
+        assert error_tensor.shape == (4, 3)  # B, n_heads
     
     def test_get_predictions_dict(self, heads, sample_inputs):
         """Test get_predictions_dict method."""
@@ -643,7 +464,7 @@ class TestReconstructionHeads:
         predictions = heads.get_predictions_dict(results)
         
         assert isinstance(predictions, dict)
-        assert len(predictions) == 5
+        assert len(predictions) == 3
         
         for name in heads.head_names:
             assert predictions[name].shape == (4, 32, 16)
@@ -693,10 +514,10 @@ class TestCreateReconstructionHeads:
     def test_default_configuration(self):
         """Test creating heads with default configuration."""
         heads = create_reconstruction_heads()
-        
+
         assert isinstance(heads, ReconstructionHeads)
-        assert heads.n_heads == 5
-    
+        assert heads.n_heads == 3
+
     def test_custom_configuration(self):
         """Test creating heads with custom configuration."""
         heads = create_reconstruction_heads(
@@ -704,10 +525,10 @@ class TestCreateReconstructionHeads:
             head_hidden_dim=128,
             n_head_layers=3,
             dropout=0.2,
-            mnar_variants=["self_censoring", "threshold"],
+            mnar_variants=["self_censoring"],
         )
-        
-        assert heads.n_heads == 4  # MCAR + MAR + 2 variants
+
+        assert heads.n_heads == 3  # MCAR + MAR + 1 variant
         assert heads.config.hidden_dim == 256
         assert heads.config.head_hidden_dim == 128
     

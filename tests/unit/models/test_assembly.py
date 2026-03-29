@@ -148,7 +148,7 @@ def default_config():
         n_layers=2,
         n_heads=2,
         max_cols=16,
-        mnar_variants=["self_censoring", "threshold"],
+        mnar_variants=["self_censoring"],
     )
 
 
@@ -250,8 +250,8 @@ class TestLacunaModelConfig:
     
     def test_mnar_variants(self, default_config):
         """Test MNAR variants configuration."""
-        assert default_config.mnar_variants == ["self_censoring", "threshold"]
-        assert default_config.get_moe_config().n_experts == 4  # MCAR + MAR + 2 MNAR
+        assert default_config.mnar_variants == ["self_censoring"]
+        assert default_config.get_moe_config().n_experts == 3  # MCAR + MAR + 1 MNAR
 
     def test_n_experts_property(self):
         """Test n_experts is computed correctly."""
@@ -290,7 +290,7 @@ class TestLacunaModelConfig:
         
         assert isinstance(moe_config, MoEConfig)
         assert moe_config.evidence_dim == default_config.evidence_dim
-        assert moe_config.n_experts == 4  # MCAR + MAR + 2 MNAR variants
+        assert moe_config.n_experts == 3  # MCAR + MAR + 1 MNAR variant
     
     def test_loss_matrix_default(self):
         """Test default loss matrix structure."""
@@ -572,7 +572,7 @@ class TestLacunaModel:
         assert isinstance(output.reconstruction, dict)
 
         # Should have one result per head
-        expected_heads = ["mcar", "mar", "self_censoring", "threshold"]
+        expected_heads = ["mcar", "mar", "self_censoring"]
         for head_name in expected_heads:
             assert head_name in output.reconstruction
             assert isinstance(output.reconstruction[head_name], ExtendedReconstructionResult)
@@ -668,9 +668,9 @@ class TestLacunaModel:
     
     def test_expert_to_class_buffer(self, model):
         """Test expert_to_class mapping buffer."""
-        # With 2 MNAR variants: experts are MCAR, MAR, SC, Thresh
-        expected = torch.tensor([MCAR, MAR, MNAR, MNAR])
-        
+        # With 1 MNAR variant: experts are MCAR, MAR, SC
+        expected = torch.tensor([MCAR, MAR, MNAR])
+
         assert torch.equal(model.expert_to_class, expected)
     
     def test_handles_variable_batch_sizes(self, model_mini):
@@ -717,19 +717,19 @@ class TestCreateLacunaModel:
             n_layers=6,
             n_heads=8,
             max_cols=64,
-            mnar_variants=["self_censoring", "threshold"],
+            mnar_variants=["self_censoring"],
             use_reconstruction_errors=True,
             use_expert_heads=True,
             temperature=0.5,
             learn_temperature=True,
         )
-        
+
         assert model.config.hidden_dim == 256
         assert model.config.evidence_dim == 128
         assert model.config.n_layers == 6
         assert model.config.n_heads == 8
         assert model.config.max_cols == 64
-        assert model.config.mnar_variants == ["self_censoring", "threshold"]
+        assert model.config.mnar_variants == ["self_censoring"]
         assert model.config.use_reconstruction_errors is True
         assert model.config.use_expert_heads is True
         assert model.config.temperature == 0.5

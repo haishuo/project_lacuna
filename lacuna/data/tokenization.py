@@ -177,7 +177,8 @@ def tokenize_dataset(
     
     # Handle row subsampling/padding
     if n > max_rows:
-        # Random subsample (use dataset_id for reproducibility if needed)
+        # NON-DETERMINISTIC: uses global numpy RNG for row subsampling.
+        # For reproducibility, seed the global RNG or pass dataset_id as seed.
         indices = np.random.choice(n, max_rows, replace=False)
         X = X[indices]
         R = R[indices]
@@ -263,6 +264,8 @@ def apply_artificial_masking(
         True
     """
     if rng is None:
+        # NON-DETERMINISTIC: unseeded RNG when no explicit seed provided.
+        # Callers should pass a seeded rng for reproducibility.
         rng = np.random.default_rng()
     
     n, d = X.shape
