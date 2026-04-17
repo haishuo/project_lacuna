@@ -65,10 +65,7 @@ from lacuna.data.tokenization import (
 )
 
 # === Batching ===
-from lacuna.data.batching import (
-    SyntheticDataLoader,
-    collate_fn,
-)
+from lacuna.data.batching import collate_fn
 
 # === Ingestion (for real datasets) ===
 from lacuna.data.ingestion import (
@@ -139,7 +136,6 @@ __all__ = [
     "collate_token_batches",
     
     # === Batching ===
-    "SyntheticDataLoader",
     "collate_fn",
     
     # === Ingestion ===

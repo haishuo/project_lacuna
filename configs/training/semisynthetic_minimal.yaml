@@ -1,5 +1,5 @@
 # Minimal semi-synthetic config for quick testing
-# Usage: python scripts/train_semisynthetic.py --config configs/training/semisynthetic_minimal.yaml
+# Usage: python scripts/train.py --config configs/training/semisynthetic_minimal.yaml
 
 seed: 42
 device: cpu

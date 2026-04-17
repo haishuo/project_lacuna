@@ -82,6 +82,10 @@ class LacunaModelConfig:
     
     # === Missingness Features ===
     use_missingness_features: bool = True  # Extract explicit missingness features
+    # Optional override of which feature groups are enabled. Used for ablation
+    # studies. When None, DEFAULT_MISSINGNESS_CONFIG (all groups on) is used.
+    # Ignored when use_missingness_features=False.
+    missingness_feature_config: Optional[MissingnessFeatureConfig] = None
     
     # === MoE ===
     gate_hidden_dim: int = 64         # Gating network hidden dimension
@@ -149,7 +153,11 @@ class LacunaModelConfig:
         n_recon_heads = 2 + len(self.mnar_variants)  # mcar + mar + mnar variants
         
         # Calculate number of missingness features
-        n_miss_features = DEFAULT_MISSINGNESS_CONFIG.n_features if self.use_missingness_features else 0
+        if self.use_missingness_features:
+            miss_cfg = self.missingness_feature_config or DEFAULT_MISSINGNESS_CONFIG
+            n_miss_features = miss_cfg.n_features
+        else:
+            n_miss_features = 0
         
         return MoEConfig(
             evidence_dim=self.evidence_dim,
@@ -302,7 +310,9 @@ class LacunaModel(nn.Module):
         
         # === Missingness Feature Extractor ===
         if config.use_missingness_features:
-            self.missingness_extractor = MissingnessFeatureExtractor()
+            self.missingness_extractor = MissingnessFeatureExtractor(
+                config.missingness_feature_config
+            )
         else:
             self.missingness_extractor = None
         
@@ -542,6 +552,7 @@ def create_lacuna_model(
     recon_n_head_layers: int = 2,
     mnar_variants: Optional[List[str]] = None,
     use_missingness_features: bool = True,
+    missingness_feature_config: Optional[MissingnessFeatureConfig] = None,
     gate_hidden_dim: int = 64,
     gate_n_layers: int = 2,
     gating_level: str = "dataset",
@@ -606,6 +617,7 @@ def create_lacuna_model(
         recon_n_head_layers=recon_n_head_layers,
         mnar_variants=mnar_variants,
         use_missingness_features=use_missingness_features,
+        missingness_feature_config=missingness_feature_config,
         gate_hidden_dim=gate_hidden_dim,
         gate_n_layers=gate_n_layers,
         gating_level=gating_level,

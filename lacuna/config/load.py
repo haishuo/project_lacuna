@@ -32,15 +32,9 @@ def config_from_dict(d: Dict[str, Any]) -> LacunaConfig:
     """Create LacunaConfig from dictionary."""
     try:
         data_dict = d.get("data", {})
-        
-        # Convert lists to tuples for dataclass
-        if "n_range" in data_dict and isinstance(data_dict["n_range"], list):
-            data_dict["n_range"] = tuple(data_dict["n_range"])
-        if "d_range" in data_dict and isinstance(data_dict["d_range"], list):
-            data_dict["d_range"] = tuple(data_dict["d_range"])
-        
-        # Handle optional dataset lists (for semi-synthetic)
-        # Keep as lists if present, None otherwise
+
+        # Handle optional dataset lists (semi-synthetic pathway).
+        # Keep as lists if present, None otherwise.
         if "train_datasets" in data_dict and data_dict["train_datasets"] is None:
             del data_dict["train_datasets"]
         if "val_datasets" in data_dict and data_dict["val_datasets"] is None:
@@ -79,12 +73,10 @@ def save_config(config: LacunaConfig, path: Union[str, Path]) -> None:
 def config_to_dict(config: LacunaConfig) -> Dict[str, Any]:
     """Convert LacunaConfig to dictionary."""
     data_dict = {
-        "n_range": list(config.data.n_range),
-        "d_range": list(config.data.d_range),
         "max_cols": config.data.max_cols,
         "max_rows": config.data.max_rows,
     }
-    
+
     # Include dataset lists if present
     if config.data.train_datasets is not None:
         data_dict["train_datasets"] = config.data.train_datasets

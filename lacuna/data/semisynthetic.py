@@ -215,15 +215,16 @@ def generate_semisynthetic_batch(
 
 
 class SemiSyntheticDataLoader:
-    """Data loader for semi-synthetic data.
-    
-    Takes a pool of real datasets and generates training batches
-    by applying random missingness mechanisms.
-    
-    Key differences from SyntheticDataLoader:
-    - Uses real data distributions (not synthetic X)
-    - Only generates synthetic missingness patterns (R)
-    - Supports row subsampling for large datasets
+    """Data loader for semi-synthetic data — Lacuna's only data path.
+
+    Takes a pool of real tabular datasets and generates training batches
+    by applying synthetic missingness mechanisms per batch. Supports row
+    subsampling for large datasets.
+
+    Why semi-synthetic: per Molenberghs, real missingness mechanisms are
+    unidentifiable from observed data, so the mechanism has to be synthetic.
+    But the underlying X must be real — pure Gaussian-tensor data is too
+    "pat" to ground any downstream accuracy claim.
     """
     
     def __init__(
@@ -277,7 +278,7 @@ class SemiSyntheticDataLoader:
         return self.batches_per_epoch
     
     def __iter__(self):
-        from .batching import tokenize_and_batch
+        from .tokenization import tokenize_and_batch
 
         # Use a different seed each epoch so the model sees fresh data
         epoch_seed = self.seed + self._epoch_counter * 1_000_000
@@ -344,51 +345,3 @@ class SemiSyntheticDataLoader:
         self.seed = new_seed
 
 
-class MixedDataLoader:
-    """Data loader that mixes synthetic and semi-synthetic data.
-    
-    Useful for curriculum learning or robustness testing.
-    """
-    
-    def __init__(
-        self,
-        synthetic_loader,  # SyntheticDataLoader
-        semisynthetic_loader: SemiSyntheticDataLoader,
-        mix_ratio: float = 0.5,
-        seed: int = 42,
-    ):
-        """Initialize mixed data loader.
-        
-        Args:
-            synthetic_loader: Fully synthetic data loader.
-            semisynthetic_loader: Semi-synthetic data loader.
-            mix_ratio: Fraction of batches from semi-synthetic (0-1).
-            seed: Random seed.
-        """
-        self.synthetic_loader = synthetic_loader
-        self.semisynthetic_loader = semisynthetic_loader
-        self.mix_ratio = mix_ratio
-        self.seed = seed
-    
-    def __len__(self) -> int:
-        return len(self.synthetic_loader)
-    
-    def __iter__(self):
-        rng = RNGState(seed=self.seed)
-        
-        syn_iter = iter(self.synthetic_loader)
-        semi_iter = iter(self.semisynthetic_loader)
-        
-        for _ in range(len(self)):
-            if rng.rand(1).item() < self.mix_ratio:
-                try:
-                    yield next(semi_iter)
-                except StopIteration:
-                    semi_iter = iter(self.semisynthetic_loader)
-                    yield next(semi_iter)
-            else:
-                try:
-                    yield next(syn_iter)
-                except StopIteration:
-                    syn_iter = iter(self.synthetic_loader)
-                    yield next(syn_iter)

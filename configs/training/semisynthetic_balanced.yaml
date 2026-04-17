@@ -1,7 +1,7 @@
 # Balanced semi-synthetic config with better train/val distribution
 # Mixed dataset sizes in both splits to prevent distribution shift
 #
-# Usage: python scripts/train_semisynthetic.py --config configs/training/semisynthetic_balanced.yaml --device cuda
+# Usage: python scripts/train.py --config configs/training/semisynthetic_balanced.yaml --device cuda
 
 seed: 42
 device: cuda

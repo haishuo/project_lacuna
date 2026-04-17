@@ -139,9 +139,9 @@ so evaluation always uses the exact settings the model was trained with.
 | `catalog.py` | Dataset registry with caching; loads UCI / OpenML / sklearn datasets |
 | `ingestion.py` | CSV / Parquet / sklearn → `RawDataset` |
 | `normalization.py` | Robust MAD-based normalisation |
-| `semisynthetic.py` | `SemiSyntheticDataLoader`; applies synthetic missingness to real data |
+| `semisynthetic.py` | `SemiSyntheticDataLoader`; applies synthetic missingness to real data. Only data loader path. |
 | `tokenization.py` | Row tokenisation; `apply_artificial_masking()` for self-supervised pretraining |
-| `batching.py` | `SyntheticDataLoader` for fully synthetic training batches |
+| `batching.py` | `collate_fn` for the PyTorch DataLoader (only contents; pure-synthetic loaders removed) |
 | `missingness_features.py` | `MissingnessFeatureExtractor`; computes 16 explicit statistics |
 
 **Semi-synthetic generation:** Each training batch samples a real dataset from the
@@ -289,7 +289,9 @@ record of what was run, with what config, and what it achieved.
 | Script | Purpose |
 |---|---|
 | `run_pipeline.py` | **Primary entry point**: train → calibrate → evaluate → figures |
-| `train_semisynthetic.py` | Training only, with auto eval report |
+| `train.py` | Training only, with auto eval report |
+| `run_ablation.py` | Missingness-feature ablation sweep (7 specs × N seeds) |
+| `validate_generators.py` | Validate synthetic generators against Little's MCAR test |
 | `evaluate.py` | Evaluation only; `--batches N` controls sample count |
 | `calibrate.py` | Post-hoc temperature scaling |
 | `generate_run_figures.py` | Full figure suite from a single `eval_report.json` |

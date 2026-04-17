@@ -215,25 +215,26 @@ project_lacuna/
 │
 ├── scripts/                         # Runnable scripts
 │   ├── infer.py                     # ← USER-FACING: classify a CSV's mechanism
-│   ├── train.py                     # Main training entry point
-│   ├── train_semisynthetic.py       # Training with semi-synthetic data (primary)
+│   ├── train.py                     # ← Training entry point (semi-synthetic only)
 │   ├── evaluate.py                  # Full evaluation with detailed reporting
 │   ├── calibrate.py                 # Post-hoc temperature scaling
+│   ├── run_ablation.py              # Missingness-feature ablation sweep
+│   ├── validate_generators.py       # Validate generators against Little's MCAR test
 │   ├── consolidate_results.py       # Gather all experiment results into JSON
 │   ├── generate_dissertation_figures.py  # Generate dissertation figures + LaTeX
 │   ├── download_datasets.py         # Download UCI/OpenML real datasets
 │   ├── test_missingness_features.py # Diagnostic: verify feature discriminability
 │   ├── diagnose_reconstruction.py   # Debug reconstruction errors by mechanism
-│   ├── train_fingerprint_test.py    # Cross-validation on MNAR variants
 │   ├── journal_entry.py             # Experiment logging utility
 │   └── repo_stats.py                # Repository statistics
 │
 ├── configs/                         # YAML configuration files
 │   ├── training/
-│   │   ├── default.yaml             # Default training config
-│   │   ├── minimal.yaml             # Minimal config for rapid testing
-│   │   ├── fast_gpu.yaml            # GPU-optimized config
-│   │   └── semisynthetic_full.yaml  # ← PRODUCTION: full semi-synthetic training
+│   │   ├── semisynthetic.yaml       # Standard semi-synthetic training
+│   │   ├── semisynthetic_minimal.yaml   # Minimal for rapid testing
+│   │   ├── semisynthetic_balanced.yaml  # Class-balanced variant
+│   │   ├── semisynthetic_full.yaml  # ← PRODUCTION: full semi-synthetic training
+│   │   └── ablation.yaml            # Canonical ablation sweep config
 │   ├── generators/
 │   │   ├── lacuna_tabular_110.yaml  # ← PRODUCTION: all 110 generators
 │   │   ├── lacuna_minimal_6.yaml    # 6-generator subset for testing
@@ -823,12 +824,10 @@ device: cuda
 output_dir: /mnt/artifacts/project_lacuna/runs
 
 data:
-  n_range: [50, 500]     # Dataset row counts during training
-  d_range: [5, 20]       # Dataset column counts during training
-  max_rows: 256          # Tokenization padding limit
-  max_cols: 48           # Tokenization padding limit
-  train_datasets: [...]  # Paths to 24 UCI/OpenML datasets
-  val_datasets:   [...]  # Paths to 7 UCI/OpenML datasets
+  max_rows: 256          # Tokenization padding limit (row subsampling cap)
+  max_cols: 48           # Tokenization padding limit (column cap)
+  train_datasets: [...]  # Catalog names of 24 UCI/OpenML/sklearn datasets
+  val_datasets:   [...]  # Catalog names of 7 held-out datasets
 
 model:
   hidden_dim: 128
@@ -975,7 +974,7 @@ This produces in `docs/figures/`:
 To reproduce Experiment 10 (final model):
 ```bash
 # Step 1: Train with 1/1/1 experts
-python scripts/train_semisynthetic.py \
+python scripts/train.py \
   --config configs/training/semisynthetic_full.yaml \
   --generators lacuna_tabular_110 \
   --mnar-variants self_censoring \

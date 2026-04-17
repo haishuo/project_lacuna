@@ -20,16 +20,16 @@ class TestDataConfig:
         cfg = DataConfig()
         assert cfg.max_cols == 32
         assert cfg.max_rows == 256
-        assert cfg.n_range == (50, 500)
-        assert cfg.d_range == (5, 20)
-    
-    def test_invalid_n_range_raises(self):
+        assert cfg.train_datasets is None
+        assert cfg.val_datasets is None
+
+    def test_invalid_max_cols_raises(self):
         with pytest.raises(ValueError):
-            DataConfig(n_range=(100, 50))  # min > max
-    
-    def test_invalid_d_range_raises(self):
+            DataConfig(max_cols=0)
+
+    def test_invalid_max_rows_raises(self):
         with pytest.raises(ValueError):
-            DataConfig(d_range=(20, 5))  # min > max
+            DataConfig(max_rows=-1)
 
 
 class TestModelConfig:
@@ -100,4 +100,6 @@ class TestLacunaConfig:
         assert cfg.device == "cpu"
         assert cfg.data.max_cols == 16
         assert cfg.data.max_rows == 64
+        assert cfg.data.train_datasets == ["iris"]
+        assert cfg.data.val_datasets == ["iris"]
         assert cfg.model.hidden_dim == 64

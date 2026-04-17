@@ -7,30 +7,30 @@ Simplified for row-level tokenization architecture.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Tuple, Optional
+from typing import List, Optional
 import torch
 
 
 @dataclass
 class DataConfig:
-    """Data processing configuration."""
-    # Synthetic data ranges (used by SyntheticDataLoader)
-    n_range: Tuple[int, int] = (50, 500)
-    d_range: Tuple[int, int] = (5, 20)
-    
-    # Dimension limits
+    """Data processing configuration.
+
+    Lacuna trains on semi-synthetic data: real tabular X loaded from the
+    catalog (via `train_datasets` / `val_datasets`), with synthetic
+    missingness mechanisms applied per batch.
+    """
+    # Dimension limits (tokeniser capacity)
     max_cols: int = 32
     max_rows: int = 256
-    
-    # Semi-synthetic dataset names (used by SemiSyntheticDataLoader)
+
+    # Catalog dataset names for semi-synthetic training.
+    # train_datasets is required; val_datasets is required whenever
+    # training runs. Left Optional so partial configs (e.g. eval-only
+    # invocations) can omit one.
     train_datasets: Optional[List[str]] = None
     val_datasets: Optional[List[str]] = None
-    
+
     def __post_init__(self):
-        if self.n_range[0] > self.n_range[1]:
-            raise ValueError("n_range[0] must be <= n_range[1]")
-        if self.d_range[0] > self.d_range[1]:
-            raise ValueError("d_range[0] must be <= d_range[1]")
         if self.max_cols <= 0:
             raise ValueError("max_cols must be positive")
         if self.max_rows <= 0:
@@ -107,13 +107,19 @@ class LacunaConfig:
     
     @classmethod
     def minimal(cls) -> "LacunaConfig":
-        """Create minimal config for fast testing."""
+        """Create minimal semi-synthetic config for fast testing.
+
+        Uses iris (the smallest sklearn built-in, always available) as
+        both train and val source. Paired with `lacuna_minimal_6` for a
+        small generator registry. CPU-only. Intended for test suites and
+        smoke checks — NOT for dissertation-grade ablation runs.
+        """
         return cls(
             data=DataConfig(
-                n_range=(50, 100),
-                d_range=(5, 8),
                 max_cols=16,
                 max_rows=64,
+                train_datasets=["iris"],
+                val_datasets=["iris"],
             ),
             model=ModelConfig(
                 hidden_dim=64,

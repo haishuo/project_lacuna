@@ -1,1 +1,10 @@
 # Dependencies
+
+# PyStatistics: R-parity statistical computing.
+# Used for offline analysis only (generator validation, ablation statistics,
+# bootstrap CIs on reported metrics). MUST NOT be called from the model
+# forward pass — classical CPU backend, breaks autograd.
+#
+# Not yet on PyPI. Install in dev with:
+#   pip install -e /path/to/pystatistics
+pystatistics>=1.7.0

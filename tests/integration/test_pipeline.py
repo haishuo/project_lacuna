@@ -39,11 +39,7 @@ from lacuna.data.tokenization import (
     MaskingConfig,
     TOKEN_DIM,
 )
-from lacuna.data.batching import (
-    SyntheticDataLoader,
-    SyntheticDataLoaderConfig,
-    collate_fn,
-)
+from lacuna.data.batching import collate_fn
 from lacuna.models.assembly import (
     LacunaModel,
     LacunaModelConfig,
@@ -570,70 +566,6 @@ class TestCheckpointing:
 
 
 # =============================================================================
-# Test Data Loader Integration
-# =============================================================================
-
-class TestDataLoaderIntegration:
-    """Test data loaders work with model."""
-    
-    def test_synthetic_data_loader(self, generators, model):
-        """SyntheticDataLoader produces valid batches."""
-        config = SyntheticDataLoaderConfig(
-            batch_size=4,
-            n_range=(50, 100),
-            d_range=(5, 10),
-            max_rows=16,
-            max_cols=16,
-            apply_masking=False,
-            batches_per_epoch=2,
-            seed=42,
-        )
-        
-        loader = SyntheticDataLoader(
-            generators=list(generators),
-            config=config,
-        )
-        
-        model.eval()
-        for batch in loader:
-            with torch.no_grad():
-                output = model(batch)
-            
-            assert output.posterior.p_class.shape[0] == 4
-            assert not torch.isnan(output.posterior.p_class).any()
-    
-    def test_data_loader_reproducibility(self, generators):
-        """Data loader produces valid batches (reproducibility depends on internal reset)."""
-        config = SyntheticDataLoaderConfig(
-            batch_size=4,
-            n_range=(50, 100),
-            d_range=(5, 10),
-            max_rows=16,
-            max_cols=16,
-            apply_masking=False,
-            batches_per_epoch=2,
-            seed=42,
-        )
-        
-        # Create first loader and get first batch
-        loader1 = SyntheticDataLoader(generators=list(generators), config=config)
-        batch1 = next(iter(loader1))
-        
-        # Create second loader with same config and get first batch
-        loader2 = SyntheticDataLoader(generators=list(generators), config=config)
-        batch2 = next(iter(loader2))
-        
-        # Verify that both loaders produce valid batches of the same shape
-        assert batch1.tokens.shape == batch2.tokens.shape
-        assert batch1.row_mask.shape == batch2.row_mask.shape
-        assert batch1.col_mask.shape == batch2.col_mask.shape
-        
-        # Note: Full reproducibility requires resetting internal state
-        # between loader instantiations. The important thing is that 
-        # batches are valid and have consistent shapes.
-
-
-# =============================================================================
 # Test End-to-End Pipeline
 # =============================================================================
 
@@ -916,28 +848,29 @@ class TestRegistryIntegration:
             assert gen.generator_id == i
     
     def test_registry_with_data_loader(self, registry):
-        """Registry integrates with data loader."""
-        config = SyntheticDataLoaderConfig(
-            batch_size=4,
-            n_range=(50, 100),
-            d_range=(5, 10),
+        """Registry integrates with the semi-synthetic data loader."""
+        from lacuna.data.catalog import create_default_catalog
+        from lacuna.data.semisynthetic import SemiSyntheticDataLoader
+        from lacuna.generators.priors import GeneratorPrior
+        from lacuna.generators.registry import GeneratorRegistry
+
+        iris = create_default_catalog().load("iris")
+        full_reg = GeneratorRegistry(registry)
+        loader = SemiSyntheticDataLoader(
+            raw_datasets=[iris],
+            registry=full_reg,
+            prior=GeneratorPrior.uniform(full_reg),
             max_rows=16,
             max_cols=16,
-            apply_masking=False,
+            batch_size=4,
             batches_per_epoch=1,
             seed=42,
         )
-        
-        loader = SyntheticDataLoader(
-            generators=list(registry.generators),
-            config=config,
-        )
-        
+
         for batch in loader:
             assert batch.generator_ids is not None
             assert batch.class_ids is not None
-            
-            # Verify class_ids match registry mapping
-            mapping = registry.get_class_mapping()
+
+            mapping = full_reg.get_class_mapping()
             expected_classes = mapping[batch.generator_ids]
             assert torch.equal(batch.class_ids, expected_classes)

@@ -14,7 +14,6 @@ from lacuna.data.semisynthetic import (
     subsample_rows,
     generate_semisynthetic_batch,
     SemiSyntheticDataLoader,
-    MixedDataLoader,
 )
 from lacuna.data.ingestion import RawDataset, load_sklearn_dataset
 from lacuna.generators import load_registry_from_config
@@ -325,48 +324,3 @@ class TestSemiSyntheticDataLoader:
             )
 
 
-class TestMixedDataLoader:
-    """Tests for MixedDataLoader."""
-    
-    def test_basic_iteration(self, small_raw, minimal_registry):
-        """Should iterate through both loaders."""
-        prior = GeneratorPrior.uniform(minimal_registry)
-        
-        from lacuna.data.batching import SyntheticDataLoader, SyntheticDataLoaderConfig
-        
-        syn_config = SyntheticDataLoaderConfig(
-            batch_size=4,
-            n_range=(30, 50),
-            d_range=(3, 5),
-            max_rows=64,
-            max_cols=16,
-            batches_per_epoch=3,
-            seed=42,
-        )
-        syn_loader = SyntheticDataLoader(
-            generators=list(minimal_registry.generators),
-            config=syn_config,
-        )
-        
-        semi_loader = SemiSyntheticDataLoader(
-            raw_datasets=[small_raw],
-            registry=minimal_registry,
-            prior=prior,
-            max_rows=64,
-            max_cols=16,
-            batch_size=4,
-            batches_per_epoch=2,
-            seed=43,
-        )
-        
-        mixed = MixedDataLoader(
-            synthetic_loader=syn_loader,
-            semisynthetic_loader=semi_loader,
-            mix_ratio=0.5,
-            seed=44,
-        )
-        
-        batches = list(mixed)
-        
-        # MixedDataLoader.__len__ returns len(synthetic_loader) = 3
-        assert len(batches) == 3

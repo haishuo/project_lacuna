@@ -1,7 +1,19 @@
-# Full semi-synthetic training config with all available datasets
-# Uses 80% for training, 20% for validation
+# Canonical training config for the missingness-feature ablation sweep.
 #
-# Usage: python scripts/train.py --config configs/training/semisynthetic_full.yaml --device cuda
+# Mirrors semisynthetic_full.yaml exactly: real underlying X from the 24
+# tabular training datasets, 7 held-out real validation datasets, synthetic
+# missingness mechanisms from lacuna_tabular_110, 100 epochs.
+#
+# Why not pure synthetic: per Molenberghs, real missingness mechanisms are
+# unidentifiable from observed data alone — the mechanism MUST be synthetic.
+# But the underlying X can (and should) be real. Pure-synthetic Gaussian-tensor
+# data is too "pat" to produce committee-convincing ablation conclusions.
+#
+# Usage (on Forge, in tmux):
+#   python scripts/run_ablation.py \
+#       --config configs/training/ablation.yaml \
+#       --seeds 1 2 3 4 5 \
+#       --csv /mnt/artifacts/project_lacuna/ablation/semisynth_5seed.csv
 
 seed: 42
 device: cuda
@@ -11,7 +23,7 @@ data:
   max_rows: 128
   max_cols: 48
 
-  # Training datasets (80% - 24 datasets)
+  # Training datasets (24 real tabular datasets of varying size)
   train_datasets:
     # Large datasets (>10k samples)
     - credit_card_default
@@ -25,7 +37,6 @@ data:
     - satellite
     - spambase
     - pendigits
-
     # Medium datasets (1k-10k samples)
     - abalone
     - cardiotocography
@@ -35,15 +46,14 @@ data:
     - wine_white
     - yeast
     - concrete
-
-    # Small datasets (<1k samples) - sklearn built-ins
+    # Small datasets (<1k samples)
     - breast_cancer
     - diabetes
     - wine
     - parkinsons
     - vehicle
 
-  # Validation datasets (20% - 6 datasets, diverse sizes)
+  # Held-out real validation datasets
   val_datasets:
     - banknote
     - heart_disease
@@ -74,3 +84,8 @@ training:
 
 generator:
   config_name: lacuna_tabular_110
+
+loss_matrix:
+  - [0.0, 0.3, 1.0]   # Green action
+  - [0.2, 0.0, 0.2]   # Yellow action
+  - [1.0, 0.3, 0.0]   # Red action

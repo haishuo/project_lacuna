@@ -1,7 +1,7 @@
 # Semi-synthetic training config
 # Uses real data + synthetic missingness mechanisms
 #
-# Usage: python scripts/train_semisynthetic.py --config configs/training/semisynthetic.yaml
+# Usage: python scripts/train.py --config configs/training/semisynthetic.yaml
 
 seed: 42
 device: cuda

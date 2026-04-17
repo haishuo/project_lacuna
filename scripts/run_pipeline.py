@@ -192,7 +192,7 @@ def main():
 
     # === Step 1: Train with auto-report ===
     train_cmd = [
-        PYTHON, str(PROJECT_ROOT / "scripts" / "train_semisynthetic.py"),
+        PYTHON, str(PROJECT_ROOT / "scripts" / "train.py"),
         "--config", args.config,
         "--quiet",
         "--report",
