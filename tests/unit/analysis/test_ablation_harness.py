@@ -101,7 +101,14 @@ def test_disable_specs_toggle_exactly_one_flag():
 # =============================================================================
 
 
-def _make_row(spec_name: str, seed: int, accuracy: float) -> AblationResult:
+def _make_row(
+    spec_name: str,
+    seed: int,
+    accuracy: float,
+    *,
+    train_accuracy: float = 0.95,
+    generalization_gap: float = 0.05,
+) -> AblationResult:
     return AblationResult(
         spec_name=spec_name,
         seed=seed,
@@ -113,6 +120,8 @@ def _make_row(spec_name: str, seed: int, accuracy: float) -> AblationResult:
         ece=0.05,
         val_loss=0.5,
         train_time_s=12.3,
+        train_accuracy=train_accuracy,
+        generalization_gap=generalization_gap,
     )
 
 
@@ -152,6 +161,34 @@ def test_results_for_sorts_by_seed():
 def test_results_for_unknown_metric_raises():
     with pytest.raises(ValueError, match="Unknown metric"):
         results_for([_make_row("baseline", 1, 0.9)], "baseline", metric="nonsense")
+
+
+def test_csv_roundtrip_preserves_train_acc_and_gap(tmp_path: Path):
+    """New fields round-trip cleanly through the CSV."""
+    csv = tmp_path / "ablation.csv"
+    row = _make_row("baseline", 1, 0.85, train_accuracy=0.97, generalization_gap=0.12)
+    _write_row(csv, row, write_header=True)
+    restored = load_ablation_csv(csv)
+    assert restored[0].train_accuracy == pytest.approx(0.97)
+    assert restored[0].generalization_gap == pytest.approx(0.12)
+
+
+def test_load_legacy_csv_without_train_acc_columns(tmp_path: Path):
+    """Legacy CSVs (no train_accuracy / generalization_gap columns) load with None."""
+    csv = tmp_path / "legacy.csv"
+    legacy_header = (
+        "spec_name,seed,n_features,accuracy,mcar_acc,mar_acc,mnar_acc,"
+        "ece,val_loss,train_time_s\n"
+    )
+    legacy_row = "baseline,1,16,0.85,0.9,0.8,0.7,0.05,0.5,12.3\n"
+    csv.write_text(legacy_header + legacy_row)
+
+    rows = load_ablation_csv(csv)
+    assert len(rows) == 1
+    assert rows[0].spec_name == "baseline"
+    assert rows[0].accuracy == pytest.approx(0.85)
+    assert rows[0].train_accuracy is None
+    assert rows[0].generalization_gap is None
 
 
 # =============================================================================
@@ -227,6 +264,13 @@ def test_end_to_end_minimal_sweep(tmp_path: Path):
     base_row = [r for r in results if r.spec_name == "baseline"][0]
     dis_row = [r for r in results if r.spec_name == "disable_littles"][0]
     assert base_row.n_features > dis_row.n_features
+
+    # Train-set evaluation populates the memorization-diagnostic fields.
+    for r in results:
+        assert r.train_accuracy is not None
+        assert 0.0 <= r.train_accuracy <= 1.0
+        assert r.generalization_gap is not None
+        assert r.generalization_gap == pytest.approx(r.train_accuracy - r.accuracy)
 
     # CSV matches in-memory rows.
     restored = load_ablation_csv(csv)

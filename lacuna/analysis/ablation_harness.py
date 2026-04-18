@@ -75,6 +75,11 @@ class AblationResult:
     """One row of ablation output: metrics from a single (spec, seed) run.
 
     Attributes match the keys written to the tidy CSV.
+
+    train_accuracy / generalization_gap are optional for backward-compat
+    with CSVs written by earlier harness revisions (pre train-eval). New
+    runs always populate them. A None value in either field means "not
+    measured" — analysis code must handle this.
     """
     spec_name: str
     seed: int
@@ -86,6 +91,8 @@ class AblationResult:
     ece: float
     val_loss: float
     train_time_s: float
+    train_accuracy: Optional[float] = None
+    generalization_gap: Optional[float] = None
 
 
 # =============================================================================
@@ -227,6 +234,36 @@ def _build_loaders(base_config: LacunaConfig, seed: int):
     return train_loader, val_loader, registry
 
 
+def _build_train_eval_loader(base_config: LacunaConfig, seed: int) -> SemiSyntheticDataLoader:
+    """Build an evaluation loader over TRAIN datasets with val-sized budget.
+
+    Used to measure train-set accuracy as a memorization diagnostic. Uses
+    the same dataset pool as training but with a different seed derivation
+    (seed + 2_000_000) so the batches are fresh random samples — this
+    measures generalization across mechanisms on the same X distributions,
+    which is the relevant "train accuracy" for a semi-synthetic pipeline
+    where the mechanism is re-randomised every batch.
+    """
+    generators_name = (
+        base_config.generator.config_path or base_config.generator.config_name
+    )
+    registry = load_registry_from_config(generators_name)
+    prior = GeneratorPrior.uniform(registry)
+    train_raw = _load_raw_datasets_for_harness(
+        base_config.data.train_datasets, base_config.data.max_cols
+    )
+    return SemiSyntheticDataLoader(
+        raw_datasets=train_raw,
+        registry=registry,
+        prior=prior,
+        max_rows=base_config.data.max_rows,
+        max_cols=base_config.data.max_cols,
+        batch_size=base_config.training.batch_size,
+        batches_per_epoch=base_config.training.val_batches,
+        seed=seed + 2_000_000,
+    )
+
+
 def run_single_ablation(
     base_config: LacunaConfig,
     spec: AblationSpec,
@@ -281,12 +318,27 @@ def run_single_ablation(
     trainer.fit(train_loader, val_loader)
     train_time = time.time() - t0
 
-    # Detailed validation for per-class accuracy + ECE.
-    detailed = trainer.validate_detailed(val_loader)
-    report = generate_eval_report(detailed, registry=registry)
+    # Detailed validation on held-out val datasets.
+    detailed_val = trainer.validate_detailed(val_loader)
+    report_val = generate_eval_report(detailed_val, registry=registry)
 
-    summary = report["summary"]
-    calibration = report["calibration"]
+    # Train-set evaluation for the memorization diagnostic. Uses a
+    # separately-built loader over the TRAIN datasets with val_batches
+    # worth of fresh samples (same evaluation budget as val) — drawing
+    # fresh random mechanisms and subsamples, so this measures how well
+    # the model generalizes across missingness patterns on the same X
+    # distributions it was trained on.
+    train_eval_loader = _build_train_eval_loader(base_config, seed)
+    detailed_train = trainer.validate_detailed(train_eval_loader)
+    report_train = generate_eval_report(detailed_train, registry=registry)
+
+    summary_val = report_val["summary"]
+    calibration = report_val["calibration"]
+    summary_train = report_train["summary"]
+
+    val_accuracy = float(summary_val["accuracy"])
+    train_accuracy = float(summary_train["accuracy"])
+    generalization_gap = train_accuracy - val_accuracy
 
     n_features = 0
     if spec.use_missingness_features:
@@ -297,13 +349,15 @@ def run_single_ablation(
         spec_name=spec.name,
         seed=seed,
         n_features=n_features,
-        accuracy=float(summary["accuracy"]),
-        mcar_acc=float(summary["mcar_acc"]),
-        mar_acc=float(summary["mar_acc"]),
-        mnar_acc=float(summary["mnar_acc"]),
+        accuracy=val_accuracy,
+        mcar_acc=float(summary_val["mcar_acc"]),
+        mar_acc=float(summary_val["mar_acc"]),
+        mnar_acc=float(summary_val["mnar_acc"]),
         ece=float(calibration["ece"]),
-        val_loss=float(summary["loss"]),
+        val_loss=float(summary_val["loss"]),
         train_time_s=float(train_time),
+        train_accuracy=train_accuracy,
+        generalization_gap=generalization_gap,
     )
 
 
@@ -323,7 +377,17 @@ CSV_COLUMNS = [
     "ece",
     "val_loss",
     "train_time_s",
+    "train_accuracy",
+    "generalization_gap",
 ]
+
+# Columns a pre-train-eval CSV is guaranteed to have. `load_ablation_csv`
+# treats anything beyond this set as optional so legacy CSVs still load.
+_LEGACY_CSV_COLUMNS = frozenset({
+    "spec_name", "seed", "n_features", "accuracy",
+    "mcar_acc", "mar_acc", "mnar_acc", "ece",
+    "val_loss", "train_time_s",
+})
 
 
 def _write_row(csv_path: Path, row: AblationResult, write_header: bool) -> None:
@@ -381,12 +445,21 @@ def run_ablation_sweep(
 
 
 def load_ablation_csv(csv_path: Path) -> List[AblationResult]:
-    """Read a tidy CSV produced by run_ablation_sweep back into AblationResult rows."""
+    """Read a tidy CSV produced by run_ablation_sweep back into AblationResult rows.
+
+    Backward-compatible with legacy CSVs written before train-set evaluation
+    was added to the harness: `train_accuracy` and `generalization_gap`
+    default to None when absent. Analysis code must handle None.
+    """
     csv_path = Path(csv_path)
     out: List[AblationResult] = []
     with csv_path.open("r", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            train_acc_raw = row.get("train_accuracy", "")
+            gap_raw = row.get("generalization_gap", "")
+            train_accuracy = float(train_acc_raw) if train_acc_raw not in ("", None) else None
+            gap = float(gap_raw) if gap_raw not in ("", None) else None
             out.append(
                 AblationResult(
                     spec_name=row["spec_name"],
@@ -399,6 +472,8 @@ def load_ablation_csv(csv_path: Path) -> List[AblationResult]:
                     ece=float(row["ece"]),
                     val_loss=float(row["val_loss"]),
                     train_time_s=float(row["train_time_s"]),
+                    train_accuracy=train_accuracy,
+                    generalization_gap=gap,
                 )
             )
     return out
