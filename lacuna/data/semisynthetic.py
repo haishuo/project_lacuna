@@ -225,6 +225,13 @@ class SemiSyntheticDataLoader:
     unidentifiable from observed data, so the mechanism has to be synthetic.
     But the underlying X must be real — pure Gaussian-tensor data is too
     "pat" to ground any downstream accuracy claim.
+
+    Optional Little's MCAR cache: if provided at construction, each batch
+    receives `little_mcar_stat` and `little_mcar_pvalue` tensors populated
+    from the cache keyed on (raw_dataset_name, generator_id). Every
+    (raw_dataset, generator) pair the loader can produce MUST be present
+    in the cache — missing keys raise KeyError. Build the cache with
+    `scripts/build_littles_cache.py`.
     """
     
     def __init__(
@@ -237,9 +244,11 @@ class SemiSyntheticDataLoader:
         batch_size: int,
         batches_per_epoch: int,
         seed: int = 42,
+        littles_cache=None,  # Optional[LittlesCache]; late-bound to avoid circular import
+        littles_method: str = "mle",
     ):
         """Initialize the semi-synthetic data loader.
-        
+
         Args:
             raw_datasets: Pool of complete datasets to draw from.
             registry: Generator registry for missingness mechanisms.
@@ -249,7 +258,22 @@ class SemiSyntheticDataLoader:
             batch_size: Number of datasets per batch.
             batches_per_epoch: Number of batches per epoch.
             seed: Random seed for reproducibility.
+            littles_cache: Optional LittlesCache. If provided, emitted
+                TokenBatches carry precomputed MCAR-test scalars. Every
+                (raw_dataset.name, generator_id) pair reachable by this
+                loader must be present in the cache.
+            littles_method: Which cached MCAR test to emit. "mle" (default,
+                Little 1988) or "mom" (method-of-moments). Ignored when
+                littles_cache is None.
         """
+        from .littles_cache import VALID_METHODS
+
+        if littles_method not in VALID_METHODS:
+            raise ValueError(
+                f"littles_method must be one of {VALID_METHODS}; "
+                f"got {littles_method!r}"
+            )
+
         self.raw_datasets = raw_datasets
         self.registry = registry
         self.prior = prior
@@ -258,13 +282,15 @@ class SemiSyntheticDataLoader:
         self.batch_size = batch_size
         self.batches_per_epoch = batches_per_epoch
         self.seed = seed
+        self.littles_cache = littles_cache
+        self.littles_method = littles_method
         self._epoch_counter = 0
 
         self._class_mapping = registry.get_class_mapping()
-        
+
         if len(raw_datasets) == 0:
             raise ValueError("Need at least one raw dataset")
-        
+
         # Validate datasets
         for ds in raw_datasets:
             if ds.d > max_cols:
@@ -273,11 +299,28 @@ class SemiSyntheticDataLoader:
                     f"but max_cols={max_cols}. Either increase max_cols "
                     f"or exclude this dataset."
                 )
+
+        # Validate cache coverage (fail loud per Coding Bible rule 1).
+        if littles_cache is not None:
+            missing = [
+                (ds.name, gen.generator_id)
+                for ds in raw_datasets
+                for gen in registry
+                if (ds.name, gen.generator_id) not in littles_cache
+            ]
+            if missing:
+                raise ValueError(
+                    f"Little's cache is missing {len(missing)} "
+                    f"(dataset, generator) pair(s). First 5: {missing[:5]}. "
+                    f"Rebuild the cache."
+                )
     
     def __len__(self) -> int:
         return self.batches_per_epoch
     
     def __iter__(self):
+        import dataclasses
+        import torch
         from .tokenization import tokenize_and_batch
 
         # Use a different seed each epoch so the model sees fresh data
@@ -285,13 +328,14 @@ class SemiSyntheticDataLoader:
         self._epoch_counter += 1
         rng = RNGState(seed=epoch_seed)
         n_datasets = len(self.raw_datasets)
-        
+
         for batch_idx in range(self.batches_per_epoch):
             batch_rng = rng.spawn()
-            
+
             datasets = []
             generator_ids = []
-            
+            raw_names: List[str] = []
+
             for i in range(self.batch_size):
                 # Pick a random raw dataset
                 ds_idx = batch_rng.randint(0, n_datasets, (1,)).item()
@@ -318,17 +362,18 @@ class SemiSyntheticDataLoader:
                                 f"dataset '{raw.name}' (d={raw.d}) after "
                                 f"{max_retries} attempts"
                             )
-                
+
                 # Subsample rows if needed
                 observed = subsample_rows(
                     ss.observed,
                     max_rows=self.max_rows,
                     rng=batch_rng.spawn(),
                 )
-                
+
                 datasets.append(observed)
                 generator_ids.append(gen_id)
-            
+                raw_names.append(raw.name)
+
             # Tokenize and batch
             batch = tokenize_and_batch(
                 datasets=datasets,
@@ -337,7 +382,24 @@ class SemiSyntheticDataLoader:
                 generator_ids=generator_ids,
                 class_mapping=self._class_mapping,
             )
-            
+
+            # Attach cached MCAR scalars, if a cache was provided. The
+            # method selector ("mle" or "mom") picks which pair is emitted.
+            if self.littles_cache is not None:
+                stats = torch.empty(self.batch_size, dtype=torch.float32)
+                pvals = torch.empty(self.batch_size, dtype=torch.float32)
+                for i, (ds_name, gid) in enumerate(zip(raw_names, generator_ids)):
+                    stat, pval = self.littles_cache.get(
+                        ds_name, gid, method=self.littles_method
+                    )
+                    stats[i] = stat
+                    pvals[i] = pval
+                batch = dataclasses.replace(
+                    batch,
+                    little_mcar_stat=stats,
+                    little_mcar_pvalue=pvals,
+                )
+
             yield batch
     
     def reset_seed(self, new_seed: int) -> None:

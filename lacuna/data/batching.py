@@ -59,6 +59,12 @@ def collate_fn(batches: List[TokenBatch]) -> TokenBatch:
     if all(b.reconstruction_mask is not None for b in batches):
         reconstruction_mask = torch.cat([b.reconstruction_mask for b in batches], dim=0)
 
+    little_mcar_stat = None
+    little_mcar_pvalue = None
+    if all(b.little_mcar_stat is not None for b in batches):
+        little_mcar_stat = torch.cat([b.little_mcar_stat for b in batches], dim=0)
+        little_mcar_pvalue = torch.cat([b.little_mcar_pvalue for b in batches], dim=0)
+
     return TokenBatch(
         tokens=tokens,
         row_mask=row_mask,
@@ -68,4 +74,6 @@ def collate_fn(batches: List[TokenBatch]) -> TokenBatch:
         variant_ids=variant_ids,
         original_values=original_values,
         reconstruction_mask=reconstruction_mask,
+        little_mcar_stat=little_mcar_stat,
+        little_mcar_pvalue=little_mcar_pvalue,
     )

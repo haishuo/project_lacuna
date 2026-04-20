@@ -43,7 +43,7 @@ def iris_raw():
     return create_default_catalog().load("iris")
 
 
-def _make_loader(registry, iris_raw, *, batches: int, batch_size: int, seed: int):
+def _make_loader(registry, iris_raw, *, batches: int, batch_size: int, seed: int, littles_cache=None):
     """Build a SemiSyntheticDataLoader on iris for a test run."""
     return SemiSyntheticDataLoader(
         raw_datasets=[iris_raw],
@@ -54,6 +54,7 @@ def _make_loader(registry, iris_raw, *, batches: int, batch_size: int, seed: int
         batch_size=batch_size,
         batches_per_epoch=batches,
         seed=seed,
+        littles_cache=littles_cache,
     )
 
 
@@ -65,12 +66,12 @@ def _sample_batch(loader: SemiSyntheticDataLoader):
 class TestTrainingLoop:
     """Test full training loop."""
 
-    def test_training_reduces_loss(self, registry, iris_raw):
+    def test_training_reduces_loss(self, registry, iris_raw, iris_littles_cache):
         """Training completes and emits finite validation metrics."""
         model = create_lacuna_mini(max_cols=16)
 
-        train_loader = _make_loader(registry, iris_raw, batches=10, batch_size=8, seed=42)
-        val_loader = _make_loader(registry, iris_raw, batches=3, batch_size=8, seed=99)
+        train_loader = _make_loader(registry, iris_raw, batches=10, batch_size=8, seed=42, littles_cache=iris_littles_cache)
+        val_loader = _make_loader(registry, iris_raw, batches=3, batch_size=8, seed=99, littles_cache=iris_littles_cache)
 
         trainer_config = TrainerConfig(
             lr=3e-3,
@@ -88,12 +89,12 @@ class TestTrainingLoop:
         assert result["best_val_loss"] > 0
         assert result["best_val_acc"] >= 0.0
 
-    def test_checkpoint_save_load(self, registry, iris_raw):
+    def test_checkpoint_save_load(self, registry, iris_raw, iris_littles_cache):
         """Checkpoints preserve model state."""
         model1 = create_lacuna_mini(max_cols=16)
         model2 = create_lacuna_mini(max_cols=16)
 
-        train_loader = _make_loader(registry, iris_raw, batches=5, batch_size=8, seed=42)
+        train_loader = _make_loader(registry, iris_raw, batches=5, batch_size=8, seed=42, littles_cache=iris_littles_cache)
         trainer_config = TrainerConfig(lr=1e-3, epochs=1, warmup_steps=5)
         trainer = Trainer(model1, trainer_config, device="cpu")
         trainer.fit(train_loader)
@@ -109,7 +110,7 @@ class TestTrainingLoop:
             load_model_weights(model2, ckpt_path)
 
         test_batch = _sample_batch(
-            _make_loader(registry, iris_raw, batches=1, batch_size=4, seed=123)
+            _make_loader(registry, iris_raw, batches=1, batch_size=4, seed=123, littles_cache=iris_littles_cache)
         )
 
         model1.eval()
@@ -120,12 +121,12 @@ class TestTrainingLoop:
 
         assert torch.allclose(out1.posterior.p_class, out2.posterior.p_class)
 
-    def test_training_with_validation(self, registry, iris_raw):
+    def test_training_with_validation(self, registry, iris_raw, iris_littles_cache):
         """Training with validation tracks best model."""
         model = create_lacuna_mini(max_cols=16)
 
-        train_loader = _make_loader(registry, iris_raw, batches=10, batch_size=8, seed=42)
-        val_loader = _make_loader(registry, iris_raw, batches=3, batch_size=8, seed=99)
+        train_loader = _make_loader(registry, iris_raw, batches=10, batch_size=8, seed=42, littles_cache=iris_littles_cache)
+        val_loader = _make_loader(registry, iris_raw, batches=3, batch_size=8, seed=99, littles_cache=iris_littles_cache)
 
         trainer_config = TrainerConfig(
             lr=1e-3,
@@ -142,12 +143,12 @@ class TestTrainingLoop:
         assert result["best_val_loss"] < float("inf")
         assert result["best_val_acc"] >= 0
 
-    def test_early_stopping_triggers(self, registry, iris_raw):
+    def test_early_stopping_triggers(self, registry, iris_raw, iris_littles_cache):
         """Early stopping fires when validation stops improving."""
         model = create_lacuna_mini(max_cols=16)
 
-        train_loader = _make_loader(registry, iris_raw, batches=5, batch_size=4, seed=42)
-        val_loader = _make_loader(registry, iris_raw, batches=2, batch_size=4, seed=99)
+        train_loader = _make_loader(registry, iris_raw, batches=5, batch_size=4, seed=42, littles_cache=iris_littles_cache)
+        val_loader = _make_loader(registry, iris_raw, batches=2, batch_size=4, seed=99, littles_cache=iris_littles_cache)
 
         trainer_config = TrainerConfig(
             lr=1e-8,
@@ -166,12 +167,12 @@ class TestTrainingLoop:
 class TestCheckpointIntegrity:
     """Test checkpoint save/load integrity."""
 
-    def test_checkpoint_preserves_all_state(self, registry, iris_raw):
+    def test_checkpoint_preserves_all_state(self, registry, iris_raw, iris_littles_cache):
         """Checkpoint preserves step, epoch, and optimizer state."""
         model = create_lacuna_mini(max_cols=16)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 
-        loader = _make_loader(registry, iris_raw, batches=5, batch_size=4, seed=42)
+        loader = _make_loader(registry, iris_raw, batches=5, batch_size=4, seed=42, littles_cache=iris_littles_cache)
         for batch in loader:
             optimizer.zero_grad()
             output = model(batch)

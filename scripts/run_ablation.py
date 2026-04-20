@@ -28,6 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from lacuna.config.schema import LacunaConfig
 from lacuna.config.load import load_config
+from lacuna.data.littles_cache import load_cache
 from lacuna.analysis.ablation_harness import (
     DEFAULT_SPECS,
     run_ablation_sweep,
@@ -56,6 +57,12 @@ def parse_args():
     )
     parser.add_argument("--csv", type=Path, required=True, help="Output CSV path.")
     parser.add_argument("--device", type=str, default=None, help="Override device.")
+    parser.add_argument(
+        "--littles-cache", type=Path, default=None,
+        help="Path to the Little's MCAR JSON cache "
+             "(see scripts/build_littles_cache.py). Required whenever any "
+             "spec has include_littles_approx=True, which is the baseline.",
+    )
     return parser.parse_args()
 
 
@@ -105,12 +112,18 @@ def main():
             f"t={result.train_time_s:.1f}s"
         )
 
+    cache = load_cache(args.littles_cache) if args.littles_cache else None
+    if cache is not None:
+        print(f"  Little's cache: {args.littles_cache} ({len(cache.entries)} entries)")
+        print()
+
     run_ablation_sweep(
         base_config=base,
         seeds=args.seeds,
         specs=specs,
         csv_path=args.csv,
         on_result=_log,
+        littles_cache=cache,
     )
 
     print()

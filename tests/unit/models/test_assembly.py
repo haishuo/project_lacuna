@@ -131,7 +131,11 @@ def create_sample_batch(
     if include_reconstruction:
         kwargs["original_values"] = torch.randn(B, max_rows, max_cols)
         kwargs["reconstruction_mask"] = torch.rand(B, max_rows, max_cols) > 0.7
-    
+
+    # Placeholder cached Little's scalars so MissingnessFeatureExtractor can run.
+    kwargs["little_mcar_stat"] = torch.zeros(B)
+    kwargs["little_mcar_pvalue"] = torch.ones(B)
+
     return TokenBatch(**kwargs)
 
 
@@ -199,6 +203,12 @@ def sample_batch():
         variant_ids=torch.zeros(B, dtype=torch.long),
         original_values=original_values,
         reconstruction_mask=reconstruction_mask,
+        # Zero placeholders stand in for cached Little's scalars — these
+        # fixture batches don't go through SemiSyntheticDataLoader so they
+        # have no real cache values. The model treats them as a "no evidence"
+        # signal for the Little's feature slot.
+        little_mcar_stat=torch.zeros(B),
+        little_mcar_pvalue=torch.ones(B),
     )
 
 
@@ -218,6 +228,8 @@ def sample_batch_mini():
         row_mask=row_mask,
         col_mask=col_mask,
         class_ids=torch.randint(0, 3, (B,)),
+        little_mcar_stat=torch.zeros(B),
+        little_mcar_pvalue=torch.ones(B),
     )
 
 
@@ -948,22 +960,28 @@ class TestFullPipeline:
             tokens=sample1,
             row_mask=torch.ones(1, 16, dtype=torch.bool),
             col_mask=torch.ones(1, 8, dtype=torch.bool),
+            little_mcar_stat=torch.zeros(1),
+            little_mcar_pvalue=torch.ones(1),
         )
         batch2 = TokenBatch(
             tokens=sample2,
             row_mask=torch.ones(1, 16, dtype=torch.bool),
             col_mask=torch.ones(1, 8, dtype=torch.bool),
+            little_mcar_stat=torch.zeros(1),
+            little_mcar_pvalue=torch.ones(1),
         )
-        
+
         with torch.no_grad():
             out1 = model(batch1)
             out2 = model(batch2)
-        
+
         # Process together
         batch_combined = TokenBatch(
             tokens=torch.cat([sample1, sample2], dim=0),
             row_mask=torch.ones(2, 16, dtype=torch.bool),
             col_mask=torch.ones(2, 8, dtype=torch.bool),
+            little_mcar_stat=torch.zeros(2),
+            little_mcar_pvalue=torch.ones(2),
         )
         
         with torch.no_grad():

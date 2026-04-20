@@ -93,6 +93,12 @@ class TokenBatch:
         variant_ids: [B] MNAR variant labels (training only, for MNAR samples).
         original_values: [B, max_rows, max_cols] original values before masking (for reconstruction loss).
         reconstruction_mask: [B, max_rows, max_cols] bool. True = this cell was masked for reconstruction.
+        little_mcar_stat: [B] cached Little's MCAR chi-squared statistic per sample
+            (precomputed once per (dataset, generator) pair; see
+            `lacuna.data.littles_cache`). None when the cache was not
+            available at loader construction.
+        little_mcar_pvalue: [B] cached Little's MCAR p-value per sample.
+            None iff little_mcar_stat is None.
     """
     tokens: torch.Tensor
     row_mask: torch.Tensor
@@ -102,15 +108,17 @@ class TokenBatch:
     variant_ids: Optional[torch.Tensor] = None
     original_values: Optional[torch.Tensor] = None
     reconstruction_mask: Optional[torch.Tensor] = None
-    
+    little_mcar_stat: Optional[torch.Tensor] = None
+    little_mcar_pvalue: Optional[torch.Tensor] = None
+
     def __post_init__(self):
         B, max_rows, max_cols, token_dim = self.tokens.shape
-        
+
         if self.row_mask.shape != (B, max_rows):
             raise ValueError(f"row_mask shape {self.row_mask.shape} != ({B}, {max_rows})")
         if self.col_mask.shape != (B, max_cols):
             raise ValueError(f"col_mask shape {self.col_mask.shape} != ({B}, {max_cols})")
-        
+
         if self.generator_ids is not None and self.generator_ids.shape != (B,):
             raise ValueError(f"generator_ids shape {self.generator_ids.shape} != ({B},)")
         if self.class_ids is not None and self.class_ids.shape != (B,):
@@ -121,6 +129,15 @@ class TokenBatch:
             raise ValueError(f"original_values shape {self.original_values.shape} != ({B}, {max_rows}, {max_cols})")
         if self.reconstruction_mask is not None and self.reconstruction_mask.shape != (B, max_rows, max_cols):
             raise ValueError(f"reconstruction_mask shape {self.reconstruction_mask.shape} != ({B}, {max_rows}, {max_cols})")
+        # Little's cached scalars travel as a matched pair: both or neither.
+        if (self.little_mcar_stat is None) != (self.little_mcar_pvalue is None):
+            raise ValueError(
+                "little_mcar_stat and little_mcar_pvalue must both be set or both be None"
+            )
+        if self.little_mcar_stat is not None and self.little_mcar_stat.shape != (B,):
+            raise ValueError(f"little_mcar_stat shape {self.little_mcar_stat.shape} != ({B},)")
+        if self.little_mcar_pvalue is not None and self.little_mcar_pvalue.shape != (B,):
+            raise ValueError(f"little_mcar_pvalue shape {self.little_mcar_pvalue.shape} != ({B},)")
     
     @property
     def batch_size(self) -> int:
@@ -149,6 +166,8 @@ class TokenBatch:
             variant_ids=self.variant_ids.to(device) if self.variant_ids is not None else None,
             original_values=self.original_values.to(device) if self.original_values is not None else None,
             reconstruction_mask=self.reconstruction_mask.to(device) if self.reconstruction_mask is not None else None,
+            little_mcar_stat=self.little_mcar_stat.to(device) if self.little_mcar_stat is not None else None,
+            little_mcar_pvalue=self.little_mcar_pvalue.to(device) if self.little_mcar_pvalue is not None else None,
         )
 
 

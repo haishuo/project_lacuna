@@ -34,12 +34,30 @@ from lacuna.core.types import (
 )
 from lacuna.core.rng import RNGState
 from lacuna.data.tokenization import (
-    tokenize_and_batch,
+    tokenize_and_batch as _raw_tokenize_and_batch,
     apply_artificial_masking,
     MaskingConfig,
     TOKEN_DIM,
 )
 from lacuna.data.batching import collate_fn
+
+
+def tokenize_and_batch(*args, **kwargs):
+    """Test shim: wraps `tokenize_and_batch` with zero placeholder Little's
+    cache scalars so the model's MissingnessFeatureExtractor can run.
+
+    Production batches get real cached values via SemiSyntheticDataLoader;
+    these tests bypass the loader and construct batches directly, so they
+    need placeholder scalars.
+    """
+    import dataclasses
+    batch = _raw_tokenize_and_batch(*args, **kwargs)
+    B = batch.tokens.shape[0]
+    return dataclasses.replace(
+        batch,
+        little_mcar_stat=torch.zeros(B),
+        little_mcar_pvalue=torch.ones(B),
+    )
 from lacuna.models.assembly import (
     LacunaModel,
     LacunaModelConfig,
@@ -768,12 +786,14 @@ class TestErrorHandling:
             tokens=tokens,
             row_mask=torch.ones(1, 16, dtype=torch.bool),
             col_mask=torch.ones(1, 16, dtype=torch.bool),
+            little_mcar_stat=torch.zeros(1),
+            little_mcar_pvalue=torch.ones(1),
         )
-        
+
         model.eval()
         with torch.no_grad():
             output = model(batch)
-        
+
         assert output.posterior.p_class.shape == (1, 3)
     
     def test_handles_varying_dataset_sizes(self, generators, rng, model):

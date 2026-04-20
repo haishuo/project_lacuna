@@ -44,13 +44,32 @@ from lacuna.data.missingness_features import MissingnessFeatureConfig
 
 
 def test_default_specs_shape():
-    """DEFAULT_SPECS is: baseline + 5 disable_X + all_disabled."""
+    """DEFAULT_SPECS is: baseline + baseline_mom + 3 disable_X + all_disabled.
+
+    Post-ADR 0003: added baseline_mom to compare MoM-based Little's cache
+    against the MLE default. The feature-group-disable specs collapsed to
+    3 (down from the original 5) when ADR 0001 removed pointbiserial and
+    distributional as non-contributory.
+    """
     names = [s.name for s in DEFAULT_SPECS]
     assert names[0] == "baseline"
+    assert "baseline_mom" in names
     assert names[-1] == "all_disabled"
-    assert len(DEFAULT_SPECS) == 7
+    assert len(DEFAULT_SPECS) == 6
     disable_specs = [s for s in DEFAULT_SPECS if s.name.startswith("disable_")]
-    assert len(disable_specs) == 5
+    assert len(disable_specs) == 3
+
+
+def test_baseline_mom_spec_uses_mom_method():
+    baseline_mom = [s for s in DEFAULT_SPECS if s.name == "baseline_mom"][0]
+    assert baseline_mom.littles_method == "mom"
+    assert baseline_mom.feature_config is None  # default feature set
+
+
+def test_baseline_spec_uses_mle_method():
+    baseline = DEFAULT_SPECS[0]
+    assert baseline.name == "baseline"
+    assert baseline.littles_method == "mle"
 
 
 def test_baseline_spec_uses_defaults():
@@ -69,9 +88,7 @@ def test_disable_specs_toggle_exactly_one_flag():
     default = MissingnessFeatureConfig()
     default_flags = {
         "include_missing_rate_stats": default.include_missing_rate_stats,
-        "include_pointbiserial": default.include_pointbiserial,
         "include_cross_column_corr": default.include_cross_column_corr,
-        "include_distributional": default.include_distributional,
         "include_littles_approx": default.include_littles_approx,
     }
     for spec in DEFAULT_SPECS:
@@ -81,9 +98,7 @@ def test_disable_specs_toggle_exactly_one_flag():
         assert cfg is not None
         spec_flags = {
             "include_missing_rate_stats": cfg.include_missing_rate_stats,
-            "include_pointbiserial": cfg.include_pointbiserial,
             "include_cross_column_corr": cfg.include_cross_column_corr,
-            "include_distributional": cfg.include_distributional,
             "include_littles_approx": cfg.include_littles_approx,
         }
         differing = [k for k in default_flags if default_flags[k] != spec_flags[k]]
@@ -236,7 +251,7 @@ def test_missing_val_datasets_raises():
 
 
 @pytest.mark.slow
-def test_end_to_end_minimal_sweep(tmp_path: Path):
+def test_end_to_end_minimal_sweep(tmp_path: Path, iris_littles_cache):
     """One seed × two specs on the minimal config — proves plumbing works."""
     base = LacunaConfig.minimal()
     # Shrink even further to keep this test under ~60s on CPU.
@@ -257,6 +272,7 @@ def test_end_to_end_minimal_sweep(tmp_path: Path):
         seeds=[7],
         specs=specs,
         csv_path=csv,
+        littles_cache=iris_littles_cache,
     )
     assert len(results) == 2
     assert {r.spec_name for r in results} == {"baseline", "disable_littles"}

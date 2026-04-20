@@ -60,14 +60,19 @@ class AblationSpec:
         name: Short identifier used in output rows and logs. Keep filename-safe.
         feature_config: MissingnessFeatureConfig for this run. If None and
             use_missingness_features=True, the model defaults are used
-            (all 5 feature groups enabled) — equivalent to the "baseline"
-            spec.
+            (all surviving feature groups enabled) — equivalent to the
+            "baseline" spec.
         use_missingness_features: If False, the extractor is removed
             entirely — a full sanity-check ablation.
+        littles_method: Which cached MCAR scalar pair the data loader
+            emits — "mle" (Little 1988) or "mom" (method-of-moments).
+            Ignored when include_littles_approx is False or no cache is
+            provided. Defaults to "mle".
     """
     name: str
     feature_config: Optional[MissingnessFeatureConfig]
     use_missingness_features: bool = True
+    littles_method: str = "mle"
 
 
 @dataclass(frozen=True)
@@ -106,12 +111,16 @@ def _spec_disable(name: str, **flags) -> AblationSpec:
     return AblationSpec(name=name, feature_config=cfg)
 
 
+# DEFAULT_SPECS reflects the 3 surviving feature groups after the 2026-04-18
+# ablation; pointbiserial and distributional were removed as non-contributory
+# (ADR 0001). "baseline" uses Little's MLE from the cache;
+# "baseline_mom" swaps to the method-of-moments test for the same slot,
+# measuring the MLE-vs-MoM tradeoff added in ADR 0003.
 DEFAULT_SPECS: List[AblationSpec] = [
-    AblationSpec(name="baseline", feature_config=None),
+    AblationSpec(name="baseline", feature_config=None, littles_method="mle"),
+    AblationSpec(name="baseline_mom", feature_config=None, littles_method="mom"),
     _spec_disable("disable_missing_rate", include_missing_rate_stats=False),
-    _spec_disable("disable_pointbiserial", include_pointbiserial=False),
     _spec_disable("disable_cross_column", include_cross_column_corr=False),
-    _spec_disable("disable_distributional", include_distributional=False),
     _spec_disable("disable_littles", include_littles_approx=False),
     AblationSpec(
         name="all_disabled",
@@ -175,12 +184,26 @@ def _load_raw_datasets_for_harness(names: Sequence[str], max_cols: int) -> list:
     return datasets
 
 
-def _build_loaders(base_config: LacunaConfig, seed: int):
+def _build_loaders(
+    base_config: LacunaConfig,
+    seed: int,
+    littles_cache=None,
+    littles_method: str = "mle",
+):
     """Construct (train_loader, val_loader, registry) for one ablation run.
 
     Seed-derivation matches scripts/train.py (seed / seed + 1_000_000) so
     every spec sees identical data for a given seed — the paired design
     Phase 2 relies on.
+
+    Args:
+        base_config: Training config.
+        seed: Per-run seed.
+        littles_cache: Optional LittlesCache. Passed to both the train and
+            val loaders so emitted TokenBatches carry the cached MCAR
+            scalars required by MissingnessFeatureExtractor.
+        littles_method: "mle" or "mom" — which cached scalar pair the
+            loader should emit. Ignored when littles_cache is None.
 
     Raises:
         ValidationError: If the config lacks train_datasets or val_datasets.
@@ -220,6 +243,8 @@ def _build_loaders(base_config: LacunaConfig, seed: int):
         batch_size=base_config.training.batch_size,
         batches_per_epoch=base_config.training.batches_per_epoch,
         seed=seed,
+        littles_cache=littles_cache,
+        littles_method=littles_method,
     )
     val_loader = SemiSyntheticDataLoader(
         raw_datasets=val_raw,
@@ -230,11 +255,18 @@ def _build_loaders(base_config: LacunaConfig, seed: int):
         batch_size=base_config.training.batch_size,
         batches_per_epoch=base_config.training.val_batches,
         seed=seed + 1_000_000,
+        littles_cache=littles_cache,
+        littles_method=littles_method,
     )
     return train_loader, val_loader, registry
 
 
-def _build_train_eval_loader(base_config: LacunaConfig, seed: int) -> SemiSyntheticDataLoader:
+def _build_train_eval_loader(
+    base_config: LacunaConfig,
+    seed: int,
+    littles_cache=None,
+    littles_method: str = "mle",
+) -> SemiSyntheticDataLoader:
     """Build an evaluation loader over TRAIN datasets with val-sized budget.
 
     Used to measure train-set accuracy as a memorization diagnostic. Uses
@@ -261,6 +293,8 @@ def _build_train_eval_loader(base_config: LacunaConfig, seed: int) -> SemiSynthe
         batch_size=base_config.training.batch_size,
         batches_per_epoch=base_config.training.val_batches,
         seed=seed + 2_000_000,
+        littles_cache=littles_cache,
+        littles_method=littles_method,
     )
 
 
@@ -270,6 +304,7 @@ def run_single_ablation(
     seed: int,
     *,
     log_fn: Optional[Callable[[dict], None]] = None,
+    littles_cache=None,
 ) -> AblationResult:
     """Train + evaluate one (spec, seed) combination.
 
@@ -298,7 +333,12 @@ def run_single_ablation(
         torch.cuda.manual_seed_all(seed)
 
     model = _build_model(base_config, spec)
-    train_loader, val_loader, registry = _build_loaders(base_config, seed)
+    train_loader, val_loader, registry = _build_loaders(
+        base_config,
+        seed,
+        littles_cache=littles_cache,
+        littles_method=spec.littles_method,
+    )
 
     trainer_cfg = TrainerConfig(
         lr=base_config.training.lr,
@@ -328,7 +368,12 @@ def run_single_ablation(
     # fresh random mechanisms and subsamples, so this measures how well
     # the model generalizes across missingness patterns on the same X
     # distributions it was trained on.
-    train_eval_loader = _build_train_eval_loader(base_config, seed)
+    train_eval_loader = _build_train_eval_loader(
+        base_config,
+        seed,
+        littles_cache=littles_cache,
+        littles_method=spec.littles_method,
+    )
     detailed_train = trainer.validate_detailed(train_eval_loader)
     report_train = generate_eval_report(detailed_train, registry=registry)
 
@@ -408,6 +453,7 @@ def run_ablation_sweep(
     specs: Sequence[AblationSpec] = DEFAULT_SPECS,
     csv_path: Optional[Path] = None,
     on_result: Optional[Callable[[AblationResult], None]] = None,
+    littles_cache=None,
 ) -> List[AblationResult]:
     """Run the full (spec × seed) cross-product.
 
@@ -434,7 +480,9 @@ def run_ablation_sweep(
     first = True
     for spec in specs:
         for seed in seeds:
-            result = run_single_ablation(base_config, spec, seed)
+            result = run_single_ablation(
+                base_config, spec, seed, littles_cache=littles_cache
+            )
             results.append(result)
             if on_result is not None:
                 on_result(result)

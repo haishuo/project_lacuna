@@ -87,6 +87,11 @@ def parse_args():
         "--mnar-variants", type=str, nargs="+", default=None,
         help="Override MNAR expert variants (must match checkpoint architecture)",
     )
+    parser.add_argument(
+        "--littles-cache", type=str, default=None,
+        help="Path to Little's MCAR JSON cache. Required when the model "
+             "has include_littles_approx=True. Build via scripts/build_littles_cache.py.",
+    )
     return parser.parse_args()
 
 
@@ -161,6 +166,14 @@ def main():
 
     print(f"  Loaded {len(eval_raw)} datasets")
 
+    # Load Little's cache if provided.
+    littles_cache = None
+    if args.littles_cache:
+        from lacuna.data.littles_cache import load_cache
+        littles_cache = load_cache(args.littles_cache)
+        print(f"Little's cache: {args.littles_cache} "
+              f"({len(littles_cache.entries)} entries)")
+
     # Create evaluation data loader
     n_batches = args.batches or config.training.val_batches or 20
     eval_loader = SemiSyntheticDataLoader(
@@ -172,6 +185,7 @@ def main():
         batch_size=config.training.batch_size,
         batches_per_epoch=n_batches,
         seed=seed + 9999999,  # Different seed from training
+        littles_cache=littles_cache,
     )
 
     # Create model (with optional mnar_variants override)

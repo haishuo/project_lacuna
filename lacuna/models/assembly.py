@@ -395,6 +395,8 @@ class LacunaModel(nn.Module):
                 batch.tokens,
                 batch.row_mask,
                 batch.col_mask,
+                little_mcar_stat=batch.little_mcar_stat,
+                little_mcar_pvalue=batch.little_mcar_pvalue,
             )
             # Safety check for NaN/Inf
             if torch.isnan(missingness_features).any() or torch.isinf(missingness_features).any():
@@ -533,6 +535,8 @@ class LacunaModel(nn.Module):
             batch.tokens,
             batch.row_mask,
             batch.col_mask,
+            little_mcar_stat=batch.little_mcar_stat,
+            little_mcar_pvalue=batch.little_mcar_pvalue,
         )
 
 

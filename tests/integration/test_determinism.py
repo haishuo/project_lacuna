@@ -38,12 +38,21 @@ def generate_batch(registry, batch_size: int, seed: int):
         datasets.append(dataset)
         gen_ids.append(gen.generator_id)
     
-    return tokenize_and_batch(
+    import dataclasses
+    batch = tokenize_and_batch(
         datasets=datasets,
         max_rows=64,
         max_cols=16,
         generator_ids=gen_ids,
         class_mapping=registry.get_class_mapping(),
+    )
+    # Attach placeholder Little's scalars so the model can run; this test
+    # file is about determinism, not the Little's feature itself.
+    B = batch.tokens.shape[0]
+    return dataclasses.replace(
+        batch,
+        little_mcar_stat=torch.zeros(B),
+        little_mcar_pvalue=torch.ones(B),
     )
 
 

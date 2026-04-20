@@ -97,6 +97,10 @@ def make_dummy_batch(B: int = 4, max_rows: int = 16, max_cols: int = 8) -> Token
         variant_ids=torch.zeros(B, dtype=torch.long),
         original_values=torch.randn(B, max_rows, max_cols),
         reconstruction_mask=torch.rand(B, max_rows, max_cols) > 0.7,
+        # Placeholder cached Little's scalars so MissingnessFeatureExtractor
+        # can run; this trainer test doesn't depend on specific values.
+        little_mcar_stat=torch.zeros(B),
+        little_mcar_pvalue=torch.ones(B),
     )
 
 

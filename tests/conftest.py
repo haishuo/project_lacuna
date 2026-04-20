@@ -8,6 +8,29 @@ from lacuna.core.rng import RNGState
 from lacuna.config.schema import LacunaConfig
 
 
+@pytest.fixture(scope="session")
+def iris_littles_cache():
+    """Tiny session-scoped Little's MCAR cache for (iris × lacuna_minimal_6).
+
+    Built once per test session. Gives model-forward tests a valid cache
+    to point at — the alternative would be mocking or disabling the feature,
+    both of which would skip the integration.
+    """
+    from lacuna.data.catalog import create_default_catalog
+    from lacuna.data.littles_cache import build_cache
+    from lacuna.generators.families.registry_builder import load_registry_from_config
+
+    iris = create_default_catalog().load("iris")
+    registry = load_registry_from_config("lacuna_minimal_6")
+    return build_cache(
+        raw_datasets=[iris],
+        generators=list(registry.generators),
+        generator_registry_name="lacuna_minimal_6",
+        sample_rows=150,
+        seed_base=99999,
+    )
+
+
 @pytest.fixture
 def rng():
     """Provide seeded RNG for reproducible tests."""

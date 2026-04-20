@@ -71,6 +71,10 @@ def parse_args():
     parser.add_argument("--journal", type=str, default=None,
                         help="Path to experiment journal (default: experiments/JOURNAL.md). "
                              "Set to 'none' to disable auto-journaling.")
+    parser.add_argument("--littles-cache", type=str, default=None,
+                        help="Path to the Little's MCAR JSON cache. Required "
+                             "when the model config has include_littles_approx=True "
+                             "(the default). Build via scripts/build_littles_cache.py.")
     return parser.parse_args()
 
 
@@ -307,6 +311,15 @@ def main():
         print(f"Datasets: {len(train_raw)} train, {len(val_raw)} val | "
               f"epochs={config.training.epochs} batch={config.training.batch_size}")
 
+    # Load Little's cache if provided.
+    littles_cache = None
+    if args.littles_cache:
+        from lacuna.data.littles_cache import load_cache
+        littles_cache = load_cache(args.littles_cache)
+        if not quiet:
+            print(f"Little's cache: {args.littles_cache} "
+                  f"({len(littles_cache.entries)} entries)")
+
     # Create data loaders
     train_loader = SemiSyntheticDataLoader(
         raw_datasets=train_raw,
@@ -317,6 +330,7 @@ def main():
         batch_size=config.training.batch_size,
         batches_per_epoch=config.training.batches_per_epoch,
         seed=config.seed,
+        littles_cache=littles_cache,
     )
 
     val_loader = SemiSyntheticDataLoader(
@@ -328,6 +342,7 @@ def main():
         batch_size=config.training.batch_size,
         batches_per_epoch=config.training.val_batches,
         seed=config.seed + 1000000,
+        littles_cache=littles_cache,
     )
 
     if not quiet:
