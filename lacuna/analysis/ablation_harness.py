@@ -122,6 +122,23 @@ DEFAULT_SPECS: List[AblationSpec] = [
     _spec_disable("disable_missing_rate", include_missing_rate_stats=False),
     _spec_disable("disable_cross_column", include_cross_column_corr=False),
     _spec_disable("disable_littles", include_littles_approx=False),
+    # baseline_heuristic: revived median-split SMD heuristic (pre-ADR-0002
+    # slot content), for the `mcar-alternatives-bakeoff` Stage 1 screening.
+    # Fills the MCAR slot without touching the offline cache — the feature
+    # is computed live from tokens in the forward pass.
+    _spec_disable(
+        "baseline_heuristic",
+        include_littles_approx=False,
+        include_heuristic_littles=True,
+    ),
+    # Schema-v3 nonparametric MCAR-test alternatives (bakeoff Stage 1
+    # screening per PLANNED.md §3). Each swaps the cached Little's scalar
+    # pair for a different test's (stat, p_value). feature_config=None
+    # keeps the default extractor behaviour (include_littles_approx=True
+    # → read cached scalars); littles_method selects which cached pair.
+    AblationSpec(name="baseline_propensity", feature_config=None, littles_method="propensity"),
+    AblationSpec(name="baseline_hsic",       feature_config=None, littles_method="hsic"),
+    AblationSpec(name="baseline_missmech",   feature_config=None, littles_method="missmech"),
     AblationSpec(
         name="all_disabled",
         feature_config=None,

@@ -44,20 +44,44 @@ from lacuna.data.missingness_features import MissingnessFeatureConfig
 
 
 def test_default_specs_shape():
-    """DEFAULT_SPECS is: baseline + baseline_mom + 3 disable_X + all_disabled.
-
-    Post-ADR 0003: added baseline_mom to compare MoM-based Little's cache
-    against the MLE default. The feature-group-disable specs collapsed to
-    3 (down from the original 5) when ADR 0001 removed pointbiserial and
-    distributional as non-contributory.
+    """DEFAULT_SPECS after the 2026-04-20 bakeoff additions:
+    baseline + baseline_mom + 3 disable_X + baseline_heuristic +
+    baseline_propensity + baseline_hsic + baseline_missmech + all_disabled.
     """
     names = [s.name for s in DEFAULT_SPECS]
     assert names[0] == "baseline"
     assert "baseline_mom" in names
+    assert "baseline_heuristic" in names
+    assert "baseline_propensity" in names
+    assert "baseline_hsic" in names
+    assert "baseline_missmech" in names
     assert names[-1] == "all_disabled"
-    assert len(DEFAULT_SPECS) == 6
+    assert len(DEFAULT_SPECS) == 10
     disable_specs = [s for s in DEFAULT_SPECS if s.name.startswith("disable_")]
     assert len(disable_specs) == 3
+
+
+def test_bakeoff_specs_select_correct_cache_methods():
+    """Each new bakeoff spec reads its own cached scalar pair."""
+    by_name = {s.name: s for s in DEFAULT_SPECS}
+    assert by_name["baseline_propensity"].littles_method == "propensity"
+    assert by_name["baseline_hsic"].littles_method == "hsic"
+    assert by_name["baseline_missmech"].littles_method == "missmech"
+    # And they leave the feature-config defaults (cached Little's slot on).
+    for name in ("baseline_propensity", "baseline_hsic", "baseline_missmech"):
+        assert by_name[name].feature_config is None
+        assert by_name[name].use_missingness_features is True
+
+
+def test_baseline_heuristic_spec_swaps_mcar_slot():
+    spec = [s for s in DEFAULT_SPECS if s.name == "baseline_heuristic"][0]
+    cfg = spec.feature_config
+    assert cfg is not None
+    assert cfg.include_littles_approx is False
+    assert cfg.include_heuristic_littles is True
+    # Total feature count unchanged vs. default: heuristic occupies the
+    # same 2-scalar slot as the cached Little's path.
+    assert cfg.n_features == MissingnessFeatureConfig().n_features
 
 
 def test_baseline_mom_spec_uses_mom_method():

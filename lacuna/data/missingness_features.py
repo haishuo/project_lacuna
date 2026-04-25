@@ -44,7 +44,7 @@ import torch.nn.functional as F
 from typing import Tuple, Optional
 from dataclasses import dataclass
 
-from lacuna.data.tokenization import IDX_OBSERVED
+from lacuna.data.tokenization import IDX_OBSERVED, IDX_VALUE
 
 
 # =============================================================================
@@ -62,10 +62,19 @@ class MissingnessFeatureConfig:
     # Which feature groups to include
     include_missing_rate_stats: bool = True      # Mean, var, range of missing rates
     include_cross_column_corr: bool = True       # Correlation: missingness across columns
-    include_littles_approx: bool = True          # Median-split standardised mean difference
+    include_littles_approx: bool = True          # Cached Little's MCAR (statistic, p-value)
+    include_heuristic_littles: bool = False      # Median-split SMD heuristic (computed from tokens)
 
     # Numerical stability
     eps: float = 1e-8
+
+    def __post_init__(self):
+        if self.include_littles_approx and self.include_heuristic_littles:
+            raise ValueError(
+                "include_littles_approx and include_heuristic_littles are "
+                "mutually exclusive: both fill the same 2-scalar MCAR slot. "
+                "Set exactly one to True (or both False to disable the slot)."
+            )
 
     @property
     def n_features(self) -> int:
@@ -76,7 +85,9 @@ class MissingnessFeatureConfig:
         if self.include_cross_column_corr:
             n += 3  # mean, max of cross-column missingness correlation
         if self.include_littles_approx:
-            n += 2  # approximate chi-squared statistic, p-value proxy
+            n += 2  # cached chi-squared statistic, p-value
+        if self.include_heuristic_littles:
+            n += 2  # heuristic test_stat, significance_proxy
         return n
 
 
@@ -263,6 +274,75 @@ def compute_cross_column_missingness_correlation(
     return features
 
 
+def compute_littles_test_approx(
+    values: torch.Tensor,       # [B, max_rows, max_cols]
+    is_observed: torch.Tensor,  # [B, max_rows, max_cols]
+    row_mask: torch.Tensor,     # [B, max_rows]
+    col_mask: torch.Tensor,     # [B, max_cols]
+    eps: float = 1e-8,
+) -> torch.Tensor:
+    """Median-split standardised-mean-difference heuristic (pre-ADR-0002 slot).
+
+    Partition rows into "low missingness" and "high missingness" groups at
+    the per-sample mean missing-count, compute the standardised mean
+    difference per column between groups, and aggregate. Emits 2 scalars
+    matching the layout of the cached-Little's path:
+        [test_stat, sig_proxy]
+    where test_stat is mean squared SMD across valid columns (chi-squared-
+    like) and sig_proxy is the fraction of columns with |SMD| > 0.5.
+
+    Large test_stat ⇒ evidence against MCAR; small ⇒ consistent with MCAR.
+    See ADR 0001 and `mcar-alternatives-bakeoff` in PLANNED.md for context.
+
+    Returns:
+        [B, 2] tensor.
+    """
+    B, max_rows, max_cols = values.shape
+
+    row_mask_exp = row_mask.unsqueeze(-1).float()
+    col_mask_exp = col_mask.unsqueeze(1).float()
+    valid_mask = row_mask_exp * col_mask_exp
+
+    is_missing = 1.0 - is_observed.float()
+    missing_per_row = (is_missing * valid_mask).sum(dim=2)  # [B, max_rows]
+
+    row_mask_f = row_mask.float()
+    mean_missing = (missing_per_row * row_mask_f).sum(dim=1) / row_mask_f.sum(dim=1).clamp(min=1)
+
+    low_miss_rows = (missing_per_row <= mean_missing.unsqueeze(-1)) & row_mask
+    high_miss_rows = (missing_per_row > mean_missing.unsqueeze(-1)) & row_mask
+
+    low_mask = low_miss_rows.unsqueeze(-1).float() * col_mask_exp * is_observed.float()
+    high_mask = high_miss_rows.unsqueeze(-1).float() * col_mask_exp * is_observed.float()
+
+    low_count = low_mask.sum(dim=1).clamp(min=1)
+    high_count = high_mask.sum(dim=1).clamp(min=1)
+    low_mean = (values * low_mask).sum(dim=1) / low_count
+    high_mean = (values * high_mask).sum(dim=1) / high_count
+
+    pooled_var = (
+        ((values - low_mean.unsqueeze(1)) ** 2 * low_mask).sum(dim=1)
+        + ((values - high_mean.unsqueeze(1)) ** 2 * high_mask).sum(dim=1)
+    ) / (low_count + high_count - 2).clamp(min=1)
+    pooled_std = pooled_var.sqrt().clamp(min=eps)
+
+    col_mask_f = col_mask.float()
+    mean_diff = (high_mean - low_mean).abs() / pooled_std
+    mean_diff = mean_diff * col_mask_f
+    mean_diff = torch.where(
+        torch.isnan(mean_diff) | torch.isinf(mean_diff),
+        torch.zeros_like(mean_diff), mean_diff,
+    )
+
+    n_valid_cols = col_mask_f.sum(dim=1).clamp(min=1)
+    test_stat = (mean_diff ** 2).sum(dim=1) / n_valid_cols
+    sig_proxy = (mean_diff > 0.5).float().sum(dim=1) / n_valid_cols
+
+    features = torch.stack([test_stat, sig_proxy], dim=-1)
+    features = features.clamp(min=0.0, max=10.0)
+    return features
+
+
 # =============================================================================
 # Main Feature Extraction Function
 # =============================================================================
@@ -304,6 +384,7 @@ def extract_missingness_features(
     # Extract values and observation mask from tokens
     is_observed = tokens[..., IDX_OBSERVED]  # [B, max_rows, max_cols]
     is_observed_bool = is_observed > 0.5
+    values = tokens[..., IDX_VALUE]  # [B, max_rows, max_cols]
 
     feature_list = []
 
@@ -345,7 +426,16 @@ def extract_missingness_features(
         stat = little_mcar_stat.to(dtype=torch.float32, device=tokens.device)
         pval = little_mcar_pvalue.to(dtype=torch.float32, device=tokens.device)
         feature_list.append(torch.stack([stat, pval], dim=-1))
-    
+
+    # 4. Median-split SMD heuristic — pre-ADR-0002 version of the MCAR
+    # slot. Revived 2026-04-20 for the `mcar-alternatives-bakeoff` Stage 1
+    # (see PLANNED.md §3). Mutually exclusive with include_littles_approx.
+    if config.include_heuristic_littles:
+        heur_features = compute_littles_test_approx(
+            values, is_observed_bool, row_mask, col_mask, config.eps
+        )
+        feature_list.append(heur_features)
+
     # Concatenate all features
     if feature_list:
         features = torch.cat(feature_list, dim=-1)
@@ -456,6 +546,12 @@ def get_feature_names(config: Optional[MissingnessFeatureConfig] = None) -> list
         names.extend([
             "littles_stat",
             "littles_sig_proxy",
+        ])
+
+    if config.include_heuristic_littles:
+        names.extend([
+            "heuristic_littles_stat",
+            "heuristic_littles_sig_proxy",
         ])
 
     return names

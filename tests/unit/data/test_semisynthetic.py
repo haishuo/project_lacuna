@@ -11,6 +11,7 @@ import numpy as np
 from lacuna.data.semisynthetic import (
     SemiSyntheticDataset,
     apply_missingness,
+    subsample_raw,
     subsample_rows,
     generate_semisynthetic_batch,
     SemiSyntheticDataLoader,
@@ -147,6 +148,55 @@ class TestSubsampleRows:
         
         assert torch.equal(r1.x, r2.x)
         assert torch.equal(r1.r, r2.r)
+
+
+class TestSubsampleRaw:
+    """Tests for subsample_raw (RawDataset-level, used to hoist
+    subsampling above apply_missingness in the training hot path)."""
+
+    def test_returns_same_object_when_already_small(self, small_raw):
+        out = subsample_raw(small_raw, max_rows=100, rng=RNGState(42))
+        # Identity: no copy, same data buffer.
+        assert out is small_raw
+
+    def test_subsamples_when_large(self, large_raw):
+        out = subsample_raw(large_raw, max_rows=64, rng=RNGState(42))
+        assert out.n == 64
+        assert out.d == large_raw.d
+        assert out.feature_names == large_raw.feature_names
+        assert out.name == large_raw.name
+
+    def test_reproducible_same_seed(self, large_raw):
+        a = subsample_raw(large_raw, max_rows=64, rng=RNGState(7))
+        b = subsample_raw(large_raw, max_rows=64, rng=RNGState(7))
+        np.testing.assert_array_equal(a.data, b.data)
+
+    def test_different_seeds_differ(self, large_raw):
+        a = subsample_raw(large_raw, max_rows=64, rng=RNGState(1))
+        b = subsample_raw(large_raw, max_rows=64, rng=RNGState(2))
+        assert not np.array_equal(a.data, b.data)
+
+    def test_target_slice_follows_rows(self):
+        # Encode row index into BOTH data[:, 0] and target, so after any
+        # subsampling we can verify the two were selected with the same
+        # indices (target[i] must still equal data[i, 0]).
+        row_ids = np.arange(100, dtype=np.float32)
+        data = np.zeros((100, 5), dtype=np.float32)
+        data[:, 0] = row_ids
+        target = row_ids.copy()
+        raw = RawDataset(
+            data, tuple(f"c{i}" for i in range(5)),
+            target=target, target_name="y", name="with_target",
+        )
+        out = subsample_raw(raw, max_rows=30, rng=RNGState(5))
+        assert out.target is not None
+        assert out.target.shape == (30,)
+        np.testing.assert_array_equal(out.target, out.data[:, 0])
+
+    def test_no_target_returns_none_target(self, large_raw):
+        assert large_raw.target is None
+        out = subsample_raw(large_raw, max_rows=64, rng=RNGState(0))
+        assert out.target is None
 
 
 class TestGenerateSemisyntheticBatch:

@@ -133,6 +133,42 @@ def apply_missingness(
     )
 
 
+def subsample_raw(
+    raw: RawDataset,
+    max_rows: int,
+    rng: RNGState,
+) -> RawDataset:
+    """Subsample rows from a RawDataset before the missingness generator runs.
+
+    The training hot path used to apply the generator to the FULL raw
+    dataset (up to 30K rows for credit_card_default) and then discard all
+    but ``max_rows`` via ``subsample_rows`` on the resulting
+    ObservedDataset. That wasted ~230× generator work per batch on wide
+    datasets. Moving the subsample upstream — before ``apply_missingness``
+    — is algebraically equivalent under MCAR/MAR/MNAR generators (they
+    operate row-independently, so applying to a 128-row sample gives the
+    same joint distribution as applying to 30K and discarding 29,872).
+
+    Returns
+    -------
+    RawDataset
+        Same object when ``raw.n <= max_rows`` (no copy). Otherwise a
+        new RawDataset carrying the selected rows (and target slice).
+    """
+    if raw.n <= max_rows:
+        return raw
+    idx = rng.choice(raw.n, size=max_rows, replace=False)
+    target = raw.target[idx] if raw.target is not None else None
+    return RawDataset(
+        data=raw.data[idx],
+        feature_names=raw.feature_names,
+        target=target,
+        target_name=raw.target_name,
+        source=raw.source,
+        name=raw.name,
+    )
+
+
 def subsample_rows(
     dataset: ObservedDataset,
     max_rows: int,
@@ -341,6 +377,18 @@ class SemiSyntheticDataLoader:
                 ds_idx = batch_rng.randint(0, n_datasets, (1,)).item()
                 raw = self.raw_datasets[ds_idx]
 
+                # Subsample the raw rows FIRST (before the generator runs),
+                # so the missingness mechanism only does work for the
+                # ``max_rows`` we'll actually use. Equivalent in
+                # distribution to the old "apply then subsample" order
+                # because every generator in the registry is
+                # row-independent (MCAR/MAR/MNAR at the row level). The
+                # old order wasted up to 230× generator CPU per batch on
+                # wide datasets like credit_card_default (n=30k).
+                raw_sub = subsample_raw(
+                    raw, max_rows=self.max_rows, rng=batch_rng.spawn(),
+                )
+
                 # Sample a compatible generator (retry if d is too small)
                 max_retries = 20
                 for attempt in range(max_retries):
@@ -348,7 +396,7 @@ class SemiSyntheticDataLoader:
                     generator = self.registry[gen_id]
                     try:
                         ss = apply_missingness(
-                            raw=raw,
+                            raw=raw_sub,
                             generator=generator,
                             rng=batch_rng.spawn(),
                             dataset_id=f"batch{batch_idx}_item{i}",
@@ -363,12 +411,7 @@ class SemiSyntheticDataLoader:
                                 f"{max_retries} attempts"
                             )
 
-                # Subsample rows if needed
-                observed = subsample_rows(
-                    ss.observed,
-                    max_rows=self.max_rows,
-                    rng=batch_rng.spawn(),
-                )
+                observed = ss.observed
 
                 datasets.append(observed)
                 generator_ids.append(gen_id)
