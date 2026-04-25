@@ -2,15 +2,17 @@
 
 Covers:
     Normal cases:
-        - Default config produces n_features = 4+3+2 = 9 scalars.
+        - Default config produces n_features = 4+3 = 7 scalars (ADR 0004:
+          cached Little's slot is off by default).
         - extract_missingness_features returns [B, n_features] shape.
-        - Heuristic flag replaces the cached slot cleanly; same n_features.
+        - Opt-in cached slot: include_littles_approx=True adds 2 scalars.
+        - Heuristic flag still works; same n_features as cached opt-in.
         - compute_littles_test_approx detects structured (non-MCAR)
           missingness: MAR-pattern data produces larger test_stat than
           uniformly MCAR data.
         - get_feature_names emits heuristic_littles_* names when enabled.
     Edge cases:
-        - Both MCAR flags False → n_features drops to 7.
+        - Both MCAR flags False → n_features stays at 7 (the default).
         - Heuristic path works with all columns observed (no missingness).
     Failure cases:
         - Enabling both include_littles_approx and include_heuristic_littles
@@ -45,11 +47,18 @@ def _make_tokens(values: torch.Tensor, is_observed: torch.Tensor) -> torch.Tenso
 
 
 def test_default_config_n_features():
+    # ADR 0004: default drops from 9 → 7 (cached Little's slot is off).
     cfg = MissingnessFeatureConfig()
+    assert cfg.include_littles_approx is False
+    assert cfg.n_features == 4 + 3
+
+
+def test_cached_opt_in_adds_two_features():
+    cfg = MissingnessFeatureConfig(include_littles_approx=True)
     assert cfg.n_features == 4 + 3 + 2
 
 
-def test_heuristic_flag_keeps_same_feature_count():
+def test_heuristic_flag_adds_two_features():
     cfg = MissingnessFeatureConfig(
         include_littles_approx=False,
         include_heuristic_littles=True,
@@ -57,7 +66,7 @@ def test_heuristic_flag_keeps_same_feature_count():
     assert cfg.n_features == 4 + 3 + 2
 
 
-def test_both_mcar_flags_false_drops_two_features():
+def test_both_mcar_flags_false_matches_default():
     cfg = MissingnessFeatureConfig(
         include_littles_approx=False,
         include_heuristic_littles=False,
@@ -163,7 +172,8 @@ def test_extract_with_heuristic_does_not_need_cached_scalars():
 
 
 def test_extract_with_cached_still_requires_tensors():
-    cfg = MissingnessFeatureConfig()  # include_littles_approx=True by default
+    # Opt-in cached slot still requires the loader-attached tensors.
+    cfg = MissingnessFeatureConfig(include_littles_approx=True)
     B, R, C = 2, 8, 4
     tokens = torch.zeros(B, R, C, TOKEN_DIM)
     row_mask = torch.ones(B, R, dtype=torch.bool)

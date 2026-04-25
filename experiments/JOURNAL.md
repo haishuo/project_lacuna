@@ -898,6 +898,78 @@ python scripts/evaluate.py \
 
 ---
 
+
+---
+
+## lacuna_demo_v1
+
+**Date:** 2026-04-25
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_demo_v1/checkpoints/best_model.pt`
+**Config:** `configs/training/semisynthetic_full.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_demo_v1`
+
+### Results
+
+**Overall accuracy: 87.4%** (800 samples) | Training: 1287s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 89.5% | 95.0% | 92.2% | 279 |
+| MAR | 95.4% | 80.0% | 87.0% | 235 |
+| MNAR | 80.1% | 86.0% | 83.0% | 286 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 265 | 0 | 14 |
+| **True MAR** | 0 | 188 | 47 |
+| **True MNAR** | 31 | 9 | 246 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0555
+- **Mean confidence:** 0.918
+- **Mean confidence (correct):** 0.936
+- **Mean confidence (incorrect):** 0.794
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 87.4% | 100.0% |
+| 0.50 | 87.3% | 99.8% |
+| 0.60 | 89.0% | 94.1% |
+| 0.70 | 90.0% | 89.6% |
+| 0.80 | 90.9% | 86.4% |
+| 0.90 | 95.8% | 77.1% |
+| 0.95 | 97.2% | 61.4% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
 ## Planned Experiments
 
 ### Experiment 11 — Per-Class Loss Weights (Conditional)

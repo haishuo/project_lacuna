@@ -32,6 +32,7 @@ from lacuna.data.littles_cache import load_cache
 from lacuna.analysis.ablation_harness import (
     DEFAULT_SPECS,
     run_ablation_sweep,
+    spec_requires_littles_cache,
 )
 
 
@@ -60,8 +61,11 @@ def parse_args():
     parser.add_argument(
         "--littles-cache", type=Path, default=None,
         help="Path to the Little's MCAR JSON cache "
-             "(see scripts/build_littles_cache.py). Required whenever any "
-             "spec has include_littles_approx=True, which is the baseline.",
+             "(see scripts/build_littles_cache.py). Optional after ADR 0004: "
+             "the default baseline no longer reads from the cache. Required "
+             "only when a selected spec sets include_littles_approx=True "
+             "(e.g. baseline_legacy_mle, baseline_mom, baseline_propensity, "
+             "baseline_hsic, baseline_missmech).",
     )
     return parser.parse_args()
 
@@ -89,6 +93,15 @@ def main():
         specs = [known[n] for n in args.specs]
     else:
         specs = DEFAULT_SPECS
+
+    needs_cache = [s.name for s in specs if spec_requires_littles_cache(s)]
+    if needs_cache and args.littles_cache is None:
+        raise SystemExit(
+            "The selected specs require a Little's MCAR cache but "
+            "--littles-cache was not provided. Specs needing cache: "
+            f"{needs_cache}. Build one via scripts/build_littles_cache.py, "
+            "or drop the specs from --specs."
+        )
 
     total = len(specs) * len(args.seeds)
     print(f"Running ablation sweep: {len(specs)} specs × {len(args.seeds)} seeds "

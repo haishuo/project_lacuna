@@ -1,0 +1,15 @@
+# Lacuna demo — Streamlit-based browser UI.
+# Install on the demo machine with:
+#   pip install -r demo/requirements.txt
+# Then start with:
+#   streamlit run demo/app.py
+#
+# The lacuna package itself is imported from the parent directory; either
+# `pip install -e .` from the repo root, or run streamlit from the repo
+# root so the demo's sys.path shim picks it up.
+
+streamlit>=1.31
+pandas>=2.0
+numpy>=1.24
+torch>=2.1
+pyyaml>=6.0

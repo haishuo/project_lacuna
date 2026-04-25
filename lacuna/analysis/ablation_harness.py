@@ -111,40 +111,81 @@ def _spec_disable(name: str, **flags) -> AblationSpec:
     return AblationSpec(name=name, feature_config=cfg)
 
 
-# DEFAULT_SPECS reflects the 3 surviving feature groups after the 2026-04-18
-# ablation; pointbiserial and distributional were removed as non-contributory
-# (ADR 0001). "baseline" uses Little's MLE from the cache;
-# "baseline_mom" swaps to the method-of-moments test for the same slot,
-# measuring the MLE-vs-MoM tradeoff added in ADR 0003.
+# DEFAULT_SPECS after ADR 0004. The new "baseline" is the post-ADR-0004
+# default extractor (missing_rate_stats + cross_column_corr, no Little's
+# slot — the 7-feature config that the n=30 ablation identified as
+# optimal). "baseline_legacy_mle" preserves the pre-ADR-0004 cached-MLE
+# behaviour for reproducing the historical comparison. "disable_littles"
+# is retained as an alias for the new baseline so existing CSVs / scripts
+# still resolve to a known spec. Research-mode specs (baseline_mom,
+# baseline_heuristic, baseline_propensity, baseline_hsic,
+# baseline_missmech) reproduce the MCAR-alternatives bakeoff — they are
+# NOT part of the dissertation ablation table.
 DEFAULT_SPECS: List[AblationSpec] = [
-    AblationSpec(name="baseline", feature_config=None, littles_method="mle"),
-    AblationSpec(name="baseline_mom", feature_config=None, littles_method="mom"),
+    # Dissertation ablation table:
+    AblationSpec(name="baseline", feature_config=None),
+    AblationSpec(
+        name="baseline_legacy_mle",
+        feature_config=MissingnessFeatureConfig(include_littles_approx=True),
+        littles_method="mle",
+    ),
     _spec_disable("disable_missing_rate", include_missing_rate_stats=False),
     _spec_disable("disable_cross_column", include_cross_column_corr=False),
-    _spec_disable("disable_littles", include_littles_approx=False),
-    # baseline_heuristic: revived median-split SMD heuristic (pre-ADR-0002
-    # slot content), for the `mcar-alternatives-bakeoff` Stage 1 screening.
-    # Fills the MCAR slot without touching the offline cache — the feature
-    # is computed live from tokens in the forward pass.
-    _spec_disable(
-        "baseline_heuristic",
-        include_littles_approx=False,
-        include_heuristic_littles=True,
-    ),
-    # Schema-v3 nonparametric MCAR-test alternatives (bakeoff Stage 1
-    # screening per PLANNED.md §3). Each swaps the cached Little's scalar
-    # pair for a different test's (stat, p_value). feature_config=None
-    # keeps the default extractor behaviour (include_littles_approx=True
-    # → read cached scalars); littles_method selects which cached pair.
-    AblationSpec(name="baseline_propensity", feature_config=None, littles_method="propensity"),
-    AblationSpec(name="baseline_hsic",       feature_config=None, littles_method="hsic"),
-    AblationSpec(name="baseline_missmech",   feature_config=None, littles_method="missmech"),
+    # Alias for the new baseline; preserved so historical CSVs / scripts
+    # referencing "disable_littles" still resolve.
+    AblationSpec(name="disable_littles", feature_config=None),
     AblationSpec(
         name="all_disabled",
         feature_config=None,
         use_missingness_features=False,
     ),
+    # Research-mode specs (not in the dissertation ablation table). Each
+    # re-enables the cached Little's slot with a different MCAR-test
+    # family to reproduce the bakeoff. baseline_heuristic fills the slot
+    # live from tokens and does not need the offline cache.
+    AblationSpec(
+        name="baseline_mom",
+        feature_config=MissingnessFeatureConfig(include_littles_approx=True),
+        littles_method="mom",
+    ),
+    AblationSpec(
+        name="baseline_heuristic",
+        feature_config=MissingnessFeatureConfig(
+            include_littles_approx=False,
+            include_heuristic_littles=True,
+        ),
+    ),
+    AblationSpec(
+        name="baseline_propensity",
+        feature_config=MissingnessFeatureConfig(include_littles_approx=True),
+        littles_method="propensity",
+    ),
+    AblationSpec(
+        name="baseline_hsic",
+        feature_config=MissingnessFeatureConfig(include_littles_approx=True),
+        littles_method="hsic",
+    ),
+    AblationSpec(
+        name="baseline_missmech",
+        feature_config=MissingnessFeatureConfig(include_littles_approx=True),
+        littles_method="missmech",
+    ),
 ]
+
+
+def spec_requires_littles_cache(spec: AblationSpec) -> bool:
+    """Whether `spec` needs a Little's cache to run.
+
+    A spec needs the cache iff it uses the missingness-feature extractor
+    AND its feature config has include_littles_approx=True (i.e. it reads
+    cached (stat, p-value) scalars emitted by the data loader). The
+    heuristic path (include_heuristic_littles=True) computes its own
+    scalars from tokens and does NOT need the cache.
+    """
+    if not spec.use_missingness_features:
+        return False
+    cfg = spec.feature_config or MissingnessFeatureConfig()
+    return cfg.include_littles_approx
 
 
 # =============================================================================

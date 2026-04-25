@@ -72,9 +72,12 @@ def parse_args():
                         help="Path to experiment journal (default: experiments/JOURNAL.md). "
                              "Set to 'none' to disable auto-journaling.")
     parser.add_argument("--littles-cache", type=str, default=None,
-                        help="Path to the Little's MCAR JSON cache. Required "
-                             "when the model config has include_littles_approx=True "
-                             "(the default). Build via scripts/build_littles_cache.py.")
+                        help="Path to the Little's MCAR JSON cache. Optional "
+                             "after ADR 0004: the default feature config no "
+                             "longer reads from the cache. Required only when "
+                             "the model config explicitly sets "
+                             "include_littles_approx=True. Build via "
+                             "scripts/build_littles_cache.py.")
     return parser.parse_args()
 
 

@@ -44,32 +44,39 @@ from lacuna.data.missingness_features import MissingnessFeatureConfig
 
 
 def test_default_specs_shape():
-    """DEFAULT_SPECS after the 2026-04-20 bakeoff additions:
-    baseline + baseline_mom + 3 disable_X + baseline_heuristic +
-    baseline_propensity + baseline_hsic + baseline_missmech + all_disabled.
+    """DEFAULT_SPECS after ADR 0004:
+    baseline + baseline_legacy_mle + 2 disable_X + disable_littles alias +
+    all_disabled (dissertation set), then the research-mode specs
+    baseline_mom + baseline_heuristic + baseline_propensity +
+    baseline_hsic + baseline_missmech.
     """
     names = [s.name for s in DEFAULT_SPECS]
     assert names[0] == "baseline"
+    assert "baseline_legacy_mle" in names
+    assert "disable_littles" in names
+    assert "all_disabled" in names
     assert "baseline_mom" in names
     assert "baseline_heuristic" in names
     assert "baseline_propensity" in names
     assert "baseline_hsic" in names
     assert "baseline_missmech" in names
-    assert names[-1] == "all_disabled"
-    assert len(DEFAULT_SPECS) == 10
+    assert len(DEFAULT_SPECS) == 11
     disable_specs = [s for s in DEFAULT_SPECS if s.name.startswith("disable_")]
-    assert len(disable_specs) == 3
+    assert len(disable_specs) == 3  # disable_missing_rate, disable_cross_column, disable_littles
 
 
 def test_bakeoff_specs_select_correct_cache_methods():
-    """Each new bakeoff spec reads its own cached scalar pair."""
+    """Each bakeoff spec reads its own cached scalar pair. After ADR
+    0004 the default is include_littles_approx=False, so these specs now
+    carry an explicit feature_config that re-enables the cached slot."""
     by_name = {s.name: s for s in DEFAULT_SPECS}
     assert by_name["baseline_propensity"].littles_method == "propensity"
     assert by_name["baseline_hsic"].littles_method == "hsic"
     assert by_name["baseline_missmech"].littles_method == "missmech"
-    # And they leave the feature-config defaults (cached Little's slot on).
     for name in ("baseline_propensity", "baseline_hsic", "baseline_missmech"):
-        assert by_name[name].feature_config is None
+        cfg = by_name[name].feature_config
+        assert cfg is not None
+        assert cfg.include_littles_approx is True
         assert by_name[name].use_missingness_features is True
 
 
@@ -79,27 +86,37 @@ def test_baseline_heuristic_spec_swaps_mcar_slot():
     assert cfg is not None
     assert cfg.include_littles_approx is False
     assert cfg.include_heuristic_littles is True
-    # Total feature count unchanged vs. default: heuristic occupies the
-    # same 2-scalar slot as the cached Little's path.
-    assert cfg.n_features == MissingnessFeatureConfig().n_features
 
 
 def test_baseline_mom_spec_uses_mom_method():
     baseline_mom = [s for s in DEFAULT_SPECS if s.name == "baseline_mom"][0]
     assert baseline_mom.littles_method == "mom"
-    assert baseline_mom.feature_config is None  # default feature set
+    # Research-mode spec re-enables the cached slot (the default is off
+    # after ADR 0004), so the feature_config must be explicit.
+    assert baseline_mom.feature_config is not None
+    assert baseline_mom.feature_config.include_littles_approx is True
 
 
-def test_baseline_spec_uses_mle_method():
+def test_baseline_legacy_mle_spec_reenables_cached_slot():
+    spec = [s for s in DEFAULT_SPECS if s.name == "baseline_legacy_mle"][0]
+    assert spec.littles_method == "mle"
+    assert spec.feature_config is not None
+    assert spec.feature_config.include_littles_approx is True
+
+
+def test_baseline_spec_uses_post_adr_defaults():
+    # ADR 0004: baseline = the new default config (no Little's slot).
     baseline = DEFAULT_SPECS[0]
     assert baseline.name == "baseline"
-    assert baseline.littles_method == "mle"
-
-
-def test_baseline_spec_uses_defaults():
-    baseline = DEFAULT_SPECS[0]
     assert baseline.feature_config is None
     assert baseline.use_missingness_features is True
+
+
+def test_disable_littles_alias_matches_baseline():
+    # The alias resolves to the new default config — same as baseline.
+    alias = [s for s in DEFAULT_SPECS if s.name == "disable_littles"][0]
+    assert alias.feature_config is None
+    assert alias.use_missingness_features is True
 
 
 def test_all_disabled_spec():
@@ -108,7 +125,9 @@ def test_all_disabled_spec():
 
 
 def test_disable_specs_toggle_exactly_one_flag():
-    """Each 'disable_X' spec differs from the default in exactly one flag."""
+    """Each active 'disable_X' spec differs from the default in exactly
+    one flag. `disable_littles` is an ADR-0004 alias for the new default
+    (the cached slot is already off by default) and is exempt."""
     default = MissingnessFeatureConfig()
     default_flags = {
         "include_missing_rate_stats": default.include_missing_rate_stats,
@@ -117,6 +136,10 @@ def test_disable_specs_toggle_exactly_one_flag():
     }
     for spec in DEFAULT_SPECS:
         if not spec.name.startswith("disable_"):
+            continue
+        if spec.name == "disable_littles":
+            # Alias spec — intentionally identical to the new default.
+            assert spec.feature_config is None
             continue
         cfg = spec.feature_config
         assert cfg is not None
@@ -286,8 +309,8 @@ def test_end_to_end_minimal_sweep(tmp_path: Path, iris_littles_cache):
     base.training.patience = 5
 
     specs = [
-        DEFAULT_SPECS[0],  # baseline
-        [s for s in DEFAULT_SPECS if s.name == "disable_littles"][0],
+        DEFAULT_SPECS[0],  # baseline (post-ADR-0004: no Little's slot)
+        [s for s in DEFAULT_SPECS if s.name == "baseline_legacy_mle"][0],
     ]
 
     csv = tmp_path / "ablation.csv"
@@ -299,11 +322,11 @@ def test_end_to_end_minimal_sweep(tmp_path: Path, iris_littles_cache):
         littles_cache=iris_littles_cache,
     )
     assert len(results) == 2
-    assert {r.spec_name for r in results} == {"baseline", "disable_littles"}
-    # Baseline gate has more features than disable_littles.
+    assert {r.spec_name for r in results} == {"baseline", "baseline_legacy_mle"}
+    # Legacy MLE spec re-adds the 2-scalar cached slot, so it has more features.
     base_row = [r for r in results if r.spec_name == "baseline"][0]
-    dis_row = [r for r in results if r.spec_name == "disable_littles"][0]
-    assert base_row.n_features > dis_row.n_features
+    legacy_row = [r for r in results if r.spec_name == "baseline_legacy_mle"][0]
+    assert legacy_row.n_features > base_row.n_features
 
     # Train-set evaluation populates the memorization-diagnostic fields.
     for r in results:

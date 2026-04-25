@@ -89,8 +89,9 @@ def parse_args():
     )
     parser.add_argument(
         "--littles-cache", type=str, default=None,
-        help="Path to Little's MCAR JSON cache. Required when the model "
-             "has include_littles_approx=True. Build via scripts/build_littles_cache.py.",
+        help="Path to Little's MCAR JSON cache. Optional after ADR 0004; "
+             "only required when the loaded model has "
+             "include_littles_approx=True. Build via scripts/build_littles_cache.py.",
     )
     return parser.parse_args()
 

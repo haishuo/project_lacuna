@@ -11,18 +11,18 @@ The Problem:
 The Solution:
     Add explicit statistical features that capture the STRUCTURE of missingness.
 
-Features Extracted (3 groups, 9 scalars total):
+Features Extracted by default (2 groups, 7 scalars total — ADR 0004):
     - Missing rate statistics (mean, variance, range, max across columns): 4 scalars
     - Cross-column missingness correlations (mean, max, fraction high-corr): 3 scalars
-    - Little's MCAR test (chi-squared statistic, p-value): 2 scalars
 
-Little's MCAR feature — cached, not computed in the forward pass:
-    The real `pystatistics.mvnmle.little_mcar_test` is too slow to run per
-    batch (seconds per call, EM-based). Instead, we precompute it once per
-    (raw_dataset, generator_id) pair and cache the result. The data loader
-    attaches the cached (statistic, p_value) tensors to every TokenBatch;
-    this extractor reads them and slots them into the feature vector.
-    See `lacuna.data.littles_cache` and `scripts/build_littles_cache.py`.
+Optional cached Little's MCAR slot (off by default — ADR 0004):
+    `include_littles_approx=True` re-enables a 2-scalar slot filled with a
+    precomputed (chi-squared statistic, p-value) pair read from the
+    offline cache (`lacuna.data.littles_cache`). The n=30 ablation
+    (docs/experiments/2026-04-25-canonical-n30.md) found that this slot
+    *hurts* mechanism classification; it remains available for research-
+    mode experiments that reproduce the bakeoff but is not part of the
+    default training path.
 
 Feature-group selection history:
     An earlier version also computed point-biserial correlations (missingness
@@ -55,14 +55,15 @@ from lacuna.data.tokenization import IDX_OBSERVED, IDX_VALUE
 class MissingnessFeatureConfig:
     """Configuration for missingness feature extraction.
 
-    The 3 surviving feature groups after the 2026-04-18 ablation. See module
-    docstring for the two groups that were removed and why.
+    Two feature groups are enabled by default after ADR 0004; the cached
+    Little's MCAR slot is off by default (it hurt accuracy at n=30). See
+    module docstring for the feature groups removed in ADR 0001.
     """
 
     # Which feature groups to include
     include_missing_rate_stats: bool = True      # Mean, var, range of missing rates
     include_cross_column_corr: bool = True       # Correlation: missingness across columns
-    include_littles_approx: bool = True          # Cached Little's MCAR (statistic, p-value)
+    include_littles_approx: bool = False         # Cached Little's MCAR (off by default — ADR 0004)
     include_heuristic_littles: bool = False      # Median-split SMD heuristic (computed from tokens)
 
     # Numerical stability
@@ -78,7 +79,7 @@ class MissingnessFeatureConfig:
 
     @property
     def n_features(self) -> int:
-        """Total number of features extracted."""
+        """Total number of features extracted. Default: 7 (4 + 3)."""
         n = 0
         if self.include_missing_rate_stats:
             n += 4  # mean, var, range, max
