@@ -550,6 +550,63 @@ generators:
       post_quota_rate: 0.60
 
   # ============================================================
+  # MAR — realistic.py (3 classes, 6 variants — added 2026-04-25)
+  # Cover the moderate-multi-column regime where real-world MAR
+  # datasets (airquality, mass_survey, pbc) actually live. Existing
+  # MAR generators concentrate at "1 col fully missing" or "many cols
+  # at >50 %"; these fill the gap. See ADR notes in
+  # `lacuna/generators/families/mar/realistic.py`.
+  # ============================================================
+
+  - family: mar
+    variant: RealisticSingle
+    name: MAR-RealisticSingle-15
+    params:
+      target_miss_rate: 0.15
+      slope: 1.0
+
+  - family: mar
+    variant: RealisticSingle
+    name: MAR-RealisticSingle-25
+    params:
+      target_miss_rate: 0.25
+      slope: 1.5
+
+  - family: mar
+    variant: PartialResponse
+    name: MAR-PartialResponse-Light
+    params:
+      partial_rate: 0.20
+      slope: 1.2
+      block_frac: 0.40
+
+  - family: mar
+    variant: PartialResponse
+    name: MAR-PartialResponse-Heavy
+    params:
+      partial_rate: 0.45
+      slope: 1.5
+      block_frac: 0.55
+
+  - family: mar
+    variant: DemographicGated
+    name: MAR-DemoGated-Sparse
+    params:
+      gate_quantile: 0.5
+      rate_above: 0.20
+      rate_below: 0.03
+      cols_affected_frac: 0.6
+
+  - family: mar
+    variant: DemographicGated
+    name: MAR-DemoGated-Broad
+    params:
+      gate_quantile: 0.4
+      rate_above: 0.30
+      rate_below: 0.10
+      cols_affected_frac: 0.85
+
+  # ============================================================
   # MNAR — self_censoring.py (9 classes)
   # ============================================================
 

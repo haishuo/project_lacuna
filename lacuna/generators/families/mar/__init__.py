@@ -50,6 +50,11 @@ from .survey import (
     MARRequiredOptional,
     MARQuotaBased,
 )
+from .realistic import (
+    MARRealisticSingle,
+    MARPartialResponse,
+    MARDemographicGated,
+)
 
 __all__ = [
     # simple.py
@@ -95,4 +100,8 @@ __all__ = [
     "MARSectionLevel",
     "MARRequiredOptional",
     "MARQuotaBased",
+    # realistic.py
+    "MARRealisticSingle",
+    "MARPartialResponse",
+    "MARDemographicGated",
 ]

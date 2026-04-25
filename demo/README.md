@@ -40,6 +40,25 @@ streamlit run demo/app.py
 The browser opens on <http://localhost:8501>. Drop a CSV (or pick one
 from `demo/sample_data/`) and hit **Analyze**.
 
+## Bundled samples
+
+Two scripts populate `demo/sample_data/`. Both files they produce are
+gitignored, so re-run them after a fresh clone:
+
+```bash
+python demo/sample_data/_generate.py          # synthetic — wine + Lacuna's own generators
+python demo/sample_data/_realworld_fetch.py   # real-world — needs internet, downloads two CSVs
+```
+
+- `mcar.csv`, `mar.csv`, `mnar.csv` — synthetic missingness applied to the
+  wine catalog dataset, one per mechanism. These should yield a clean
+  green / yellow / red sweep when the trained checkpoint is installed.
+- `pima_real.csv` — Pima Indians Diabetes with zero-coded cells recoded
+  to NaN. Textbook reading: **MNAR**.
+- `airquality_real.csv` — R's `datasets::airquality`. Textbook reading:
+  **MAR**, though Lacuna leans MNAR; useful as a class discussion point
+  about contested mechanism interpretation, not as a pass/fail test.
+
 ## Pointing at a different checkpoint
 
 ```bash
