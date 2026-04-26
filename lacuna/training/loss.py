@@ -36,6 +36,8 @@ Design Decisions:
     4. Support for both class-level and mechanism-level supervision
 """
 
+from typing import List, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -67,6 +69,11 @@ class LossConfig:
     # === Mechanism Loss ===
     mechanism_loss_type: str = "cross_entropy"  # "cross_entropy" or "brier"
     label_smoothing: float = 0.0        # Label smoothing for cross-entropy
+    # Per-class loss weights [w_MCAR, w_MAR, w_MNAR]. None = unweighted.
+    # Use to bias the model away from collapsing one true class into a
+    # neighbour at training time — e.g. set MNAR > 1.0 to discourage the
+    # MNAR-true → MAR-predicted collapse seen on real-world data.
+    per_class_weights: Optional[List[float]] = None
     
     # === Reconstruction Loss ===
     reconstruction_loss_type: str = "mse"  # "mse" or "huber"
@@ -125,25 +132,33 @@ def mechanism_cross_entropy_from_probs(
     targets: torch.Tensor,             # [B] integer class labels
     label_smoothing: float = 0.0,
     reduction: str = "mean",
+    class_weights: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
     Cross-entropy loss computed from probabilities (not logits).
-    
+
     Useful when we have posteriors but not logits (e.g., from MoE).
     Uses log of probabilities as pseudo-logits.
-    
+
     Args:
         probs: Probabilities (after softmax). Shape: [B, K]
         targets: Integer class labels. Shape: [B]
         label_smoothing: Label smoothing factor.
         reduction: "mean", "sum", or "none".
-    
+        class_weights: Optional per-class loss weights, shape [K]. When
+            given, each sample's loss is multiplied by the weight of its
+            target class before reduction. With reduction="mean" this
+            yields the standard weighted-average formulation used by
+            torch.nn.CrossEntropyLoss(weight=...). Useful for biasing
+            the model away from confidently routing one class into a
+            neighbour class (e.g. MNAR → MAR collapse on real data).
+
     Returns:
         loss: Scalar or per-sample loss.
     """
     # Convert probabilities to log-probabilities
     log_probs = torch.log(probs.clamp(min=1e-8))
-    
+
     # NLL loss on log-probabilities
     if label_smoothing > 0:
         # Manual label smoothing for NLL
@@ -154,7 +169,22 @@ def mechanism_cross_entropy_from_probs(
         loss = -(smooth_targets * log_probs).sum(dim=-1)
     else:
         loss = F.nll_loss(log_probs, targets, reduction="none")
-    
+
+    if class_weights is not None:
+        if class_weights.shape != (probs.shape[-1],):
+            raise ValueError(
+                f"class_weights must have shape ({probs.shape[-1]},); "
+                f"got {tuple(class_weights.shape)}"
+            )
+        w = class_weights.to(loss.device).to(loss.dtype)
+        sample_weight = w[targets]
+        loss = loss * sample_weight
+        if reduction == "mean":
+            return loss.sum() / sample_weight.sum().clamp(min=1e-8)
+        elif reduction == "sum":
+            return loss.sum()
+        return loss
+
     if reduction == "mean":
         return loss.mean()
     elif reduction == "sum":
@@ -206,6 +236,7 @@ def class_cross_entropy(
     class_targets: torch.Tensor,       # [B] class labels (0=MCAR, 1=MAR, 2=MNAR)
     label_smoothing: float = 0.0,
     reduction: str = "mean",
+    class_weights: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """
     Cross-entropy on mechanism class (MCAR/MAR/MNAR).
@@ -227,6 +258,7 @@ def class_cross_entropy(
         class_targets,
         label_smoothing=label_smoothing,
         reduction=reduction,
+        class_weights=class_weights,
     )
 
 
@@ -578,11 +610,17 @@ class LacunaLoss(nn.Module):
         if self.config.mechanism_weight > 0 and batch.class_ids is not None:
             # Class-level loss (MCAR/MAR/MNAR)
             if self.config.class_weight > 0:
+                weights_tensor = None
+                if self.config.per_class_weights is not None:
+                    weights_tensor = torch.as_tensor(
+                        self.config.per_class_weights, dtype=torch.float32
+                    )
                 if self.config.mechanism_loss_type == "cross_entropy":
                     class_loss = class_cross_entropy(
                         output.posterior.p_class,
                         batch.class_ids,
                         label_smoothing=self.config.label_smoothing,
+                        class_weights=weights_tensor,
                     )
                 else:  # brier
                     class_loss = brier_score(

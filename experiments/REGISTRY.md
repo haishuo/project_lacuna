@@ -2,8 +2,8 @@
 
 # Lacuna Run Registry
 
-Generated: 2026-04-25 03:46:00  
-Total runs: 55
+Generated: 2026-04-26 05:30:13  
+Total runs: 65
 
 ## Summary
 
@@ -64,3 +64,13 @@ Total runs: 55
 | RUN-053 | 2026-03-29 | training | - | - | - | test_semi |
 | RUN-054 | 2026-03-29 | evaluated | 81.5% | 71.8% | - | lacuna_semisyn_20260329_032848 |
 | RUN-055 | 2026-04-25 | evaluated | 87.4% | 80.0% | - | lacuna_demo_v1 |
+| RUN-056 | 2026-04-25 | evaluated | 73.9% | 72.2% | - | lacuna_demo_v2 |
+| RUN-057 | 2026-04-25 | evaluated | 79.5% | 86.3% | - | lacuna_demo_v3 |
+| RUN-058 | 2026-04-26 | evaluated | 80.8% | 80.1% | - | lacuna_demo_v4 |
+| RUN-059 | 2026-04-26 | evaluated | 74.5% | 96.6% | - | lacuna_survey_v2 |
+| RUN-060 | 2026-04-26 | evaluated | 98.2% | 96.2% | - | lacuna_survey_v3 |
+| RUN-061 | 2026-04-26 | evaluated | 88.4% | 89.2% | - | lacuna_survey_v4 |
+| RUN-062 | 2026-04-26 | evaluated | 94.0% | 89.2% | - | lacuna_survey_v5 |
+| RUN-063 | 2026-04-26 | evaluated | 88.5% | 89.2% | - | lacuna_survey_v6 |
+| RUN-064 | 2026-04-26 | evaluated | 86.9% | 87.7% | - | lacuna_survey_v7 |
+| RUN-065 | 2026-04-26 | evaluated | 86.5% | 90.5% | - | lacuna_survey_v8 |

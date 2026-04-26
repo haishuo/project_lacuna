@@ -581,14 +581,6 @@ generators:
       block_frac: 0.40
 
   - family: mar
-    variant: PartialResponse
-    name: MAR-PartialResponse-Heavy
-    params:
-      partial_rate: 0.45
-      slope: 1.5
-      block_frac: 0.55
-
-  - family: mar
     variant: DemographicGated
     name: MAR-DemoGated-Sparse
     params:
@@ -597,14 +589,12 @@ generators:
       rate_below: 0.03
       cols_affected_frac: 0.6
 
-  - family: mar
-    variant: DemographicGated
-    name: MAR-DemoGated-Broad
-    params:
-      gate_quantile: 0.4
-      rate_above: 0.30
-      rate_below: 0.10
-      cols_affected_frac: 0.85
+  # MAR-PartialResponse-Heavy and MAR-DemoGated-Broad were dropped
+  # 2026-04-25 because their pattern fingerprints (multi-column at
+  # ~50 % missing) overlap heavily with MNAR-SelfCensor variants and
+  # caused the model to confuse synthetic MNAR for MAR. The lighter
+  # variants are sufficient to cover the moderate-multi-column gap
+  # that real-world MAR datasets occupy.
 
   # ============================================================
   # MNAR — self_censoring.py (9 classes)
@@ -913,12 +903,11 @@ generators:
       volunteer_tendency: 0.5
       affected_frac: 0.5
 
-  - family: mnar
-    variant: Attrition
-    name: MNAR-Attrition
-    params:
-      attrition_rate: 0.30
-      value_dependence: 0.50
+  # MNAR-Attrition was dropped 2026-04-25. Its progressive-dropout model
+  # ("once a row drops out at col j, all subsequent cols are missing")
+  # cumulatively saturates beyond column ~3 on any moderately-wide
+  # dataset, regardless of per-column rate tuning. Re-enable only with
+  # a width-aware reparameterisation that targets a fixed total dropout.
 
   - family: mnar
     variant: CompetingEvents

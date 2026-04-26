@@ -54,6 +54,19 @@ class MoEConfig:
     # Missingness pattern features (NEW)
     use_missingness_features: bool = True
     n_missingness_features: int = 16  # From MissingnessFeatureConfig.n_features
+
+    # Learnable evidence-attenuation scalar. The gate input concatenates
+    # evidence (64-dim) with reconstruction errors (3-dim) and explicit
+    # missingness features (10-dim). Without attenuation, evidence
+    # dominates the gate input by sheer volume — even when per-dimension
+    # importance favours the explicit features. The 2026-04-26 ablation
+    # probe found that on lacuna_survey_v6, evidence carried 71.8 % of
+    # gate-input L1 mass and was the primary driver of within-domain
+    # MAR-data being misclassified as MNAR. Multiplying the evidence
+    # slice by a sigmoid-bounded learnable scalar lets training find the
+    # right balance rather than hard-coding it.
+    learn_evidence_attenuation: bool = True
+    evidence_attenuation_init: float = 0.25
     
     # Expert heads
     use_expert_heads: bool = False
@@ -118,9 +131,20 @@ class GatingNetwork(nn.Module):
     
     def __init__(self, config: MoEConfig):
         super().__init__()
-        
+
         self.config = config
-        
+
+        # Learnable evidence attenuation. Stored as a logit so the
+        # effective scalar = sigmoid(logit_attn) ∈ (0, 1). Initialise so
+        # sigmoid(init) = evidence_attenuation_init.
+        if config.learn_evidence_attenuation:
+            init = float(config.evidence_attenuation_init)
+            init = max(min(init, 0.99), 0.01)
+            init_logit = float(torch.log(torch.tensor(init / (1.0 - init))).item())
+            self.evidence_attn_logit = nn.Parameter(torch.tensor(init_logit))
+        else:
+            self.register_buffer("evidence_attn_logit", torch.tensor(float("inf")))
+
         # Build MLP layers
         layers = []
         in_dim = config.gate_input_dim
@@ -169,14 +193,19 @@ class GatingNetwork(nn.Module):
             probs: Gating probabilities. [B, n_experts]
         """
         # Build gate input by concatenating available features
-        gate_inputs = [evidence]
-        
+        if self.config.learn_evidence_attenuation:
+            attn = torch.sigmoid(self.evidence_attn_logit)
+            evidence_in = evidence * attn
+        else:
+            evidence_in = evidence
+        gate_inputs = [evidence_in]
+
         if self.config.use_reconstruction_errors and reconstruction_errors is not None:
             gate_inputs.append(reconstruction_errors)
-        
+
         if self.config.use_missingness_features and missingness_features is not None:
             gate_inputs.append(missingness_features)
-        
+
         gate_input = torch.cat(gate_inputs, dim=-1)
         
         # Compute logits

@@ -85,6 +85,33 @@ def prep_pbc() -> pd.DataFrame:
     return df.select_dtypes(include="number").copy()
 
 
+# --- Real survey datasets (saved by scripts/fetch_survey_data.py) ----------
+
+def _survey_real(name: str) -> pd.DataFrame:
+    path = PROJECT_ROOT / "demo" / "sample_data" / f"survey_{name}_real.csv"
+    return pd.read_csv(path)
+
+
+def prep_survey_bfi() -> pd.DataFrame:
+    return _survey_real("bfi")
+
+
+def prep_survey_yrbss() -> pd.DataFrame:
+    return _survey_real("yrbss")
+
+
+def prep_survey_chile() -> pd.DataFrame:
+    return _survey_real("chile")
+
+
+def prep_survey_cars93() -> pd.DataFrame:
+    return _survey_real("cars93")
+
+
+def prep_survey_survey() -> pd.DataFrame:
+    return _survey_real("survey")
+
+
 # --- Diagnostic registry ----------------------------------------------------
 
 CONSENSUS_NOTES = {
@@ -120,15 +147,50 @@ CONSENSUS_NOTES = {
         "textbook treatments use MICE under MAR; some lab values "
         "are arguably MNAR.",
     ),
+    "survey_bfi": (
+        "MAR",
+        "psych::bfi — Big Five 28-item personality inventory, "
+        "n=2800. Item nonresponse spreads across 25 items; "
+        "treated as MAR for MICE in the psych package.",
+    ),
+    "survey_yrbss": (
+        "MAR",
+        "openintro::yrbss — Youth Risk Behavior Surveillance "
+        "System, n=13583. Item nonresponse on physical/behavior "
+        "items, plausibly MAR conditional on demographics.",
+    ),
+    "survey_chile": (
+        "MAR",
+        "carData::Chile — 1988 plebiscite vote-intention survey, "
+        "n=2700. Item nonresponse on income / vote-intention; "
+        "MAR conditional on demographics.",
+    ),
+    "survey_cars93": (
+        "MAR",
+        "MASS::Cars93 — consumer car-attribute survey. Sparse "
+        "nonresponse on a few attributes.",
+    ),
+    "survey_survey": (
+        "MAR",
+        "MASS::survey — Adelaide student survey (also in the "
+        "diagnostic suite as `mass_survey`).",
+    ),
 }
 
 REGISTRY: dict[str, Callable[[], pd.DataFrame]] = {
-    "airquality":  prep_airquality,
-    "pima_uci":    prep_pima_uci,
-    "pima_tr2":    prep_pima_tr2,
-    "hitters":     prep_hitters,
-    "mass_survey": prep_mass_survey,
-    "pbc":         prep_pbc,
+    # Cross-domain textbook cases (originally probed against generic Lacuna)
+    "airquality":   prep_airquality,
+    "pima_uci":     prep_pima_uci,
+    "pima_tr2":     prep_pima_tr2,
+    "hitters":      prep_hitters,
+    "mass_survey":  prep_mass_survey,
+    "pbc":          prep_pbc,
+    # Real survey datasets — apples-to-apples for Lacuna-Survey
+    "survey_bfi":    prep_survey_bfi,
+    "survey_yrbss":  prep_survey_yrbss,
+    "survey_chile":  prep_survey_chile,
+    "survey_cars93": prep_survey_cars93,
+    "survey_survey": prep_survey_survey,
 }
 
 

@@ -78,6 +78,17 @@ def parse_args():
                              "the model config explicitly sets "
                              "include_littles_approx=True. Build via "
                              "scripts/build_littles_cache.py.")
+    parser.add_argument("--per-class-weights", type=str, default=None,
+                        help="Comma-separated per-class loss weights "
+                             "[w_MCAR,w_MAR,w_MNAR], e.g. '1.0,1.0,1.5' to "
+                             "raise the cost of MNAR misclassification. "
+                             "Default: unweighted.")
+    parser.add_argument("--class-balanced-prior", action="store_true",
+                        help="Sample generators with equal mass per class "
+                             "(MCAR/MAR/MNAR each get 1/3 of training "
+                             "exposure) rather than uniform-over-generators. "
+                             "Useful when generator counts per class are "
+                             "imbalanced.")
     return parser.parse_args()
 
 
@@ -256,7 +267,13 @@ def main():
     # Create generator registry
     generators_name = args.generators or config.generator.config_path or config.generator.config_name
     registry = load_registry_from_config(generators_name)
-    prior = GeneratorPrior.uniform(registry)
+    if args.class_balanced_prior:
+        prior = GeneratorPrior.class_balanced(registry)
+        if not quiet:
+            print(f"  Generator prior: class-balanced (each of MCAR/MAR/MNAR "
+                  f"gets equal mass)")
+    else:
+        prior = GeneratorPrior.uniform(registry)
 
     # Load datasets
     catalog = create_default_catalog()
@@ -370,6 +387,21 @@ def main():
         print(f"\nCreating model...")
         print(f"  Parameters: {n_params:,} ({n_trainable:,} trainable)")
 
+    per_class_weights = None
+    if args.per_class_weights:
+        try:
+            per_class_weights = [float(w) for w in args.per_class_weights.split(",")]
+        except ValueError as e:
+            raise SystemExit(f"--per-class-weights must be a comma-separated list of floats: {e}")
+        if len(per_class_weights) != 3:
+            raise SystemExit(
+                f"--per-class-weights must have exactly 3 values "
+                f"[MCAR, MAR, MNAR]; got {len(per_class_weights)}"
+            )
+        if not quiet:
+            print(f"  Per-class loss weights: MCAR={per_class_weights[0]} "
+                  f"MAR={per_class_weights[1]} MNAR={per_class_weights[2]}")
+
     # Create trainer
     trainer_config = TrainerConfig(
         lr=config.training.lr,
@@ -382,6 +414,7 @@ def main():
         checkpoint_dir=str(exp_dir / "checkpoints"),
         save_best_only=True,
         quiet=quiet,
+        per_class_weights=per_class_weights,
     )
 
     logger = create_logger(exp_dir)
@@ -444,6 +477,25 @@ def main():
     if args.report:
         print("\nGenerating evaluation report...")
         report_start = time.time()
+
+        # CRITICAL: evaluate against the BEST checkpoint, not the final
+        # model state. The trainer's `model` is whatever weights were
+        # current when training stopped — typically a few epochs past
+        # the lowest-val-loss point, since early stopping has patience.
+        # Reporting on `final.pt` understates the deployed model's
+        # quality (we deploy `best_model.pt`); see 2026-04-26 audit
+        # comparing best vs final on lacuna_survey_v2 — same val set,
+        # MNAR recall 88.8 % (best) vs 38.9 % (final) on the same data.
+        best_ckpt_path = exp_dir / "checkpoints" / "best_model.pt"
+        if best_ckpt_path.exists():
+            from lacuna.training.checkpoint import load_checkpoint
+            checkpoint = load_checkpoint(best_ckpt_path, device=str(config.device))
+            trainer.model.load_state_dict(checkpoint.model_state)
+            if not quiet:
+                print(f"  Loaded best checkpoint: {best_ckpt_path}")
+        elif not quiet:
+            print(f"  Warning: best_model.pt not found, evaluating on final model state")
+
         detailed_result = trainer.validate_detailed(val_loader)
         report_time = time.time() - report_start
 

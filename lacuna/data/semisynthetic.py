@@ -55,6 +55,28 @@ class SemiSyntheticDataset:
     source_name: str               # Original dataset name
 
 
+def _zscore_columns(X: torch.Tensor) -> torch.Tensor:
+    """Column-wise z-score, robust to zero-variance columns.
+
+    Used to normalise the predictor view of X before generators compute
+    sigmoid(alpha + beta * X[:, predictor]). Without this, generators
+    parametrised for synthetic standard-normal X saturate immediately
+    on real catalog scales (e.g. wine alcohol on 11–15) and produce
+    degenerate "one column 100% missing" patterns rather than realistic
+    moderate missingness — see the 2026-04-25 saturation audit, which
+    found 41/116 generators saturated on `wine`. Zero-variance columns
+    (constants) are zeroed out so the predictor contributes nothing
+    rather than dividing by zero.
+    """
+    mean = X.mean(dim=0, keepdim=True)
+    std = X.std(dim=0, unbiased=False, keepdim=True)
+    safe = std.clone()
+    safe[safe == 0] = 1.0
+    Z = (X - mean) / safe
+    Z = torch.where(std == 0, torch.zeros_like(Z), Z)
+    return Z
+
+
 def apply_missingness(
     raw: RawDataset,
     generator: Generator,
@@ -62,29 +84,35 @@ def apply_missingness(
     dataset_id: Optional[str] = None,
 ) -> SemiSyntheticDataset:
     """Apply a missingness mechanism to complete data.
-    
+
     CRITICAL FIX: For MAR/MNAR mechanisms to work correctly, we must compute
     missingness based on the ACTUAL data values, not synthetic data.
-    
+
     Args:
         raw: Complete dataset (no missing values).
         generator: Missingness generator to apply.
         rng: RNG state for reproducibility.
         dataset_id: ID for the resulting dataset.
-    
+
     Returns:
         SemiSyntheticDataset with known mechanism.
     """
     n, d = raw.n, raw.d
-    
+
     # Get the complete data as tensor
     X_complete = torch.from_numpy(raw.data.astype('float32'))
-    
+
+    # The generator only uses X to PICK which rows/cells to drop. The
+    # observed data we hand back downstream still uses X_complete on its
+    # original scale. Z-scoring here only affects which rows get dropped,
+    # not what the model sees in `observed.x` afterwards.
+    X_predictor_view = _zscore_columns(X_complete)
+
     # CRITICAL FIX: Use apply_to() if available, which computes missingness
     # based on the provided X, not internally generated synthetic data.
     # This is essential for MAR/MNAR where missingness depends on data values.
     if hasattr(generator, 'apply_to'):
-        R = generator.apply_to(X_complete, rng)
+        R = generator.apply_to(X_predictor_view, rng)
     else:
         # Fallback to old behavior with warning
         # The generator.sample() returns (synthetic_X, R) where R was computed

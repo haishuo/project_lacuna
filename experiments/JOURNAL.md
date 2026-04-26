@@ -970,6 +970,726 @@ python scripts/evaluate.py \
 
 ---
 
+
+---
+
+## lacuna_demo_v2
+
+**Date:** 2026-04-25
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_demo_v2/checkpoints/best_model.pt`
+**Config:** `configs/training/semisynthetic_full.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_demo_v2`
+
+### Results
+
+**Overall accuracy: 73.9%** (800 samples) | Training: 782s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 83.6% | 89.5% | 86.5% | 257 |
+| MAR | 62.5% | 72.2% | 67.0% | 212 |
+| MNAR | 74.3% | 62.8% | 68.1% | 331 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 230 | 10 | 17 |
+| **True MAR** | 4 | 153 | 55 |
+| **True MNAR** | 41 | 82 | 208 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.1077
+- **Mean confidence:** 0.844
+- **Mean confidence (correct):** 0.878
+- **Mean confidence (incorrect):** 0.747
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 73.9% | 100.0% |
+| 0.50 | 73.9% | 99.2% |
+| 0.60 | 77.0% | 89.0% |
+| 0.70 | 80.5% | 76.4% |
+| 0.80 | 85.2% | 66.5% |
+| 0.90 | 87.8% | 50.2% |
+| 0.95 | 88.8% | 39.1% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_demo_v3
+
+**Date:** 2026-04-25
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_demo_v3/checkpoints/best_model.pt`
+**Config:** `configs/training/semisynthetic_full.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_demo_v3`
+
+### Results
+
+**Overall accuracy: 79.5%** (800 samples) | Training: 968s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 91.4% | 63.8% | 75.2% | 268 |
+| MAR | 94.0% | 86.4% | 90.0% | 271 |
+| MNAR | 63.5% | 88.5% | 73.9% | 261 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 171 | 0 | 97 |
+| **True MAR** | 1 | 234 | 36 |
+| **True MNAR** | 15 | 15 | 231 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0373
+- **Mean confidence:** 0.825
+- **Mean confidence (correct):** 0.856
+- **Mean confidence (incorrect):** 0.706
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 79.5% | 100.0% |
+| 0.50 | 80.0% | 99.0% |
+| 0.60 | 83.1% | 88.0% |
+| 0.70 | 86.3% | 75.6% |
+| 0.80 | 92.0% | 59.8% |
+| 0.90 | 96.3% | 47.0% |
+| 0.95 | 95.2% | 28.4% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_demo_v4
+
+**Date:** 2026-04-26
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_demo_v4/checkpoints/best_model.pt`
+**Config:** `configs/training/semisynthetic_full.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_demo_v4`
+
+### Results
+
+**Overall accuracy: 80.8%** (800 samples) | Training: 968s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 88.6% | 72.8% | 79.9% | 268 |
+| MAR | 93.5% | 80.1% | 86.3% | 271 |
+| MNAR | 67.2% | 89.7% | 76.8% | 261 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 195 | 0 | 73 |
+| **True MAR** | 13 | 217 | 41 |
+| **True MNAR** | 12 | 15 | 234 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0391
+- **Mean confidence:** 0.817
+- **Mean confidence (correct):** 0.859
+- **Mean confidence (incorrect):** 0.645
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 80.8% | 100.0% |
+| 0.50 | 81.0% | 99.8% |
+| 0.60 | 87.1% | 83.5% |
+| 0.70 | 93.0% | 71.1% |
+| 0.80 | 95.3% | 63.5% |
+| 0.90 | 96.7% | 49.1% |
+| 0.95 | 100.0% | 24.0% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_survey_v2
+
+**Date:** 2026-04-26
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v2/checkpoints/best_model.pt`
+**Config:** `configs/training/survey.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v2`
+
+### Results
+
+**Overall accuracy: 74.5%** (800 samples) | Training: 439s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 87.5% | 86.0% | 86.7% | 114 |
+| MAR | 69.6% | 96.6% | 80.9% | 381 |
+| MNAR | 81.8% | 42.6% | 56.0% | 305 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 98 | 0 | 16 |
+| **True MAR** | 0 | 368 | 13 |
+| **True MNAR** | 14 | 161 | 130 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.1448
+- **Mean confidence:** 0.890
+- **Mean confidence (correct):** 0.918
+- **Mean confidence (incorrect):** 0.806
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 74.5% | 100.0% |
+| 0.50 | 75.9% | 96.5% |
+| 0.60 | 76.5% | 94.1% |
+| 0.70 | 79.1% | 89.9% |
+| 0.80 | 79.6% | 86.4% |
+| 0.90 | 83.0% | 59.0% |
+| 0.95 | 91.3% | 46.2% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_survey_v3
+
+**Date:** 2026-04-26
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v3/checkpoints/best_model.pt`
+**Config:** `configs/training/survey.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v3`
+
+### Results
+
+**Overall accuracy: 98.2%** (800 samples) | Training: 821s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 100.0% | 98.5% | 99.2% | 332 |
+| MAR | 97.8% | 96.2% | 97.0% | 185 |
+| MNAR | 96.6% | 99.3% | 97.9% | 283 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 327 | 2 | 3 |
+| **True MAR** | 0 | 178 | 7 |
+| **True MNAR** | 0 | 2 | 281 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0171
+- **Mean confidence:** 0.977
+- **Mean confidence (correct):** 0.979
+- **Mean confidence (incorrect):** 0.831
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 98.2% | 100.0% |
+| 0.50 | 98.2% | 100.0% |
+| 0.60 | 98.2% | 98.5% |
+| 0.70 | 98.2% | 97.2% |
+| 0.80 | 99.0% | 95.9% |
+| 0.90 | 99.6% | 93.0% |
+| 0.95 | 99.6% | 91.5% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_survey_v4
+
+**Date:** 2026-04-26
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v4/checkpoints/best_model.pt`
+**Config:** `configs/training/survey.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v4`
+
+### Results
+
+**Overall accuracy: 88.4%** (800 samples) | Training: 753s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 100.0% | 88.9% | 94.1% | 270 |
+| MAR | 81.8% | 89.2% | 85.3% | 222 |
+| MNAR | 84.6% | 87.3% | 85.9% | 308 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 240 | 5 | 25 |
+| **True MAR** | 0 | 198 | 24 |
+| **True MNAR** | 0 | 39 | 269 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0755
+- **Mean confidence:** 0.944
+- **Mean confidence (correct):** 0.964
+- **Mean confidence (incorrect):** 0.792
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 88.3% | 99.4% |
+| 0.50 | 88.8% | 98.9% |
+| 0.60 | 90.0% | 97.5% |
+| 0.70 | 91.5% | 94.4% |
+| 0.80 | 93.8% | 91.4% |
+| 0.90 | 94.2% | 83.5% |
+| 0.95 | 96.6% | 73.8% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_survey_v5
+
+**Date:** 2026-04-26
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v5/checkpoints/best_model.pt`
+**Config:** `configs/training/survey.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v5`
+
+### Results
+
+**Overall accuracy: 94.0%** (800 samples) | Training: 578s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 97.4% | 97.4% | 97.4% | 266 |
+| MAR | 97.5% | 89.2% | 93.2% | 260 |
+| MNAR | 88.2% | 95.3% | 91.6% | 274 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 259 | 0 | 7 |
+| **True MAR** | 0 | 232 | 28 |
+| **True MNAR** | 7 | 6 | 261 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0598
+- **Mean confidence:** 0.946
+- **Mean confidence (correct):** 0.948
+- **Mean confidence (incorrect):** 0.914
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 94.0% | 100.0% |
+| 0.50 | 93.9% | 98.6% |
+| 0.60 | 93.7% | 95.9% |
+| 0.70 | 93.8% | 94.6% |
+| 0.80 | 95.0% | 92.5% |
+| 0.90 | 95.1% | 84.8% |
+| 0.95 | 95.4% | 75.6% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_survey_v6
+
+**Date:** 2026-04-26
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v6/checkpoints/best_model.pt`
+**Config:** `configs/training/survey.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v6`
+
+### Results
+
+**Overall accuracy: 88.5%** (800 samples) | Training: 754s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 94.3% | 92.6% | 93.5% | 270 |
+| MAR | 85.7% | 89.2% | 87.4% | 222 |
+| MNAR | 85.5% | 84.4% | 85.0% | 308 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 250 | 0 | 20 |
+| **True MAR** | 0 | 198 | 24 |
+| **True MNAR** | 15 | 33 | 260 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0600
+- **Mean confidence:** 0.944
+- **Mean confidence (correct):** 0.964
+- **Mean confidence (incorrect):** 0.793
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 88.5% | 100.0% |
+| 0.50 | 88.5% | 100.0% |
+| 0.60 | 89.5% | 96.9% |
+| 0.70 | 91.4% | 94.4% |
+| 0.80 | 94.0% | 89.5% |
+| 0.90 | 96.1% | 83.0% |
+| 0.95 | 96.5% | 75.5% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_survey_v7
+
+**Date:** 2026-04-26
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v7/checkpoints/best_model.pt`
+**Config:** `configs/training/survey.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v7`
+
+### Results
+
+**Overall accuracy: 86.9%** (800 samples) | Training: 459s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 100.0% | 89.1% | 94.2% | 256 |
+| MAR | 84.9% | 87.7% | 86.3% | 276 |
+| MNAR | 78.4% | 84.0% | 81.1% | 268 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 228 | 0 | 28 |
+| **True MAR** | 0 | 242 | 34 |
+| **True MNAR** | 0 | 43 | 225 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0333
+- **Mean confidence:** 0.893
+- **Mean confidence (correct):** 0.917
+- **Mean confidence (incorrect):** 0.735
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 86.9% | 100.0% |
+| 0.50 | 86.9% | 100.0% |
+| 0.60 | 89.0% | 93.2% |
+| 0.70 | 91.1% | 87.0% |
+| 0.80 | 92.6% | 80.8% |
+| 0.90 | 97.7% | 66.4% |
+| 0.95 | 97.4% | 52.4% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
+
+---
+
+## lacuna_survey_v8
+
+**Date:** 2026-04-26
+**Checkpoint:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v8/checkpoints/best_model.pt`
+**Config:** `configs/training/survey.yaml`
+**Run dir:** `/mnt/artifacts/project_lacuna/runs/lacuna_survey_v8`
+
+### Results
+
+**Overall accuracy: 86.5%** (800 samples) | Training: 398s
+
+**Architecture:** 3 experts (mnar_variants=['self_censoring'])
+
+**Per-class metrics:**
+
+| Class | Precision | Recall | F1 | Support |
+|-------|-----------|--------|----|---------|
+| MCAR | 96.2% | 90.6% | 93.3% | 278 |
+| MAR | 89.5% | 90.5% | 90.0% | 359 |
+| MNAR | 65.7% | 70.5% | 68.0% | 163 |
+
+**Confusion matrix** (rows = true, cols = predicted):
+
+|  | Pred MCAR | Pred MAR | Pred MNAR |
+|--|-----------|----------|-----------|
+| **True MCAR** | 252 | 0 | 26 |
+| **True MAR** | 0 | 325 | 34 |
+| **True MNAR** | 10 | 38 | 115 |
+
+**Mean predicted probabilities by true class:**
+
+| True Class | P(MCAR) | P(MAR) | P(MNAR) |
+|------------|---------|--------|---------|
+
+**Calibration:**
+
+- **ECE:** 0.0652
+- **Mean confidence:** 0.901
+- **Mean confidence (correct):** 0.915
+- **Mean confidence (incorrect):** 0.811
+
+**Selective accuracy:**
+
+| Threshold (τ) | Accuracy | Coverage |
+|---------------|----------|----------|
+| 0.40 | 86.5% | 100.0% |
+| 0.50 | 87.0% | 98.6% |
+| 0.60 | 87.5% | 94.6% |
+| 0.70 | 88.6% | 87.8% |
+| 0.80 | 90.5% | 82.8% |
+| 0.90 | 93.1% | 75.9% |
+| 0.95 | 95.6% | 62.7% |
+
+**Entropy:**
+
+| True Class | Mean Entropy | Std Entropy |
+|------------|-------------|-------------|
+
+### Interpretation
+
+*TODO: Add interpretation.*
+
+### Next Decision
+
+*TODO: Add next decision.*
+
+
+---
+
 ## Planned Experiments
 
 ### Experiment 11 — Per-Class Loss Weights (Conditional)

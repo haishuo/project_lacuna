@@ -1,0 +1,79 @@
+# Lacuna-Survey training config.
+#
+# Same training pipeline / model architecture as the generic
+# semisynthetic_full config; the difference is the generator registry
+# (lacuna_survey instead of lacuna_tabular_110), which restricts the
+# population of mechanisms applied during training to ones that are
+# plausible for the survey collection process.
+#
+# CAVEAT: the catalog real datasets used for training (UCI tabular)
+# are not themselves surveys — they're physical-measurement and
+# admin-record-style data. Treating them as the "X" base in the semi-
+# synthetic pipeline still demonstrates the framework: survey
+# mechanisms applied to whatever X is available. For a fully apples-
+# to-apples evaluation the training catalog should be expanded with
+# actual survey datasets (NHANES item-level subsets, ESS, GSS) — see
+# the demo's `_realworld_fetch.py` for evaluation-side fetches and
+# treat the training-side as a separate dissertation-chapter task.
+#
+# Usage:
+#   python scripts/train.py --config configs/training/survey.yaml \
+#       --name lacuna_survey_v1 --seed 42 --report
+
+seed: 42
+device: cuda
+output_dir: /mnt/artifacts/project_lacuna/runs
+
+data:
+  max_rows: 128
+  max_cols: 48
+
+  # Training datasets — REAL SURVEY-SHAPED X distributions only.
+  # Each `survey_*` file is the complete-case numeric subset of a
+  # publicly-released survey CSV (see scripts/fetch_survey_data.py).
+  # The semi-synthetic pipeline applies the survey-flavoured generator
+  # registry to these as X-bases, so the trained model sees survey
+  # column distributions (Likert-like categorical scales, demographic
+  # codes, age/income values) rather than the chemistry/sensor/admin
+  # X-bases that the generic Lacuna trains on.
+  train_datasets:
+    # Item-level questionnaires (Likert-like, many cols)
+    - survey_bfi
+    - survey_workinghours
+    # Population/economic survey panels (demographic predictors)
+    - survey_psid1976
+    - survey_psid7682
+    - survey_cps1985
+    - survey_cps1988
+    - survey_hmda
+    - survey_yrbss
+    - survey_computers
+    - survey_chile
+
+  # Validation datasets — held out from training; used for early
+  # stopping and the eval report. Small enough to evaluate quickly.
+  val_datasets:
+    - survey_cars93
+    - survey_survey
+
+model:
+  hidden_dim: 128
+  evidence_dim: 64
+  n_layers: 4
+  n_heads: 4
+  dropout: 0.1
+
+training:
+  epochs: 100
+  batch_size: 16
+  batches_per_epoch: 200
+  val_batches: 50
+  lr: 0.0003
+  weight_decay: 0.01
+  grad_clip: 1.0
+  warmup_steps: 400
+  patience: 20
+  min_delta: 0.001
+
+generator:
+  config_name: lacuna_survey

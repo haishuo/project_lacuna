@@ -108,9 +108,21 @@ class MARBranching(Generator):
                 mask = xp >= edges[b]
             branch_assignment[mask] = b
 
-        # Branch column is always observed; other columns depend on branch
+        # Columns explicitly listed in branch_columns may be missing for
+        # rows whose branch doesn't include them. Columns NOT listed in
+        # ANY branch (e.g. the d=13 wine dataset with branch_columns ⊂ {1..5})
+        # are treated as "always asked" — otherwise they'd be 100 % missing
+        # on any dataset wider than the branch list, which is degenerate
+        # training data.
         R = torch.zeros(n, d, dtype=torch.bool)
         R[:, branch_col] = True  # Predictor always observed
+        listed_cols = set()
+        for cols in branch_columns:
+            listed_cols.update(cols)
+
+        for col in range(d):
+            if col == branch_col or col not in listed_cols:
+                R[:, col] = True
 
         for b in range(n_branches):
             row_mask = branch_assignment == b

@@ -63,6 +63,7 @@ class MissingnessFeatureConfig:
     # Which feature groups to include
     include_missing_rate_stats: bool = True      # Mean, var, range of missing rates
     include_cross_column_corr: bool = True       # Correlation: missingness across columns
+    include_value_conditional: bool = True       # SMD + shape-shift (added 2026-04-26)
     include_littles_approx: bool = False         # Cached Little's MCAR (off by default — ADR 0004)
     include_heuristic_littles: bool = False      # Median-split SMD heuristic (computed from tokens)
 
@@ -79,12 +80,14 @@ class MissingnessFeatureConfig:
 
     @property
     def n_features(self) -> int:
-        """Total number of features extracted. Default: 7 (4 + 3)."""
+        """Total number of features extracted. Default: 10 (4 + 3 + 3)."""
         n = 0
         if self.include_missing_rate_stats:
             n += 4  # mean, var, range, max
         if self.include_cross_column_corr:
             n += 3  # mean, max of cross-column missingness correlation
+        if self.include_value_conditional:
+            n += 3  # smd_mean, smd_max, shape_shift
         if self.include_littles_approx:
             n += 2  # cached chi-squared statistic, p-value
         if self.include_heuristic_littles:
@@ -275,6 +278,162 @@ def compute_cross_column_missingness_correlation(
     return features
 
 
+def compute_value_conditional_features(
+    values: torch.Tensor,       # [B, max_rows, max_cols]
+    is_observed: torch.Tensor,  # [B, max_rows, max_cols] (float, 1.0=observed)
+    row_mask: torch.Tensor,     # [B, max_rows] (bool)
+    col_mask: torch.Tensor,     # [B, max_cols] (bool)
+    eps: float = 1e-8,
+) -> torch.Tensor:
+    """Three scalars per batch sample combining values with missingness:
+
+      smd_mean: avg standardised mean difference of observed X_k between
+                rows where X_j is missing vs observed, over all valid
+                (j, k) pairs. Near-zero under MCAR; positive under MAR
+                (missingness in j is predictable from values of k);
+                positive under MNAR-with-correlated-cols (correlation
+                propagates the censoring signal). MAR / not-MCAR.
+
+      smd_max:  max over valid (j, k) pairs. High concentration on a
+                single (j, k) pair suggests a specific predictor drives
+                missingness — characteristic of MAR (one observed
+                covariate explains the dropout). Broader pattern with
+                lower max suggests correlation-driven MNAR.
+
+      shape_shift: avg robust-skew (|mean − median| / std) of observed
+                   values for columns WITH missingness, minus the same
+                   averaged over columns WITHOUT missingness. Under
+                   MNAR-self-censoring, partially-missing columns have
+                   truncation-distorted observed shape; fully-observed
+                   columns retain natural shape ⇒ positive shift. Under
+                   MAR/MCAR, missingness doesn't directly selection-bias
+                   the observed values of the affected column ⇒ shift
+                   ≈ 0.
+
+    All three are batched; computation is O(B · R · C²) which is fine
+    for our regime (R ≤ 128, C ≤ 48).
+
+    Returns:
+        features: [B, 3] tensor [smd_mean, smd_max, shape_shift].
+    """
+    B, max_rows, max_cols = values.shape
+    device = values.device
+
+    is_observed_f = is_observed.float()
+    is_missing_f = 1.0 - is_observed_f
+    row_mask_f = row_mask.float().unsqueeze(-1)  # [B, R, 1]
+    col_mask_f = col_mask.float().unsqueeze(1)    # [B, 1, C]
+    valid_cell = row_mask_f * col_mask_f          # [B, R, C]
+
+    # is_obs_valid[b, i, k] = 1 iff row i, col k observed AND row+col valid
+    is_obs_valid = is_observed_f * valid_cell    # [B, R, C]
+    # j_missing_row[b, i, j] = 1 iff col j missing in row i AND row+col valid
+    j_missing_row = is_missing_f * valid_cell    # [B, R, C]
+    j_observed_row = is_obs_valid                 # alias for readability
+
+    # Weighted values (zero where invalid or missing)
+    weighted_values = values * is_obs_valid       # [B, R, C]
+
+    # For each (b, j, k):
+    #   numer_miss[b, j, k] = sum_i [j missing AND k observed AND valid] * X[k]
+    #   denom_miss[b, j, k] = sum_i [j missing AND k observed AND valid]
+    numer_miss = torch.einsum('brj,brk->bjk', j_missing_row, weighted_values)
+    denom_miss = torch.einsum('brj,brk->bjk', j_missing_row, is_obs_valid)
+    numer_obs = torch.einsum('brj,brk->bjk', j_observed_row, weighted_values)
+    denom_obs = torch.einsum('brj,brk->bjk', j_observed_row, is_obs_valid)
+
+    mean_k_given_j_miss = numer_miss / denom_miss.clamp(min=1)   # [B, j, k]
+    mean_k_given_j_obs = numer_obs / denom_obs.clamp(min=1)      # [B, j, k]
+
+    # Marginal std of X_k (over valid observed cells in col k)
+    n_obs_k = is_obs_valid.sum(dim=1)                            # [B, C]
+    sum_k = (values * is_obs_valid).sum(dim=1)                   # [B, C]
+    mean_k = sum_k / n_obs_k.clamp(min=1)                        # [B, C]
+    diff_k = (values - mean_k.unsqueeze(1)) * is_obs_valid       # [B, R, C]
+    var_k = (diff_k ** 2).sum(dim=1) / n_obs_k.clamp(min=1)
+    std_k = var_k.sqrt().clamp(min=eps)                          # [B, C]
+
+    smd = (mean_k_given_j_miss - mean_k_given_j_obs).abs() / std_k.unsqueeze(1).clamp(min=eps)
+    smd = torch.where(torch.isnan(smd) | torch.isinf(smd), torch.zeros_like(smd), smd)
+
+    # Pair validity + sample-size guard. Without a minimum per-group
+    # sample size, |SMD| can spike to 3+ on real datasets with very
+    # low overall missingness (e.g. psych::bfi at 0.6 % miss-rate, where
+    # the "j-missing" group has 4-10 rows per column). Those spikes are
+    # sampling noise, not signal. We require ≥ MIN_GROUP_N samples in
+    # both the missing and observed groups, AND shrink each pair's
+    # contribution by an effective-sample-size factor — so a pair with
+    # exactly MIN_GROUP_N samples in the smaller group contributes ~50%,
+    # asymptoting to 100 % as group sizes grow. The shrinkage is
+    # `n_eff / (n_eff + MIN_GROUP_N)` where n_eff is the harmonic mean
+    # of the two group sizes.
+    MIN_GROUP_N = 5.0
+    diag_mask = ~torch.eye(max_cols, dtype=torch.bool, device=device).unsqueeze(0)
+    valid_pair = (
+        (denom_miss >= MIN_GROUP_N)
+        & (denom_obs >= MIN_GROUP_N)
+        & (n_obs_k.unsqueeze(1) >= 2)
+        & diag_mask
+        & col_mask.unsqueeze(2)
+        & col_mask.unsqueeze(1)
+    )
+    # Effective-sample-size shrinkage: harmonic mean / (harmonic mean + MIN_GROUP_N)
+    n_eff = 2.0 / (1.0 / denom_miss.clamp(min=1) + 1.0 / denom_obs.clamp(min=1))
+    shrink = n_eff / (n_eff + MIN_GROUP_N)
+    smd_shrunk = smd * shrink
+
+    smd_masked = torch.where(valid_pair, smd_shrunk, torch.zeros_like(smd_shrunk))
+    n_pairs = valid_pair.float().sum(dim=(1, 2)).clamp(min=1)
+    smd_mean = smd_masked.sum(dim=(1, 2)) / n_pairs
+
+    # Max — also use shrunk values so a 1-sample pair can't spike the max.
+    smd_for_max = torch.where(valid_pair, smd_shrunk, torch.full_like(smd_shrunk, -1.0))
+    smd_max = smd_for_max.view(B, -1).max(dim=1).values
+    smd_max = torch.where(smd_max < 0, torch.zeros_like(smd_max), smd_max)
+
+    # === shape_shift ===
+    # For each col k: |mean_k - median_k| / std_k computed over observed cells.
+    # Median requires sorting masked values; do it per-batch per-col.
+    # Use a robust, batch-friendly approximation: weighted median via
+    # the mean of (values where R=1) sorted; we approximate the median
+    # by the 0.5 quantile after masking. PyTorch torch.quantile doesn't
+    # support per-element masking directly, so build per-col masked
+    # tensors and compute quantile column-wise.
+
+    # We'll compute median by setting masked-out values to NaN and
+    # using nanquantile. That is per-column independent, so we reshape
+    # to [B*C, R].
+    masked_vals = torch.where(is_obs_valid > 0, values, torch.full_like(values, float("nan")))
+    masked_vals_flat = masked_vals.permute(0, 2, 1).reshape(B * max_cols, max_rows)
+    median_k_flat = torch.nanquantile(masked_vals_flat, 0.5, dim=1)
+    median_k = median_k_flat.reshape(B, max_cols)
+    median_k = torch.where(torch.isnan(median_k), torch.zeros_like(median_k), median_k)
+
+    skew_k = (mean_k - median_k).abs() / std_k.clamp(min=eps)    # [B, C]
+
+    # Which cols have missingness? (within col_mask)
+    has_miss_col = ((is_missing_f * valid_cell).sum(dim=1) > 0)  # [B, C]
+    has_miss_col = has_miss_col & col_mask
+    has_obs_col_no_miss = (~has_miss_col) & col_mask              # [B, C]
+
+    n_miss_cols = has_miss_col.float().sum(dim=1).clamp(min=1)
+    n_clean_cols = has_obs_col_no_miss.float().sum(dim=1).clamp(min=1)
+
+    avg_skew_miss = (skew_k * has_miss_col.float()).sum(dim=1) / n_miss_cols
+    avg_skew_clean = (skew_k * has_obs_col_no_miss.float()).sum(dim=1) / n_clean_cols
+    shape_shift = avg_skew_miss - avg_skew_clean
+
+    # Sanity: clamp to a reasonable range. SMD can exceed 10 only on
+    # degenerate cells; cap to prevent gradient explosion downstream.
+    smd_mean = smd_mean.clamp(min=0.0, max=10.0)
+    smd_max = smd_max.clamp(min=0.0, max=10.0)
+    shape_shift = shape_shift.clamp(min=-5.0, max=5.0)
+    shape_shift = torch.where(torch.isnan(shape_shift) | torch.isinf(shape_shift),
+                              torch.zeros_like(shape_shift), shape_shift)
+
+    return torch.stack([smd_mean, smd_max, shape_shift], dim=-1)
+
+
 def compute_littles_test_approx(
     values: torch.Tensor,       # [B, max_rows, max_cols]
     is_observed: torch.Tensor,  # [B, max_rows, max_cols]
@@ -403,7 +562,18 @@ def extract_missingness_features(
         )
         feature_list.append(cc_features)
 
-    # 3. Little's MCAR test result, read from the offline cache. The
+    # 3. Value-conditional features (SMD + shape-shift). Added 2026-04-26
+    # to give the gate signal that distinguishes MAR from MNAR — pattern
+    # features alone cannot disambiguate when MNAR-with-correlated-cols
+    # produces the same per-col-rate / cross-col-corr fingerprint as MAR
+    # driven by an observed predictor.
+    if config.include_value_conditional:
+        vc_features = compute_value_conditional_features(
+            values, is_observed.float(), row_mask, col_mask, config.eps
+        )
+        feature_list.append(vc_features)
+
+    # 4. Little's MCAR test result, read from the offline cache. The
     # real chi-squared + p-value replace the earlier median-split
     # standardised-mean-difference heuristic that occupied this slot
     # (removed 2026-04-18 — see docs/decisions/0002). Values are
@@ -541,6 +711,13 @@ def get_feature_names(config: Optional[MissingnessFeatureConfig] = None) -> list
             "cross_col_corr_mean",
             "cross_col_corr_max",
             "cross_col_high_corr_frac",
+        ])
+
+    if config.include_value_conditional:
+        names.extend([
+            "smd_mean",
+            "smd_max",
+            "shape_shift",
         ])
 
     if config.include_littles_approx:

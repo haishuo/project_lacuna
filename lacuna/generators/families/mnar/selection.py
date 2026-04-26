@@ -187,12 +187,17 @@ class MNARAttrition(Generator):
         # Track which rows have dropped out
         dropped = torch.zeros(n, dtype=torch.bool)
 
+        # Position term scaled to [0, 1] so the late-column probability
+        # stays bounded by sigmoid(attrition_rate + value_dep * X) regardless
+        # of d. With the original `attrition_rate * j` term, late columns
+        # saturated to 100 % drop on any wide dataset.
         for j in range(d):
             # Once dropped, stay dropped
             R[dropped, j] = False
 
             # Compute dropout probability for this column
-            logits = attrition_rate * j + value_dep * X[:, j]
+            position = j / max(d - 1, 1)
+            logits = attrition_rate * position + value_dep * X[:, j]
             p_drop = torch.sigmoid(logits)
             new_drops = (~dropped) & (rng.rand(n) < p_drop)
             dropped = dropped | new_drops

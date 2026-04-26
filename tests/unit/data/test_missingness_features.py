@@ -47,15 +47,20 @@ def _make_tokens(values: torch.Tensor, is_observed: torch.Tensor) -> torch.Tenso
 
 
 def test_default_config_n_features():
-    # ADR 0004: default drops from 9 → 7 (cached Little's slot is off).
+    # 2026-04-26: default expands to 10 (4 missing-rate + 3 cross-col-corr +
+    # 3 value-conditional). The value-conditional group was added to give
+    # the MoE gate signal that distinguishes MAR from MNAR — pattern-only
+    # features alone hit an unidentifiability ceiling on real survey data.
+    # ADR 0004 (cached Little's slot off by default) still applies.
     cfg = MissingnessFeatureConfig()
     assert cfg.include_littles_approx is False
-    assert cfg.n_features == 4 + 3
+    assert cfg.include_value_conditional is True
+    assert cfg.n_features == 4 + 3 + 3
 
 
 def test_cached_opt_in_adds_two_features():
     cfg = MissingnessFeatureConfig(include_littles_approx=True)
-    assert cfg.n_features == 4 + 3 + 2
+    assert cfg.n_features == 4 + 3 + 3 + 2
 
 
 def test_heuristic_flag_adds_two_features():
@@ -63,7 +68,7 @@ def test_heuristic_flag_adds_two_features():
         include_littles_approx=False,
         include_heuristic_littles=True,
     )
-    assert cfg.n_features == 4 + 3 + 2
+    assert cfg.n_features == 4 + 3 + 3 + 2
 
 
 def test_both_mcar_flags_false_matches_default():
@@ -71,6 +76,11 @@ def test_both_mcar_flags_false_matches_default():
         include_littles_approx=False,
         include_heuristic_littles=False,
     )
+    assert cfg.n_features == 4 + 3 + 3
+
+
+def test_value_conditional_can_be_disabled():
+    cfg = MissingnessFeatureConfig(include_value_conditional=False)
     assert cfg.n_features == 4 + 3
 
 

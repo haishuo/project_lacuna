@@ -1,0 +1,500 @@
+# Lacuna-Survey generator registry.
+#
+# A specialised registry whose generators correspond to missingness
+# mechanisms that are PLAUSIBLE FOR THE SURVEY DATA-COLLECTION PROCESS:
+# self-administered or interviewer-administered questionnaires, polls,
+# structured interviews. Domain (medical, political, education,
+# marketing) is irrelevant — what matters is that the data was produced
+# by asking respondents to fill in items.
+#
+# DELIBERATELY EXCLUDED FROM THE GENERIC tabular registry:
+#   - Latent-variable / longitudinal MNAR (observational, not single-wave)
+#   - Competing events / symptom-triggered (clinical longitudinal)
+#   - Detection-limit / quantitation-limit (instrument process)
+#   - Heavy-tailed distributional MCAR (instrument artifacts)
+#   - ColumnBlocks / CrossClassified (admin / EHR block patterns)
+#
+# Generated from `lacuna_tabular_110.yaml` by curated allow-list.
+#
+# 2026-04-26 (post-v2 diagnostic) revisions:
+#   - Dropped MNAR-Logistic: produces a 1-col tiny-rate pattern on bfi
+#     that is literally identical to MAR-Logistic's pattern. Including
+#     both forces the model to assign different labels to indistin-
+#     guishable patterns.
+#   - Dropped MNAR-Q90: 2.2% overall miss-rate on bfi, indistinguishable
+#     from low-rate MAR threshold variants.
+#   - Dropped MNAR-Privacy and MNAR-UnderReport: similar low-coverage
+#     overlap with MAR-DemoGated-Sparse.
+# These removals tighten the MNAR pattern fingerprint to the heavier
+# self-censoring / value-truncation regime that's actually distinct
+# from MAR in pattern space.
+# 2026-04-26 (post-v7 diagnostic):
+#   Added four low-rate broad-spread variants. Real-world surveys
+#   show "many columns each missing a tiny amount" patterns
+#   (bfi: 0.6 % across 25 cols; chile: 0.6 % across 5 cols;
+#   cars93: 0.8 % across 18 cols). Existing generators were bimodal:
+#   either single-column at any rate, or many columns at high rate.
+#   The four additions fill the (low rate × broad column-spread) cell:
+#     MAR-DemoGated-LowBroad      1–2 % rate × 80 % cols
+#     MAR-DemoGated-VeryLow       1–2 % rate × 70 % cols
+#     MAR-PartialResponse-Sparse  4–6 % rate × 70 % cols
+#     MNAR-Q90-Broad              3–5 % rate × 80 % cols (truncation)
+
+name: lacuna_survey
+description: Survey collection-process specialisation. Mechanisms plausible for self/interviewer-administered questionnaires
+  regardless of subject domain.
+generators:
+- family: mcar
+  variant: Bernoulli
+  name: MCAR-Bernoulli-10
+  params:
+    miss_rate: 0.1
+- family: mcar
+  variant: Bernoulli
+  name: MCAR-Bernoulli-30
+  params:
+    miss_rate: 0.3
+- family: mcar
+  variant: Bernoulli
+  name: MCAR-Bernoulli-50
+  params:
+    miss_rate: 0.5
+- family: mcar
+  variant: ColumnMixture
+  name: MCAR-ColMixture
+  params:
+    rates:
+    - 0.05
+    - 0.2
+    - 0.5
+    weights:
+    - 0.4
+    - 0.4
+    - 0.2
+- family: mcar
+  variant: ColumnOrdered
+  name: MCAR-ColOrdered
+  params:
+    min_rate: 0.05
+    max_rate: 0.4
+- family: mcar
+  variant: ColumnClustered
+  name: MCAR-ColClustered
+  params:
+    n_clusters: 3
+    rates_per_cluster:
+    - 0.05
+    - 0.2
+    - 0.4
+- family: mcar
+  variant: RandomBlocks
+  name: MCAR-RandBlocks
+  params:
+    block_size: 5
+    miss_prob: 0.3
+- family: mcar
+  variant: SubgroupSpecific
+  name: MCAR-Subgroup
+  params:
+    subgroup_frac: 0.3
+    subgroup_rate: 0.5
+    background_rate: 0.1
+- family: mar
+  variant: Logistic
+  name: MAR-Logistic
+  params:
+    alpha0: -0.5
+    alpha1: 3.0
+- family: mar
+  variant: Probit
+  name: MAR-Probit
+  params:
+    alpha0: -0.3
+    alpha1: 2.0
+- family: mar
+  variant: Threshold
+  name: MAR-Threshold
+  params:
+    threshold: 0.0
+    miss_prob_above: 0.6
+    miss_prob_below: 0.1
+- family: mar
+  variant: Polynomial
+  name: MAR-Polynomial
+  params:
+    alpha0: -0.5
+    alpha1: 1.5
+    alpha2: 1.0
+- family: mar
+  variant: Spline
+  name: MAR-Spline
+  params:
+    knots:
+    - -2.0
+    - -0.5
+    - 0.5
+    - 2.0
+    slopes:
+    - 0.5
+    - 2.0
+    - 0.5
+- family: mar
+  variant: StepFunction
+  name: MAR-StepFunc
+  params:
+    thresholds:
+    - -1.5
+    - -0.5
+    - 0.5
+    - 1.5
+    rates:
+    - 0.1
+    - 0.3
+    - 0.6
+- family: mar
+  variant: MultiPredictor
+  name: MAR-MultiPred
+  params:
+    alpha0: -0.5
+    alphas:
+    - 2.0
+    - 1.5
+- family: mar
+  variant: TwoPredictor
+  name: MAR-TwoPred
+  params:
+    alpha0: -0.5
+    alpha1: 2.0
+    alpha2: 1.5
+- family: mar
+  variant: ThreePredictor
+  name: MAR-ThreePred
+  params:
+    alpha0: -0.5
+    alphas:
+    - 2.0
+    - 1.5
+    - 1.0
+- family: mar
+  variant: WeightedPredictor
+  name: MAR-WeightPred
+  params:
+    alpha0: -0.5
+    alphas:
+    - 2.0
+    - 1.5
+    weights:
+    - 0.7
+    - 0.3
+- family: mar
+  variant: Interactive
+  name: MAR-Interactive
+  params:
+    alpha0: -0.5
+    alpha1: 2.0
+    alpha2: 1.5
+    alpha12: 1.0
+- family: mar
+  variant: Conditional
+  name: MAR-Conditional
+  params:
+    condition_threshold: 0.0
+    alpha0: -0.5
+    alpha1: 3.0
+- family: mar
+  variant: Weak
+  name: MAR-Weak
+  params:
+    alpha0: -0.5
+- family: mar
+  variant: Moderate
+  name: MAR-Moderate
+  params:
+    alpha0: -0.5
+- family: mar
+  variant: Strong
+  name: MAR-Strong
+  params:
+    alpha0: -0.5
+- family: mar
+  variant: ContinuousPredictor
+  name: MAR-ContPred
+  params:
+    alpha0: -0.5
+    alpha1: 3.0
+- family: mar
+  variant: DiscretePredictor
+  name: MAR-DiscPred
+  params:
+    n_levels: 4
+    alpha_per_level:
+    - 0.05
+    - 0.15
+    - 0.35
+    - 0.6
+- family: mar
+  variant: BinaryPredictor
+  name: MAR-BinaryPred
+  params:
+    miss_rate_high: 0.5
+    miss_rate_low: 0.1
+- family: mar
+  variant: MixedPredictor
+  name: MAR-MixedPred
+  params:
+    alpha_continuous: 2.0
+    alpha_binary: 1.5
+- family: mar
+  variant: TreeRules
+  name: MAR-TreeRules
+  params:
+    rules:
+    - col: 0
+      threshold: 0.5
+      rate: 0.6
+    - col: 1
+      threshold: -0.5
+      rate: 0.4
+- family: mar
+  variant: Kernel
+  name: MAR-Kernel
+  params:
+    reference_quantile: 0.5
+    bandwidth: 1.0
+    scale: 2.0
+- family: mar
+  variant: SkipLogic
+  name: MAR-SkipLogic
+  params:
+    threshold: 0.0
+    conditional_rate: 0.6
+- family: mar
+  variant: Branching
+  name: MAR-Branching
+  params:
+    n_branches: 3
+    branch_columns:
+    - - 1
+      - 2
+      - 3
+    - - 2
+      - 4
+      - 5
+    - - 1
+      - 3
+      - 5
+- family: mar
+  variant: SectionLevel
+  name: MAR-Section
+  params:
+    n_sections: 3
+    section_sizes:
+    - 3
+    - 3
+    - 4
+    gateway_threshold: 0.0
+- family: mar
+  variant: RequiredOptional
+  name: MAR-ReqOpt
+  params:
+    required_frac: 0.4
+    required_rate: 0.5
+    optional_rate: 2.0
+- family: mar
+  variant: QuotaBased
+  name: MAR-Quota
+  params:
+    quota_threshold: 50.0
+    post_quota_rate: 0.6
+- family: mar
+  variant: RealisticSingle
+  name: MAR-RealisticSingle-15
+  params:
+    target_miss_rate: 0.15
+    slope: 1.0
+- family: mar
+  variant: RealisticSingle
+  name: MAR-RealisticSingle-25
+  params:
+    target_miss_rate: 0.25
+    slope: 1.5
+- family: mar
+  variant: PartialResponse
+  name: MAR-PartialResponse-Light
+  params:
+    partial_rate: 0.2
+    slope: 1.2
+    block_frac: 0.4
+- family: mar
+  variant: DemographicGated
+  name: MAR-DemoGated-Sparse
+  params:
+    gate_quantile: 0.5
+    rate_above: 0.2
+    rate_below: 0.03
+    cols_affected_frac: 0.6
+- family: mnar
+  variant: SelfCensorHigh
+  name: MNAR-SelfCensor-High
+  params:
+    beta0: -0.5
+    beta1: 2.5
+    affected_frac: 0.5
+- family: mnar
+  variant: SelfCensorLow
+  name: MNAR-SelfCensor-Low
+  params:
+    beta0: 0.5
+    beta1: -2.5
+    affected_frac: 0.5
+- family: mnar
+  variant: SelfCensorExtreme
+  name: MNAR-SelfCensor-Extreme
+  params:
+    beta0: -1.0
+    beta_quadratic: 1.5
+    affected_frac: 0.5
+- family: mnar
+  variant: SelfCensorWeak
+  name: MNAR-SelfCensor-Weak
+  params:
+    beta0: -0.5
+    beta1: 1.0
+    affected_frac: 0.5
+- family: mnar
+  variant: SelfCensorStrong
+  name: MNAR-SelfCensor-Strong
+  params:
+    beta0: -0.5
+    beta1: 3.5
+    affected_frac: 0.5
+- family: mnar
+  variant: ValueDependentStrength
+  name: MNAR-ValDepStr
+  params:
+    beta0: -0.5
+    beta1_low: 0.5
+    beta1_high: 3.0
+    affected_frac: 0.5
+- family: mnar
+  variant: ColumnSpecificCensor
+  name: MNAR-ColSpecCensor
+  params:
+    beta0_range:
+    - -1.0
+    - 1.0
+    beta1_range:
+    - 0.5
+    - 3.0
+    affected_frac: 0.5
+- family: mnar
+  variant: DemographicDependent
+  name: MNAR-DemoDepend
+  params:
+    n_groups: 3
+    beta_per_group:
+    - - -0.5
+      - 1.5
+    - - 0.0
+      - 2.5
+    - - 0.5
+      - 3.5
+    affected_frac: 0.5
+- family: mnar
+  variant: ThresholdLeft
+  name: MNAR-ThreshLeft
+  params:
+    percentile: 70
+    miss_prob: 0.7
+    affected_frac: 0.5
+- family: mnar
+  variant: ThresholdRight
+  name: MNAR-ThreshRight
+  params:
+    percentile: 30
+    miss_prob: 0.7
+    affected_frac: 0.5
+- family: mnar
+  variant: ThresholdTwoSided
+  name: MNAR-ThreshTwoSided
+  params:
+    lower_percentile: 20
+    upper_percentile: 80
+    miss_prob: 0.7
+    affected_frac: 0.5
+- family: mnar
+  variant: SoftThreshold
+  name: MNAR-SoftThresh
+  params:
+    percentile: 70
+    steepness: 3.0
+    affected_frac: 0.5
+- family: mnar
+  variant: Quantile70
+  name: MNAR-Q70
+  params:
+    miss_prob: 0.7
+    affected_frac: 0.5
+- family: mnar
+  variant: Quantile80
+  name: MNAR-Q80
+  params:
+    miss_prob: 0.7
+    affected_frac: 0.5
+- family: mnar
+  variant: OverReport
+  name: MNAR-OverReport
+  params:
+    threshold_percentile: 25
+    over_report_prob: 0.6
+    affected_frac: 0.5
+- family: mnar
+  variant: NonLinearSocial
+  name: MNAR-NonLinSocial
+  params:
+    center_value: 0.0
+    sensitivity: 1.0
+    affected_frac: 0.5
+- family: mnar
+  variant: Gaming
+  name: MNAR-Gaming
+  params:
+    incentive_threshold: 0.0
+    gaming_radius: 0.5
+    miss_prob: 0.8
+    affected_frac: 0.5
+- family: mnar
+  variant: Volunteer
+  name: MNAR-Volunteer
+  params:
+    volunteer_tendency: 0.5
+    affected_frac: 0.5
+- family: mar
+  variant: DemographicGated
+  name: MAR-DemoGated-LowBroad
+  params:
+    gate_quantile: 0.5
+    rate_above: 0.025
+    rate_below: 0.005
+    cols_affected_frac: 0.85
+- family: mar
+  variant: DemographicGated
+  name: MAR-DemoGated-VeryLow
+  params:
+    gate_quantile: 0.5
+    rate_above: 0.04
+    rate_below: 0.005
+    cols_affected_frac: 0.7
+- family: mar
+  variant: PartialResponse
+  name: MAR-PartialResponse-Sparse
+  params:
+    partial_rate: 0.05
+    slope: 1.2
+    block_frac: 0.7
+- family: mnar
+  variant: Quantile90
+  name: MNAR-Q90-Broad
+  params:
+    beta_outside_quantile: 2.5
+    affected_frac: 0.85

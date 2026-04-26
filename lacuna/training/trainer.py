@@ -88,6 +88,11 @@ class TrainerConfig:
     mechanism_loss_type: str = "cross_entropy"  # "cross_entropy" or "brier"
     label_smoothing: float = 0.0        # Label smoothing (cross-entropy only)
     load_balance_weight: float = 0.01   # MoE load balancing
+    # Per-class loss weights [w_MCAR, w_MAR, w_MNAR]. None = unweighted.
+    # 2026-04-25: introduced after v3 showed MNAR-true → MAR-predicted
+    # collapse on real datasets. Bumping w_MNAR above 1.0 raises the
+    # cost of that collapse during training.
+    per_class_weights: Optional[list] = None
     
     # === Mixed Precision ===
     use_amp: bool = False               # Use automatic mixed precision
@@ -141,6 +146,7 @@ class TrainerConfig:
             mechanism_loss_type=self.mechanism_loss_type,
             label_smoothing=self.label_smoothing,
             load_balance_weight=self.load_balance_weight,
+            per_class_weights=self.per_class_weights,
         )
 
 

@@ -25,16 +25,21 @@ from lacuna.generators.families.registry_builder import load_registry_from_confi
 OUT_DIR = Path(__file__).parent
 
 # Pick generators that produce visually clear missingness for the demo.
+# All three are in BOTH lacuna_tabular_110 and lacuna_survey registries
+# so the same synthetic samples are usable across model variants. The
+# MAR generator chosen is RealisticSingle-25 (not MAR-Logistic) because
+# the latter saturates pre-z-score and the realistic version produces
+# the moderate-rate single-column missingness that's actually plausible.
 GENERATORS = {
     "mcar.csv": "MCAR-Bernoulli-30",
-    "mar.csv":  "MAR-Logistic",
+    "mar.csv":  "MAR-RealisticSingle-25",
     "mnar.csv": "MNAR-SelfCensor-High",
 }
 
-# Use a real catalog dataset as X. wine has 178 rows × 13 features —
-# enough columns for cross-column correlation to matter, small enough
-# that the saved CSV is easy to inspect.
-DATASET_NAME = "wine"
+# Use a real survey catalog dataset as X. survey_bfi (psych::bfi Big
+# Five inventory, complete-case n=2236, 28 items) gives survey-shaped
+# X distributions — apples-to-apples with the survey-trained model.
+DATASET_NAME = "survey_bfi"
 
 SEED = 20260425
 
@@ -55,7 +60,7 @@ def to_csv(semi, path: Path) -> None:
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    registry = load_registry_from_config("lacuna_tabular_110")
+    registry = load_registry_from_config("lacuna_survey")
     by_name = {g.name: g for g in registry}
 
     catalog = create_default_catalog()
