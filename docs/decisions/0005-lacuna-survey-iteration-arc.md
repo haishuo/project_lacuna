@@ -255,3 +255,41 @@ is the current state-of-the-art for Lacuna-Survey. Within-domain
 real-survey MAR detection: 3/5. Synthetic accuracy: 86.5 %.
 Confidence calibration ECE: 0.065. Learned evidence attenuation
 α = 0.241.
+
+## Real-data calibration (2026-04-26, post-v8)
+
+Vector-scaling calibration fit in `lacuna_survey/calibrate.py` and
+saved to `lacuna_survey/deployment/calibration.json`. Calibration set:
+five real survey datasets (bfi, chile, cars93, survey_survey, yrbss,
+all consensus-MAR) up-weighted relative to ~250 synthetic samples
+covering all three classes for MCAR/MNAR coverage.
+
+Learned parameters: T = 0.837, bias = [+2.89, −2.36, +0.76]. The
+asymmetric bias reflects the all-MAR composition of the real-anchor
+set — calibration could only adjust the MAR boundary, not the MCAR
+or MNAR boundaries.
+
+| | v8 raw | v8 + calibration |
+|---|---|---|
+| Within-domain real-survey MAR | 3/5 | **4/5** |
+| Cross-domain MNAR consensus | 1/3 | 0/3 |
+
+The calibration helped within-domain (yrbss recovered to MAR;
+survey_survey softened from 89 % wrong-MNAR to 58 % wrong-MNAR) and
+hurt cross-domain (Pima_uci flipped from MNAR ✓ at 90 % to MAR ✗
+at 65 %). By the specialization framing this is a net win: cross-
+domain cases are not Lacuna-Survey's responsibility and should be
+routed elsewhere (or flagged by the OOD detector — candidate
+direction #3 above).
+
+The calibration is structurally biased toward MAR because all five
+anchor points are consensus-MAR. To get a balanced calibration, the
+anchor set would need:
+
+  - Real-survey MNAR examples (e.g. income surveys with high-earner
+    refusal — NLSY income items, or sensitive-topic NHANES items).
+  - Real-survey MCAR examples (e.g. PISA-style rotated-booklet
+    planned-missing designs).
+
+Refitting `calibrate.py` with the expanded corpus when those become
+available is mechanical — no architecture changes needed.

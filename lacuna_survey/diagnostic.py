@@ -22,6 +22,7 @@ mechanism). Use the output as evidence, not proof.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import Callable, Optional
@@ -33,6 +34,28 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from demo.pipeline import build_model, csv_to_dataset, run_model, MODEL_DEFAULTS
+
+# Optional Lacuna-Survey calibration (vector scaling). If a calibration
+# file is present in deployment/calibration.json, predictions are
+# post-processed before reporting. Enable with --calibrated.
+DEFAULT_CALIBRATION_PATH = Path(__file__).parent / "deployment" / "calibration.json"
+
+
+def _load_calibration(path: Path):
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text())
+    return payload["temperature"], payload["bias"]
+
+
+def _apply_calibration(p_class, T: float, bias):
+    """Apply vector scaling (logits' = (logits - bias) / T) to a
+    posterior probability vector. Returns calibrated probabilities."""
+    p = np.asarray(p_class, dtype=np.float64)
+    logits = np.log(np.clip(p, 1e-8, 1.0))
+    cal = (logits - np.asarray(bias)) / T
+    e = np.exp(cal - cal.max())
+    return e / e.sum()
 
 
 RDATASETS = "https://vincentarelbundock.github.io/Rdatasets/csv"
@@ -196,7 +219,10 @@ REGISTRY: dict[str, Callable[[], pd.DataFrame]] = {
 
 # --- Runner -----------------------------------------------------------------
 
-def run_one(model, name: str) -> dict:
+CLASS_NAMES_TUPLE = ("MCAR", "MAR", "MNAR")
+
+
+def run_one(model, name: str, calibration=None) -> dict:
     df = REGISTRY[name]()
     csv_bytes = df.to_csv(index=False).encode("utf-8")
     loaded = csv_to_dataset(csv_bytes, name, max_rows=MODEL_DEFAULTS["max_rows"])
@@ -205,8 +231,13 @@ def run_one(model, name: str) -> dict:
         return {"name": name, "error": "no missing values after preprocessing"}
 
     out = run_model(model, loaded.dataset)
+    p_class = out["p_class"]
+    if calibration is not None:
+        T, bias = calibration
+        p_class = _apply_calibration(p_class, T, bias).tolist()
+    pred_idx = int(np.argmax(p_class))
+    pred = CLASS_NAMES_TUPLE[pred_idx]
     consensus, _ = CONSENSUS_NOTES[name]
-    pred = out["predicted_class_name"]
     return {
         "name": name,
         "n": loaded.dataset.n,
@@ -216,11 +247,11 @@ def run_one(model, name: str) -> dict:
         "consensus": consensus,
         "pred": pred,
         "agree": pred == consensus,
-        "p_mcar": out["p_class"][0],
-        "p_mar":  out["p_class"][1],
-        "p_mnar": out["p_class"][2],
-        "confidence": out["confidence"],
-        "action": out["action_label"],
+        "p_mcar": float(p_class[0]),
+        "p_mar":  float(p_class[1]),
+        "p_mnar": float(p_class[2]),
+        "confidence": float(max(p_class)),
+        "action": out["action_label"],  # action is from raw posterior; calibration affects p only
     }
 
 
@@ -229,18 +260,29 @@ def main() -> None:
     ap.add_argument("--checkpoint", default=str(PROJECT_ROOT / "demo" / "model.pt"))
     ap.add_argument("--csv", default=None,
                     help="Optional path to write the result table as CSV.")
+    ap.add_argument("--calibrated", action="store_true",
+                    help=f"Apply Lacuna-Survey calibration from {DEFAULT_CALIBRATION_PATH}")
     args = ap.parse_args()
 
     print(f"Loading checkpoint: {args.checkpoint}")
     model, n_params = build_model(args.checkpoint)
     print(f"  {n_params:,} parameters")
+    calibration = None
+    if args.calibrated:
+        calibration = _load_calibration(DEFAULT_CALIBRATION_PATH)
+        if calibration is None:
+            print(f"  WARNING: --calibrated requested but no calibration at "
+                  f"{DEFAULT_CALIBRATION_PATH} — running raw")
+        else:
+            T, bias = calibration
+            print(f"  Calibration: T={T:.3f}  bias={[round(b, 3) for b in bias]}")
     print()
 
     rows = []
     for name in REGISTRY:
         print(f"Running {name}…", flush=True)
         try:
-            row = run_one(model, name)
+            row = run_one(model, name, calibration=calibration)
         except Exception as e:
             row = {"name": name, "error": f"{type(e).__name__}: {e}"}
         rows.append(row)
