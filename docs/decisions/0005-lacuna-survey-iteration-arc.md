@@ -182,6 +182,10 @@ Three within-domain failure modes remain:
 
 ## Candidate next directions (research-level, not architectural rewrites)
 
+These are the directions with no prior evidence against them. Two
+options that *did* have prior evidence against them are explicitly
+struck below.
+
 In rough order of expected leverage:
 
 1. **Real-data calibration** — Use a small held-out set of
@@ -190,39 +194,50 @@ In rough order of expected leverage:
    temperature scaling or Platt-style adjustment. Doesn't change the
    model; reshapes its outputs to be honest about uncertainty.
 
-2. **Ensemble with classical Little's-style tests**. Lacuna's neural
-   posterior is ONE source of evidence; the Little 1988 chi-square
-   test (already in `pystatistics.mvnmle`) is an independent
-   classical signal. A Bayesian model average of the two would
-   exploit the orthogonal information sources and let each flag where
-   it disagrees with the other — useful as a "second opinion"
-   layer that catches the airquality / Pima class of failures.
-
-3. **Encoder-side regularization**. The transformer evidence
+2. **Encoder-side regularization**. The transformer evidence
    pathway carries 71.8 % of gate input L1 mass and is the dominant
    driver of real-world misclassifications. Targeted regularization —
    e.g. an information bottleneck on the evidence vector, or
    dropout-during-inference to test sensitivity — may make evidence
    carry only what's robust across distributions.
 
-4. **Out-of-domain detection**. Deep evidential learning or simple
+3. **Out-of-domain detection**. Deep evidential learning or simple
    density-of-training-features-vs-test-features test would let the
    model flag inputs unlike anything it saw. For Lacuna-Survey,
    Pima/airquality should be flagged before any classification.
 
-5. **Active learning on real data**. Where reliable expert labels
+4. **Active learning on real data**. Where reliable expert labels
    exist (NHANES item-level, ESS), incorporate small amounts of real
    data into training as anchors. The bulk of training stays
    semi-synthetic; the real anchors prevent distribution drift.
 
-A rewrite of the model architecture is not on this list. The
-classifier framework — semi-synthetic training with apply_missingness,
-transformer encoder + MoE gate + reconstruction heads — has been
-validated by v1–v8: it produces well-calibrated, class-balanced
-predictions on synthetic, with synthetic accuracy in the 86–98 %
-range across versions. Where it fails (real-world transfer) is in
-information that isn't in the training data, not in the architecture
-that uses it.
+### Directions explicitly NOT on the list
+
+- **Ensemble with classical Little's-style tests** (Little 1988
+  MLE, MoM, propensity, HSIC, MissMech, median-split heuristic, or
+  any combinator over them). The
+  `mcar-alternatives-bakeoff` arc tested all six families as gate
+  features and ADR 0004 confirmed that Little's MLE *actively hurt*
+  classification accuracy at n=30 (CI excluded zero, p=0.036,
+  21/30 seeds favoured disable). The deployment-time ensemble is
+  technically a different combinator than learned feature weights,
+  but the underlying empirical finding — classical MCAR tests do
+  not carry information beyond Lacuna's existing features — applies
+  in either combinator. Re-introducing them would re-litigate
+  settled work.
+
+- **Architectural rewrite of the base model.** The classifier
+  framework — semi-synthetic training with `apply_missingness`,
+  transformer encoder + MoE gate + reconstruction heads — has been
+  validated by v1–v8: it produces well-calibrated, class-balanced
+  predictions on synthetic, with synthetic accuracy in the 86–98 %
+  range across versions. Where it fails (real-world transfer) is in
+  information that isn't in the training data, not in the
+  architecture that uses it. Branch only on demonstrated need for
+  fundamentally different computation (e.g. temporal attention for
+  Lacuna-Longitudinal); not as a fix for the within-domain
+  generalization gap, where the deployment-layer directions above
+  haven't been tried yet.
 
 ## Numerical reference
 

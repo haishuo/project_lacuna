@@ -65,7 +65,10 @@ class MoEConfig:
     # MAR-data being misclassified as MNAR. Multiplying the evidence
     # slice by a sigmoid-bounded learnable scalar lets training find the
     # right balance rather than hard-coding it.
-    learn_evidence_attenuation: bool = True
+    # Default OFF in base Lacuna — opt in per variant. Lacuna-Survey
+    # turns this on via its training YAML (model.learn_evidence_attenuation).
+    # See ADR 0005 for empirical motivation.
+    learn_evidence_attenuation: bool = False
     evidence_attenuation_init: float = 0.25
     
     # Expert heads

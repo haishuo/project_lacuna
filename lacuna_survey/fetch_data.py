@@ -10,10 +10,10 @@ INVARIANT — DO NOT BREAK:
     and the training labels are no longer trustworthy. Always go through
     `dropna()` (i.e. complete-case) before writing the training file.
 
-    Evaluation-side files (demo/sample_data/survey_*_real.csv) are the
-    opposite: they keep native missingness because that pattern IS the
-    test signal — we want to see what the trained model says about real
-    survey item nonresponse.
+    Evaluation-side files (lacuna_survey/evaluation_data/survey_*_real.csv)
+    are the opposite: they keep native missingness because that pattern IS
+    the test signal — we want to see what the trained model says about
+    real survey item nonresponse.
 
 For each dataset we save TWO versions:
 
@@ -23,14 +23,14 @@ For each dataset we save TWO versions:
         to during training. The catalog auto-discovers files in this
         directory at startup.
 
-    /mnt/projects/project_lacuna/demo/sample_data/survey_<name>_real.csv
+    lacuna_survey/evaluation_data/survey_<name>_real.csv
         Original numeric data with its native missingness preserved.
         These are evaluation cases — apples-to-apples with how a real
         researcher would receive a survey dataset (real item nonresponse
         already present).
 
 Run from the repo root:
-    python scripts/fetch_survey_data.py
+    python -m lacuna_survey.fetch_data
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 RAW_DIR = Path("/mnt/data/lacuna/raw")
-EVAL_DIR = Path(__file__).parent.parent / "demo" / "sample_data"
+EVAL_DIR = Path(__file__).parent / "evaluation_data"
 
 RDATASETS = "https://vincentarelbundock.github.io/Rdatasets/csv"
 

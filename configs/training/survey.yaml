@@ -57,6 +57,13 @@ data:
     - survey_survey
 
 model:
+  # Lacuna-Survey opts in to evidence attenuation. Base Lacuna's
+  # default is OFF; this flag is the only architectural divergence
+  # between base Lacuna and Lacuna-Survey at the model layer. See
+  # ADR 0005 for the empirical motivation (gate-input weight probe
+  # on lacuna_survey_v6 found evidence carrying 71.8% of L1 mass).
+  learn_evidence_attenuation: true
+  evidence_attenuation_init: 0.25
   hidden_dim: 128
   evidence_dim: 64
   n_layers: 4

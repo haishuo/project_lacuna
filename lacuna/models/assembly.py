@@ -93,6 +93,8 @@ class LacunaModelConfig:
     gating_level: str = "dataset"     # "dataset" or "row"
     use_reconstruction_errors: bool = True  # Feed recon errors to gate
     use_expert_heads: bool = False    # Use expert refinement heads
+    learn_evidence_attenuation: bool = False  # Per-variant — see ADR 0005
+    evidence_attenuation_init: float = 0.25
     
     # === Calibration ===
     temperature: float = 1.0          # Softmax temperature
@@ -176,6 +178,8 @@ class LacunaModelConfig:
             class_aggregation=self.class_aggregation,
             load_balance_weight=self.load_balance_weight,
             gate_dropout=self.dropout,
+            learn_evidence_attenuation=self.learn_evidence_attenuation,
+            evidence_attenuation_init=self.evidence_attenuation_init,
         )
 
 
@@ -568,6 +572,8 @@ def create_lacuna_model(
     load_balance_weight: float = 0.0,
     loss_matrix: Optional[List[float]] = None,
     dropout: float = 0.1,
+    learn_evidence_attenuation: bool = False,
+    evidence_attenuation_init: float = 0.25,
 ) -> LacunaModel:
     """
     Factory function to create a LacunaModel.
@@ -633,8 +639,10 @@ def create_lacuna_model(
         load_balance_weight=load_balance_weight,
         dropout=dropout,
         loss_matrix=loss_matrix,
+        learn_evidence_attenuation=learn_evidence_attenuation,
+        evidence_attenuation_init=evidence_attenuation_init,
     )
-    
+
     return LacunaModel(config)
 
 

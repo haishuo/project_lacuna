@@ -85,10 +85,10 @@ def prep_pbc() -> pd.DataFrame:
     return df.select_dtypes(include="number").copy()
 
 
-# --- Real survey datasets (saved by scripts/fetch_survey_data.py) ----------
+# --- Real survey datasets (saved by lacuna_survey.fetch_data) ----------
 
 def _survey_real(name: str) -> pd.DataFrame:
-    path = PROJECT_ROOT / "demo" / "sample_data" / f"survey_{name}_real.csv"
+    path = Path(__file__).parent / "evaluation_data" / f"survey_{name}_real.csv"
     return pd.read_csv(path)
 
 

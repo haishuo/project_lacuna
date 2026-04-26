@@ -379,6 +379,8 @@ def main():
         max_cols=config.data.max_cols,
         dropout=config.model.dropout,
         mnar_variants=mnar_variants,
+        learn_evidence_attenuation=config.model.learn_evidence_attenuation,
+        evidence_attenuation_init=config.model.evidence_attenuation_init,
     )
 
     if not quiet:

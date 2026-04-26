@@ -45,12 +45,21 @@ class ModelConfig:
     n_layers: int = 4
     n_heads: int = 4
     dropout: float = 0.1
-    
+    # Variant-specific architectural knobs. Defaults match the
+    # *generic* base Lacuna architecture (no evidence attenuation);
+    # specialised variants (e.g. Lacuna-Survey) opt in via their
+    # training YAML. See docs/decisions/0005-lacuna-survey-iteration-arc.md
+    # for the empirical basis on Lacuna-Survey.
+    learn_evidence_attenuation: bool = False
+    evidence_attenuation_init: float = 0.25
+
     def __post_init__(self):
         if self.hidden_dim % self.n_heads != 0:
             raise ValueError("hidden_dim must be divisible by n_heads")
         if not (0 <= self.dropout < 1):
             raise ValueError("dropout must be in [0, 1)")
+        if not (0.0 < self.evidence_attenuation_init < 1.0):
+            raise ValueError("evidence_attenuation_init must be in (0, 1)")
 
 
 @dataclass
