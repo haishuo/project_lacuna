@@ -256,6 +256,46 @@ real-survey MAR detection: 3/5. Synthetic accuracy: 86.5 %.
 Confidence calibration ECE: 0.065. Learned evidence attenuation
 α = 0.241.
 
+## Out-of-domain detection (2026-04-26, post-calibration)
+
+Implemented in `lacuna_survey/ood.py` and saved to
+`lacuna_survey/deployment/ood_detector.json`. Logistic-regression
+classifier on a 34-dim feature vector (10 missingness features +
+24 per-column value-distribution stats), trained to distinguish:
+
+  IN  = synthetic mechanism applied to one of the SURVEY catalog
+        X-bases (599 samples).
+  OUT = synthetic mechanism applied to a NON-SURVEY catalog X-base
+        (660 samples from wine, breast_cancer, abalone, glass, …).
+
+Threshold tuned at P(OOD) = 0.30 to catch borderline real cases
+without false-positiving the within-domain anchors.
+
+| Validation | n | Result |
+|---|---|---|
+| Synthetic IN/OUT held-out | 252 | 95.6 % accuracy |
+| Real diagnostic suite | 7 | 6/7 correct |
+
+The one false negative is `airquality_real` (P(OOD) = 0.005 — well
+inside in-domain). Its weather/integer-day mix overlaps statistically
+with survey value distributions in the 34-dim feature space. A
+different feature signal would be needed to catch this; documented
+as a known limitation rather than tuned around.
+
+The combined deployment stack (v8 + calibration + OOD) produces:
+
+  - Within-domain real surveys: 5/6 MAR-consensus correct, all
+    correctly flagged as in-domain.
+  - Cross-domain MNAR (Pima_uci, Pima_tr2, hitters): all
+    misclassified as MAR by the calibrated model, but ALL flagged
+    as OOD with P(OOD) > 0.5 — converting confident-wrong into
+    flagged-wrong, which is a safe failure mode.
+  - Cross-domain instrument (airquality): calibrated prediction
+    correct (MAR) but OOD detector misses; net: still correct, just
+    not for the right reason.
+
+This is the current best deployment state for Lacuna-Survey.
+
 ## Real-data calibration (2026-04-26, post-v8)
 
 Vector-scaling calibration fit in `lacuna_survey/calibrate.py` and
@@ -293,3 +333,34 @@ anchor set would need:
 
 Refitting `calibrate.py` with the expanded corpus when those become
 available is mechanical — no architecture changes needed.
+
+### Corpus expansion (2026-04-26, post-OOD)
+
+Three new anchors added: `survey_nhanes_demographics` (MNAR — first
+real-survey MNAR anchor), `survey_gssvocab` (MAR), `survey_ucla_textbooks`
+(MAR). The NHANES anchor was filtered to rows where demographics are
+fully administered, leaving NaN concentrated in INDFMPIR (income-to-
+poverty ratio refusal) — the canonical MNAR pattern in the missing-
+data literature.
+
+Refitted calibration parameters: T = 2.20, bias = [+2.84, −2.76, −0.10].
+The MNAR bias moved from +0.76 (with all-MAR anchors) to near zero,
+reflecting the MNAR signal entering the corpus. Net result:
+
+  - Within-domain real-survey MAR: 4/5 (unchanged from previous
+    calibration; calibration preserves the principal anchors).
+  - The NHANES MNAR anchor itself classifies as MAR — its consensus
+    label is itself contested. Allison 2001 §6.4 argues income items
+    are MNAR; van Buuren and others argue MAR conditional on
+    demographics. Lacuna's MAR prediction is consistent with the
+    latter reading.
+  - Cross-domain: airquality flipped from "lucky MAR correct"
+    (under MAR-biased calibration) to MNAR ✗. OOD flag still catches
+    Pima/Pima.tr2/hitters.
+
+Net: more principled calibration, slightly different specific-case
+outcomes, same headline within-domain count (4/5). To meaningfully
+improve, the corpus needs additional MNAR (NLSY income, NHANES
+sensitive items) and MCAR (PISA rotated booklet) anchors. These
+require manual download from auth-walled sources; the framework
+absorbs them via `import_anchor.py` + `anchors.py` edit.

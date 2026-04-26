@@ -74,6 +74,39 @@ ANCHORS: List[Anchor] = [
                  "phone-survey nonresponse can also be defensibly MCAR; the consensus is the weakest of the bunch.",
         notes="Youth Risk Behavior Surveillance System, 13583 respondents × 5 numeric items.",
     ),
+
+    # 2026-04-26 expansion (post-OOD work):
+    Anchor(
+        slug="survey_nhanes_demographics",
+        label=2, label_name="MNAR",
+        source="HuggingFace nguyenvy/cleaned_nhanes_1988_2018 (NHANES 1988-2018 demographics, "
+               "filtered to rows where demographics fully administered, leaving NaN concentrated "
+               "in INDFMPIR income-to-poverty ratio).",
+        citation="NHANES Continuous methodology reports document income refusal patterns "
+                 "(NCHS 2013); INDFMPIR refusal is the canonical MNAR example for income items "
+                 "in the missing-data literature (Allison 2001 §6.4; Schafer & Graham 2002).",
+        notes="500 rows × 5 cols; ~8% NaN concentrated in INDFMPIR. The first real-survey MNAR "
+              "anchor in the calibration corpus.",
+    ),
+    Anchor(
+        slug="survey_gssvocab",
+        label=1, label_name="MAR",
+        source="carData::GSSvocab (CRAN R package; General Social Survey vocabulary module).",
+        citation="Fox 2008 'Applied Regression' treats GSS item nonresponse as MAR conditional on "
+                 "demographic predictors (age, education, gender). NORC GSS methodology reports "
+                 "document item nonresponse patterns by demographics.",
+        notes="500-row sample × 4 numeric items; ~1% NaN. Light missingness — primarily on "
+              "year-of-birth and other demographic items.",
+    ),
+    Anchor(
+        slug="survey_ucla_textbooks",
+        label=1, label_name="MAR",
+        source="openintro::ucla_textbooks_f18 (UCLA student textbook-purchase survey, Fall 2018).",
+        citation="Diez et al. OpenIntro Statistics document student-survey item nonresponse as "
+                 "MAR conditional on observed enrollment and price-quote characteristics.",
+        notes="201 students × 7 numeric items; ~43% NaN concentrated on price-quote items "
+              "(students didn't quote prices for textbooks they didn't purchase).",
+    ),
 ]
 
 

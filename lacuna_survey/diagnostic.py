@@ -39,6 +39,7 @@ from demo.pipeline import build_model, csv_to_dataset, run_model, MODEL_DEFAULTS
 # file is present in deployment/calibration.json, predictions are
 # post-processed before reporting. Enable with --calibrated.
 DEFAULT_CALIBRATION_PATH = Path(__file__).parent / "deployment" / "calibration.json"
+DEFAULT_OOD_PATH = Path(__file__).parent / "deployment" / "ood_detector.json"
 
 
 def _load_calibration(path: Path):
@@ -46,6 +47,27 @@ def _load_calibration(path: Path):
         return None
     payload = json.loads(path.read_text())
     return payload["temperature"], payload["bias"]
+
+
+def _load_ood_detector(path: Path):
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def _ood_score_for(observed, detector) -> float:
+    """Compute P(OOD) for an ObservedDataset given the loaded detector.
+
+    Imports the helpers from ood.py to avoid duplicating the feature
+    pipeline."""
+    from lacuna_survey.ood import features_for_observed, ood_score
+    from lacuna.data.missingness_features import MissingnessFeatureConfig
+    cfg = MissingnessFeatureConfig()
+    f = features_for_observed(observed, cfg)
+    return ood_score(
+        f, np.asarray(detector["mean"]), np.asarray(detector["std"]),
+        np.asarray(detector["weights"]), detector["bias"],
+    )
 
 
 def _apply_calibration(p_class, T: float, bias):
@@ -222,7 +244,7 @@ REGISTRY: dict[str, Callable[[], pd.DataFrame]] = {
 CLASS_NAMES_TUPLE = ("MCAR", "MAR", "MNAR")
 
 
-def run_one(model, name: str, calibration=None) -> dict:
+def run_one(model, name: str, calibration=None, ood_detector=None) -> dict:
     df = REGISTRY[name]()
     csv_bytes = df.to_csv(index=False).encode("utf-8")
     loaded = csv_to_dataset(csv_bytes, name, max_rows=MODEL_DEFAULTS["max_rows"])
@@ -238,6 +260,13 @@ def run_one(model, name: str, calibration=None) -> dict:
     pred_idx = int(np.argmax(p_class))
     pred = CLASS_NAMES_TUPLE[pred_idx]
     consensus, _ = CONSENSUS_NOTES[name]
+
+    ood_p = None
+    ood_flag = None
+    if ood_detector is not None:
+        ood_p = _ood_score_for(loaded.dataset, ood_detector)
+        ood_flag = ood_p > ood_detector.get("threshold", 0.5)
+
     return {
         "name": name,
         "n": loaded.dataset.n,
@@ -251,7 +280,9 @@ def run_one(model, name: str, calibration=None) -> dict:
         "p_mar":  float(p_class[1]),
         "p_mnar": float(p_class[2]),
         "confidence": float(max(p_class)),
-        "action": out["action_label"],  # action is from raw posterior; calibration affects p only
+        "action": out["action_label"],
+        "ood_p": ood_p,
+        "ood_flag": ood_flag,
     }
 
 
@@ -262,6 +293,8 @@ def main() -> None:
                     help="Optional path to write the result table as CSV.")
     ap.add_argument("--calibrated", action="store_true",
                     help=f"Apply Lacuna-Survey calibration from {DEFAULT_CALIBRATION_PATH}")
+    ap.add_argument("--ood", action="store_true",
+                    help=f"Show OOD probability per case (from {DEFAULT_OOD_PATH})")
     args = ap.parse_args()
 
     print(f"Loading checkpoint: {args.checkpoint}")
@@ -276,28 +309,41 @@ def main() -> None:
         else:
             T, bias = calibration
             print(f"  Calibration: T={T:.3f}  bias={[round(b, 3) for b in bias]}")
+    ood_detector = None
+    if args.ood:
+        ood_detector = _load_ood_detector(DEFAULT_OOD_PATH)
+        if ood_detector is None:
+            print(f"  WARNING: --ood requested but no detector at "
+                  f"{DEFAULT_OOD_PATH} — skipping OOD scoring")
+        else:
+            print(f"  OOD detector: threshold={ood_detector['threshold']:.2f}")
     print()
 
     rows = []
     for name in REGISTRY:
         print(f"Running {name}…", flush=True)
         try:
-            row = run_one(model, name, calibration=calibration)
+            row = run_one(model, name, calibration=calibration, ood_detector=ood_detector)
         except Exception as e:
             row = {"name": name, "error": f"{type(e).__name__}: {e}"}
         rows.append(row)
 
     print()
     print("=" * 100)
+    ood_col = "  P(OOD)" if ood_detector is not None else ""
     print(f"{'dataset':14s}  {'n×d':10s}  {'miss%':6s}  "
           f"{'consensus':10s}  {'pred':5s}  {'agree':5s}  "
-          f"{'p_MCAR':>7s} {'p_MAR':>7s} {'p_MNAR':>7s}  {'conf':>6s}  action")
+          f"{'p_MCAR':>7s} {'p_MAR':>7s} {'p_MNAR':>7s}  {'conf':>6s}  action{ood_col}")
     print("-" * 100)
     for row in rows:
         if "error" in row:
             print(f"{row['name']:14s}  ERROR: {row['error']}")
             continue
         agree_mark = "✓" if row["agree"] else "✗"
+        ood_str = ""
+        if row.get("ood_p") is not None:
+            flag = "OOD" if row["ood_flag"] else "in"
+            ood_str = f"  {row['ood_p']:.2f} ({flag})"
         print(
             f"{row['name']:14s}  "
             f"{row['n']:>4d}×{row['d']:<3d}    "
@@ -308,6 +354,7 @@ def main() -> None:
             f"{row['p_mcar']:7.3f} {row['p_mar']:7.3f} {row['p_mnar']:7.3f}  "
             f"{row['confidence']*100:5.1f}%  "
             f"{row['action']}"
+            f"{ood_str}"
         )
     print("=" * 100)
 
