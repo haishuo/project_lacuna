@@ -192,6 +192,91 @@ class MCARDiagonal(Generator):
         return self._compute_missingness(n, d, rng)
 
 
+class MCARRotatedBooklet(Generator):
+    """MCAR rotated-booklet planned-missing design.
+
+    Models the missingness pattern produced by surveys that randomly
+    assign each respondent to one of K "booklets" (e.g. PISA, NAEP,
+    ECLS-K). Some columns are universal (asked of every respondent);
+    the remaining columns are partitioned into K blocks, and each row
+    is randomly assigned to one block whose columns it sees observed.
+    All other rotated columns are NaN for that row.
+
+    Random booklet assignment is independent of values, so the
+    mechanism is MCAR-by-design even though within-row missingness
+    is highly structured (entire blocks of columns absent together).
+
+    Required params:
+        n_blocks: Number of rotation blocks (booklets). Must be >= 2.
+        universal_frac: Fraction of columns that are universal (always
+            observed). Must be in [0, 1).
+    """
+
+    def __init__(self, generator_id: int, name: str, params: GeneratorParams):
+        super().__init__(generator_id, name, MCAR, params)
+        if "n_blocks" not in params or "universal_frac" not in params:
+            raise ValueError("MCARRotatedBooklet requires 'n_blocks' and 'universal_frac'")
+        if params["n_blocks"] < 2:
+            raise ValueError("MCARRotatedBooklet requires n_blocks >= 2")
+        if not (0.0 <= params["universal_frac"] < 1.0):
+            raise ValueError("MCARRotatedBooklet requires 0 <= universal_frac < 1")
+
+    def _compute_missingness(self, n: int, d: int, rng: RNGState) -> torch.Tensor:
+        n_blocks = int(self.params["n_blocks"])
+        universal_frac = float(self.params["universal_frac"])
+
+        n_universal = max(0, min(d - 1, int(round(d * universal_frac))))
+        n_rotated = d - n_universal
+
+        # If too few rotated cols for the requested blocks, fall back to
+        # whatever blocks actually fit; keep at least 2 blocks.
+        effective_blocks = min(n_blocks, max(2, n_rotated))
+
+        # Random column permutation: first n_universal are universal,
+        # remainder split into effective_blocks roughly-equal partitions.
+        perm = rng.shuffle_indices(d).tolist()
+        universal_cols = perm[:n_universal]
+        rotated_cols = perm[n_universal:]
+
+        block_of_col = torch.full((d,), -1, dtype=torch.long)
+        for c in universal_cols:
+            block_of_col[c] = -2  # sentinel: always observed
+        if n_rotated > 0:
+            base, rem = divmod(n_rotated, effective_blocks)
+            offset = 0
+            for b in range(effective_blocks):
+                size = base + (1 if b < rem else 0)
+                for c in rotated_cols[offset:offset + size]:
+                    block_of_col[c] = b
+                offset += size
+
+        # Random booklet assignment per row, uniform over effective_blocks.
+        row_block = rng.randint(0, effective_blocks, (n,))
+
+        R = torch.zeros(n, d, dtype=torch.bool)
+        for c in range(d):
+            bc = block_of_col[c].item()
+            if bc == -2:
+                R[:, c] = True
+            else:
+                R[:, c] = (row_block == bc)
+
+        if R.sum() == 0:
+            R[0, 0] = True
+        return R
+
+    def sample(self, rng: RNGState, n: int, d: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        mean = self.params.get("base_mean", 0.0)
+        std = self.params.get("base_std", 1.0)
+        X = sample_gaussian(rng.spawn(), n, d, mean=mean, std=std)
+        R = self._compute_missingness(n, d, rng.spawn())
+        return X, R
+
+    def apply_to(self, X: torch.Tensor, rng: RNGState) -> torch.Tensor:
+        n, d = X.shape
+        return self._compute_missingness(n, d, rng)
+
+
 class MCARCheckerboard(Generator):
     """MCAR with alternating blocks of observed/missing in a checkerboard pattern.
 

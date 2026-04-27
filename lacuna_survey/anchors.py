@@ -107,6 +107,43 @@ ANCHORS: List[Anchor] = [
         notes="201 students × 7 numeric items; ~43% NaN concentrated on price-quote items "
               "(students didn't quote prices for textbooks they didn't purchase).",
     ),
+
+    # 2026-04-27: First MCAR anchor.
+    Anchor(
+        slug="pisa2018_gbr_rotation",
+        label=0, label_name="MCAR",
+        source="OECD PISA 2018 student questionnaire (cy07_msu_stu_qqq.sas7bdat), "
+               "filtered to GBR (n=13818), then random 500-student subsample. "
+               "Columns: 4 universal items (grade, birth quarter/year, gender) + 6 items "
+               "from the ST196 reading-attitude battery, which is administered to "
+               "~20% of booklets under the planned-missing rotated booklet design.",
+        citation="Graham, Taylor, Olchowski & Cumsille 2006, 'Planned missing data designs in "
+                 "psychological research', Psychological Methods 11(4): 323-343 (canonical reference "
+                 "for rotated-booklet MCAR-by-design); OECD 2019, 'PISA 2018 Technical Report' Ch.2 "
+                 "documents booklet random assignment.",
+        notes="500 students × 10 cols; ~47% NaN, concentrated in the 6 rotated items "
+              "(each ~80% NaN per random booklet assignment). MCAR-by-design.",
+    ),
+
+    # 2026-04-27: Second MCAR anchor — PISA 2022 cohort, German respondents,
+    # different rotation cluster than the 2018-GBR anchor. Independent
+    # exemplar for the MCAR class.
+    Anchor(
+        slug="pisa2022_deu_rotation",
+        label=0, label_name="MCAR",
+        source="OECD PISA 2022 student questionnaire (CY08MSP_STU_QQQ.SAS7BDAT), "
+               "filtered to DEU (n=6116), then random 500-student subsample. "
+               "Columns: 4 universal demographics + 4 items from the ST315 rotated "
+               "battery (different cluster than ST196 used in pisa2018_gbr_rotation; "
+               "approximately 58% NaN per item under DEU's booklet rotation).",
+        citation="Graham, Taylor, Olchowski & Cumsille 2006, 'Planned missing data designs in "
+                 "psychological research', Psychological Methods 11(4): 323-343; OECD 2024, "
+                 "'PISA 2022 Technical Report' Ch.2 documents booklet random assignment.",
+        notes="500 students × 8 cols; ~29% NaN, concentrated in the 4 rotated items. "
+              "MCAR-by-design. Lower NaN-density than the GBR-2018 anchor (different "
+              "rotation cluster fielded on more booklets) — useful diversity in the "
+              "MCAR exemplar set.",
+    ),
 ]
 
 

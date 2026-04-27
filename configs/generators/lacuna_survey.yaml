@@ -99,6 +99,37 @@ generators:
     subgroup_frac: 0.3
     subgroup_rate: 0.5
     background_rate: 0.1
+# 2026-04-27: Rotated-booklet planned-missing generators.
+# Closes the diagnosed synth-MCAR coverage gap: real PISA / NAEP /
+# ECLS-K data exhibits column-bimodal missingness (some cols always
+# observed, others ~80% NaN with row-aligned blocks) that no other
+# MCAR variant in this registry produces. Diagnosis: both PISA
+# anchors had miss_rate_var ~15x the synth-MCAR centroid and landed
+# at the synth-MNAR centroid in feature space.
+- family: mcar
+  variant: RotatedBooklet
+  name: MCAR-Booklet-K3-uni20
+  params:
+    n_blocks: 3
+    universal_frac: 0.20
+- family: mcar
+  variant: RotatedBooklet
+  name: MCAR-Booklet-K5-uni30
+  params:
+    n_blocks: 5
+    universal_frac: 0.30
+- family: mcar
+  variant: RotatedBooklet
+  name: MCAR-Booklet-K6-uni40
+  params:
+    n_blocks: 6
+    universal_frac: 0.40
+- family: mcar
+  variant: RotatedBooklet
+  name: MCAR-Booklet-K2-uni50
+  params:
+    n_blocks: 2
+    universal_frac: 0.50
 - family: mar
   variant: Logistic
   name: MAR-Logistic

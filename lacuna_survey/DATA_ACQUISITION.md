@@ -182,28 +182,30 @@ psychological research", *Psychological Methods*.
 
 ---
 
-### 6. ESS module randomization (European Social Survey)
+### 6. ESS module randomization (European Social Survey) — DEAD END (2026-04-27)
 
-**What to download**: ESS Round 9 or 10 cumulative file. Each
-respondent gets a randomly-assigned rotating module (out of 2-3
-options); the rotated module's items are MCAR-by-design for
-respondents who didn't get assigned to it.
+**Do not attempt this anchor.** The premise here was wrong: ESS
+"rotating modules" rotate *between rounds*, not between respondents
+within a round. Every respondent in a participating country gets
+the same questionnaire; rotation does not produce within-country
+MCAR-by-design.
 
-**Where**: <https://ess.sikt.no/en/>
+What you actually find in the integrated file (verified 2026-04-27
+on ESS R11 e04.1):
+- Within one country (e.g. Germany, n=2420): 415/666 numeric cols
+  are 100% observed, 251 are 100% NaN (country-specific items —
+  party-vote variables for other countries' parties, education-system
+  codes that don't apply, etc.), and only one column has any
+  non-trivial missingness (`inwtm` interview duration, 0.9%).
+- Across countries: apparent missingness is country-specific
+  admin-NaN, not random assignment. Labeling as MCAR would be
+  factually wrong.
+- Refusal codes are encoded as numeric values (77/88/99), not NaN,
+  so even an MAR-from-refusals reading would require recoding.
 
-- Free with registration (one-time, instant approval)
-- Direct CSV / SPSS / Stata download
-
-**Format**: CSV available directly.
-
-**Effort**: ~1 hour.
-
-**What to extract**: The rotating-module items for one round. Filter
-to one country (e.g. Germany, ~3000 respondents) for tractable size.
-
-**Label**: MCAR (random module assignment)
-
-**Citation**: ESS Round Documentation, "Module Randomization" section.
+The file was downloaded, inspected, and parked in
+`/mnt/data/lacuna/rejected/ESS11e04_1.csv`. PISA 2018 / 2022 are
+the correct rotated-booklet sources; see entry #4 above.
 
 ---
 

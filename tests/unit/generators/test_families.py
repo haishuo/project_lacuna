@@ -8,6 +8,7 @@ from lacuna.core.rng import RNGState
 from lacuna.core.types import MCAR, MAR, MNAR
 from lacuna.generators.params import GeneratorParams
 from lacuna.generators.families.mcar import MCARBernoulli, MCARColumnGaussian
+from lacuna.generators.families.mcar.blocks import MCARRotatedBooklet
 from lacuna.generators.families.mar import MARLogistic, MARMultiPredictor
 from lacuna.generators.families.mnar import MNARLogistic, MNARSelfCensorHigh
 
@@ -74,6 +75,78 @@ class TestMCARColumnGaussian:
         
         # Rates should vary between columns
         assert col_rates.std() > 0.01
+
+
+class TestMCARRotatedBooklet:
+    """Tests for MCARRotatedBooklet generator (planned-missing rotated-booklet design)."""
+
+    def test_construction(self):
+        gen = MCARRotatedBooklet(0, "test",
+            GeneratorParams(n_blocks=4, universal_frac=0.3))
+        assert gen.class_id == MCAR
+
+    def test_missing_param_raises(self):
+        with pytest.raises(ValueError, match="n_blocks"):
+            MCARRotatedBooklet(0, "test", GeneratorParams(universal_frac=0.3))
+        with pytest.raises(ValueError, match="universal_frac"):
+            MCARRotatedBooklet(0, "test", GeneratorParams(n_blocks=4))
+
+    def test_invalid_n_blocks_raises(self):
+        with pytest.raises(ValueError, match="n_blocks >= 2"):
+            MCARRotatedBooklet(0, "test",
+                GeneratorParams(n_blocks=1, universal_frac=0.3))
+
+    def test_invalid_universal_frac_raises(self):
+        with pytest.raises(ValueError, match="universal_frac"):
+            MCARRotatedBooklet(0, "test",
+                GeneratorParams(n_blocks=3, universal_frac=1.0))
+        with pytest.raises(ValueError, match="universal_frac"):
+            MCARRotatedBooklet(0, "test",
+                GeneratorParams(n_blocks=3, universal_frac=-0.1))
+
+    def test_sample_shapes(self):
+        gen = MCARRotatedBooklet(0, "test",
+            GeneratorParams(n_blocks=3, universal_frac=0.3))
+        X, R = gen.sample(RNGState(seed=42), n=100, d=10)
+        assert X.shape == (100, 10)
+        assert R.shape == (100, 10)
+        assert R.dtype == torch.bool
+
+    def test_universal_columns_always_observed(self):
+        # 50% universal of 10 cols = 5 universal cols always observed.
+        gen = MCARRotatedBooklet(0, "test",
+            GeneratorParams(n_blocks=4, universal_frac=0.5))
+        X, R = gen.sample(RNGState(seed=42), n=200, d=10)
+        col_observed_rate = R.float().mean(dim=0)
+        # Exactly n_universal columns should be 100% observed.
+        n_fully_observed = int((col_observed_rate == 1.0).sum())
+        assert n_fully_observed == 5
+
+    def test_rotated_columns_have_block_rate(self):
+        # K=4 blocks → each rotated col observed in ~1/4 of rows.
+        gen = MCARRotatedBooklet(0, "test",
+            GeneratorParams(n_blocks=4, universal_frac=0.0))
+        X, R = gen.sample(RNGState(seed=42), n=2000, d=12)
+        col_rates = R.float().mean(dim=0)
+        # Every column is rotated; expected rate ~0.25 per col.
+        assert (col_rates >= 0.20).all() and (col_rates <= 0.30).all()
+
+    def test_rows_assigned_to_one_block(self):
+        # With universal_frac=0 and K blocks of equal size, every row
+        # should observe exactly one block's worth of columns.
+        gen = MCARRotatedBooklet(0, "test",
+            GeneratorParams(n_blocks=3, universal_frac=0.0))
+        X, R = gen.sample(RNGState(seed=42), n=300, d=9)  # 3 blocks of 3 cols
+        per_row_observed = R.sum(dim=1)
+        # Every row should have exactly 3 cols observed (one block).
+        assert (per_row_observed == 3).all()
+
+    def test_at_least_one_observed_with_extreme_params(self):
+        # Even with very few rotated cols, output must not be all-missing.
+        gen = MCARRotatedBooklet(0, "test",
+            GeneratorParams(n_blocks=10, universal_frac=0.0))
+        X, R = gen.sample(RNGState(seed=42), n=5, d=2)
+        assert R.sum() >= 1
 
 
 class TestMARLogistic:

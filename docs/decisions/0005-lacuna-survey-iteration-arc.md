@@ -364,3 +364,188 @@ improve, the corpus needs additional MNAR (NLSY income, NHANES
 sensitive items) and MCAR (PISA rotated booklet) anchors. These
 require manual download from auth-walled sources; the framework
 absorbs them via `import_anchor.py` + `anchors.py` edit.
+
+### Corpus expansion (2026-04-27): first MCAR anchor + ESS dead end
+
+Two acquisition attempts this session:
+
+1. **ESS Round 11 integrated file** — rejected as anchor source.
+   The DATA_ACQUISITION.md premise that ESS rotating modules
+   produce MCAR-by-design within-country was wrong. ESS rotating
+   modules are administered to *every* respondent in participating
+   countries; the apparent missingness across the integrated file
+   is country-specific admin-NaN (party-vote variables for
+   non-matching countries, country-specific education codes, etc.),
+   not random assignment. Within Germany (n=2420), of 666 numeric
+   columns: 415 are 100% observed, 251 are 100% NaN, exactly one
+   has any non-trivial missingness (`inwtm` at 0.9%). DATA_ACQUISITION.md
+   updated to reflect this; future sessions should not retry ESS.
+
+2. **PISA 2018 student questionnaire** — accepted as `pisa2018_gbr_rotation`
+   (MCAR). 500 GBR students × 10 cols (4 universal demographics +
+   6 items from the ST196 reading-attitude rotated battery). The
+   booklet rotation is genuine: in GBR, ST196 items show 0% miss
+   in some `BOOKID` values and ~95% miss in others, with random
+   booklet assignment per student (OECD 2019 Tech Report Ch.2).
+   This is the first MCAR-by-design anchor in the corpus.
+
+Refitted calibration: T = 2.418, bias = [+2.23, −2.12, +0.58].
+The MCAR direction is now non-degenerate (was previously fit only
+to synthetic MCAR exemplars). New diagnostic state:
+
+| | prior (1 MNAR / 7 MAR / 0 MCAR) | now (1 MNAR / 7 MAR / 1 MCAR) |
+|---|---|---|
+| Within-domain real-survey MAR | 4/5 | **3/5** |
+| Cross-domain MNAR consensus | 0/3 (all OOD-flagged) | 0/3 (all OOD-flagged) |
+| OOD detector validation | 11/12 cases | 10/11 cases |
+
+`yrbss` flipped MAR→MCAR in the new calibration (the single MCAR
+exemplar pulled it across the boundary). The PISA anchor itself
+is misclassified as MAR by both raw and calibrated model; one
+exemplar isn't enough to teach a robust MCAR direction. Anchor
+corpus is now structurally more balanced (MCAR class non-empty)
+but per-case accuracy on within-domain MAR went down by one.
+
+This is the kind of transient regression expected from a small
+calibration corpus: each new anchor moves the boundaries, and
+with N=9 total anchors the boundaries are noisy. Expected resolution
+path: add 2–3 more MCAR anchors (PISA 2022, ECLS-K rotated forms,
+NAEP if restricted-use access lands) and refit. No architectural
+change indicated.
+
+### Corpus expansion (2026-04-27, second pass): PISA 2022 added
+
+First PISA 2022 upload was truncated (3.2 GB, mid-page corruption);
+re-uploaded clean at 4.06 GB. Discovered an asymmetry across countries
+in within-country booklet-rotation richness: of 8 countries surveyed,
+only GBR has a rich within-country rotation pattern in PISA 2018.
+Most countries (AUS, ESP, JPN, KOR, etc.) administered fewer
+experimental modules — their non-fielded items show up as constant-
+NaN across all booklets, not split-per-booklet. So a second PISA-2018
+anchor would have been a near-duplicate.
+
+PISA 2022 resolves this: Germany (n=6116) shows 44 rotated items in
+2022 (vs 4 in 2018), with a different rotation cluster (`ST315*`
+battery, ~58% NaN per item — lower density than the GBR ST196 cluster
+at ~80%). Added as `pisa2022_deu_rotation` (500 students × 8 cols,
+~29% NaN). This is a genuinely independent MCAR exemplar: different
+cohort, different language community, different rotation cluster.
+
+Refitted calibration: T = 2.409, bias = [+1.84, -1.67, +1.02]. The
+MCAR bias dropped from +0.58 to +1.02 — the second exemplar pushed
+the MCAR direction further along its current axis but didn't change
+the topology. Both PISA anchors continue to classify as MNAR raw
+and stay MNAR after calibration; the model's feature extractor reads
+high-NaN-density-with-aligned-blocks as MNAR-looking, and logit-only
+calibration can't rewrite that.
+
+| | 1 MCAR (after PISA 2018) | 2 MCAR (after PISA 2022) |
+|---|---|---|
+| Within-domain real-survey MAR | 3/5 | **3/5** (unchanged) |
+| Cross-domain MNAR consensus | 0/3 (all OOD-flagged) | 0/3 (all OOD-flagged) |
+| OOD detector validation | 10/11 | **11/12** (pisa-2022 correctly in-dist) |
+| MCAR anchors classified MCAR | 0/1 | 0/2 |
+
+Note the last row: neither MCAR anchor classifies as MCAR even after
+calibration. This suggests the limitation is upstream of calibration —
+the trained classifier's representation of these PISA rotation
+fingerprints lies inside its MNAR region. Two consequences:
+
+1. Adding more PISA-style anchors won't fix yrbss's MAR→MCAR flip
+   (the bias keeps pushing the MCAR direction without ever placing
+   the PISA features inside it).
+2. To make MCAR detection robust, the next direction is
+   architectural — either (a) include rotated-booklet patterns in
+   the synthetic training distribution so the model learns to
+   recognise them, or (b) revisit feature extraction to surface the
+   block-aligned-NaN pattern that distinguishes booklet-rotation
+   from MNAR. Both are base-Lacuna changes and require explicit
+   user authorisation per the Rule 8 / variant-vs-base discipline.
+
+Files still staged in `/mnt/data/lacuna/incoming/`:
+- `cy07_msu_stu_qqq.sas7bdat` (PISA 2018, 3.3 GB) — kept for
+  potential future ECLS-K-style cross-cohort additions.
+- `CY08MSP_STU_QQQ.SAS7BDAT` (PISA 2022, 4.06 GB) — kept for the
+  same reason.
+- `/mnt/data/lacuna/nhanes/questionnaire_clean.csv` (549 MB) —
+  contains ALQ alcohol items only; DUQ/SXQ/DPQ modules anticipated
+  by DATA_ACQUISITION.md are NOT in this HuggingFace mirror.
+
+### Feature-space diagnostic + v9 retrain (2026-04-27)
+
+Before pursuing more anchors, ran a feature-space diagnostic to
+establish *why* the PISA anchors were classifying as MNAR. Findings
+in summary:
+
+- Both PISA anchors landed nearest the **synthetic MNAR centroid** in
+  z-normalised feature space (`pisa2018_gbr`: d_MCAR=8.32, d_MAR=7.79,
+  **d_MNAR=7.56**; `pisa2022_deu`: d_MCAR=4.23, d_MAR=3.92, **d_MNAR=3.06**).
+  Same time, `yrbss` (consensus MAR) was nearest synth MCAR — explaining
+  the MAR→MCAR flip introduced by the first MCAR anchor.
+- Per-feature z-scores against synth MCAR exposed the structural gap:
+  pisa2018_gbr's `miss_rate_var` was **+11.85σ** outside the synth-MCAR
+  distribution (`shape_shift` was −6.87σ). The 8 existing MCAR
+  generators (Bernoulli, ColMixture, ColOrdered, ColClustered,
+  RandBlocks, Subgroup) all produce relatively uniform per-cell
+  missingness; none of them produce the column-bimodal "few cols at
+  100% NaN, others at 0%" pattern that defines rotated-booklet
+  missingness.
+- Conclusion: variant-only fix (Direction 1). The synthetic distribution
+  was missing rotated-booklet coverage; the feature extractor was
+  fine. **No base-Lacuna change required**, no codebase branch.
+
+Implementation:
+- `MCARRotatedBooklet` generator class added to
+  `lacuna/generators/families/mcar/blocks.py`. Algorithm: random
+  column permutation → first `n_universal` columns are universal
+  (always observed) → remaining columns are partitioned into
+  `n_blocks` roughly-equal blocks → each row randomly assigned to
+  one block whose columns it sees observed. Random booklet
+  assignment is exogenous → MCAR-by-design. 9 unit tests added.
+- Four variants in `configs/generators/lacuna_survey.yaml`
+  covering different (block_count × universal_fraction) cells.
+  MCAR family went from 8 → 12 generators; total registry from
+  60 → 64.
+- Sanity check before retrain: applied each new variant to the
+  X-bases, measured the 10-dim feature vector, confirmed the
+  resulting feature signatures matched the PISA anchors (e.g.
+  `Booklet-K6-uni40` → miss_rate_var=0.13 vs PISA 2018
+  miss_rate_var=0.14; previously the synth-MCAR centroid was 0.009).
+
+**v9 training**: 9.6 minutes, 27 epochs (early-stopped from 100),
+`val_acc=0.87` with `val_mcar=1.00, val_mar=0.93, val_mnar=0.72`
+(vs v8: 0.80 / 0.95 / 0.97 / 0.50). Net better on MCAR and MNAR,
+slight regression on MAR. Promoted to `demo/model.pt`.
+
+Refit calibration: `T = 2.078, bias = [+1.47, -1.59, +1.64]`.
+Refit OOD: 11/12 validation cases (unchanged).
+
+**Final diagnostic state (2 MCAR / 7 MAR / 1 MNAR anchors):**
+
+| | v8 (1/7/0) | v8.1 (1/7/1) | v8.2 (2/7/1) | **v9 (2/7/1)** |
+|---|---|---|---|---|
+| Within-domain real-survey MAR | 4/5 | 3/5 | 3/5 | **7/8** |
+| Cross-domain MNAR consensus | 0/3 (3/3 OOD) | 0/3 (3/3 OOD) | 0/3 (3/3 OOD) | 0/3 (3/3 OOD) |
+| OOD detector validation | 11/12 | 10/11 | 11/12 | 11/12 |
+| MCAR anchors classified MCAR | n/a | 0/1 | 0/2 | **2/2** |
+
+The within-domain headline (7/8) jumps because v9 corrects three
+prior misroutes:
+- `survey_bfi` MNAR ✗ → MAR ✓ (was wrong on raw v8 too)
+- `survey_survey` MNAR ✗ → MAR ✓ (was wrong since v6)
+- `survey_yrbss` MCAR ✗ → MAR ✓ (introduced by v8.1 MCAR anchor; resolved)
+
+Both PISA anchors now classify as MCAR raw (no calibration help
+needed). Cross-domain MNAR continues to misroute to MAR but the OOD
+detector flags all three Pima/hitters cases — safe failure mode
+preserved. Only persistent within-domain miss is airquality (MAR
+consensus is contested in literature; not survey data anyway).
+
+Surfaced directions for future work:
+- 0/3 cross-domain MNAR detection. Adding more MNAR anchors would
+  help the calibration but the OOD-flag-and-defer behaviour is
+  already correct for those cases under the variant-specialisation
+  framing — they're not Lacuna-Survey's responsibility.
+- airquality misclassification (MAR consensus → MNAR pred) persists.
+  Single sample, contested consensus, and OOD detector misses it.
+  Low priority.
