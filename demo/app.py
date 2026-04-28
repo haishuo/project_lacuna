@@ -149,10 +149,10 @@ st.caption(
     "Calibrated under domain-conditioned priors — not a categorical verdict."
 )
 st.info(
-    "**Scope.** This build (Lacuna-Survey v11) is calibrated for self- or interviewer-administered "
-    "**survey questionnaires**. It will return a posterior on any tabular input, but predictions on "
-    "non-survey data (sensor logs, medical records, financial panels, etc.) are not validated and the "
-    "OOD flag below is a courtesy backstop, not a guarantee. The scope decision is yours.",
+    "**Scope contract.** Lacuna-Survey is calibrated for self- or interviewer-administered "
+    "**survey questionnaires**. It will return a posterior on any tabular input, but predictions "
+    "on non-survey data (sensor logs, medical records, financial panels, etc.) are *not* validated "
+    "and may be confidently wrong. The scope decision is yours — Lacuna does not police it.",
     icon="📋",
 )
 
@@ -328,70 +328,20 @@ recon = result.get("recon_errors", {}) or {}
 norm_h = result["normalized_entropy"]
 top_class = result["predicted_class_name"]
 top_prob = result["confidence"]
-p_ood = result.get("p_ood")
 
-# Surface any silent failures from the pipeline so missing-feature
-# bugs aren't invisible.
-if result.get("calibration_error"):
-    st.error(f"Calibration failed: {result['calibration_error']}", icon="🛑")
-if result.get("ood_error"):
-    st.error(f"OOD detector failed: {result['ood_error']}", icon="🛑")
-
-# OOD scope indicator — always visible so the scope context is loud,
-# not just when out-of-scope.
-if p_ood is not None:
-    if p_ood >= 0.5:
-        scope_color = "#e74c3c"  # red
-        scope_label = "OUT OF SCOPE"
-        scope_msg = (
-            f"P(OOD) = {p_ood:.2f}. This dataset's missingness fingerprint sits "
-            "outside the survey-questionnaire distribution Lacuna-Survey was "
-            "calibrated on. The posterior below is computed but should be treated "
-            "as advisory only. Consider whether your data is actually a survey "
-            "questionnaire."
-        )
-    elif p_ood >= 0.3:
-        scope_color = "#f39c12"  # amber
-        scope_label = "MARGINAL"
-        scope_msg = (
-            f"P(OOD) = {p_ood:.2f}. This dataset's fingerprint is on the edge of "
-            "the survey-questionnaire distribution. The posterior is in-distribution "
-            "enough to be informative, but interpret with extra care."
+# Surface real pipeline errors (e.g. calibration file missing or
+# unparseable). Calibration is the only post-hoc artifact we still load.
+cal_err = result.get("calibration_error")
+if cal_err:
+    if cal_err.startswith("calibration file not found"):
+        st.info(
+            "**Calibration not installed on this machine.** Showing the model's raw posterior. "
+            "To enable calibration, copy `lacuna_survey/deployment/calibration.json` to this "
+            "machine (produced by `python -m lacuna_survey.calibrate`).",
+            icon="ℹ️",
         )
     else:
-        scope_color = "#2ecc71"  # green
-        scope_label = "IN SCOPE"
-        scope_msg = (
-            f"P(OOD) = {p_ood:.2f}. This dataset's fingerprint sits inside the "
-            "survey-questionnaire distribution Lacuna-Survey was calibrated on."
-        )
-    st.markdown(
-        f"""
-        <div style="
-            border-left: 6px solid {scope_color};
-            background: rgba(0,0,0,0.03);
-            padding: 12px 18px;
-            margin: 12px 0 18px 0;
-            border-radius: 6px;
-        ">
-            <div style="
-                display: inline-block;
-                font-size: 12px;
-                letter-spacing: 0.16em;
-                font-weight: 700;
-                padding: 3px 10px;
-                background: {scope_color};
-                color: white;
-                border-radius: 4px;
-                vertical-align: middle;
-            ">SCOPE · {scope_label}</div>
-            <div style="margin-top: 10px; font-size: 14px; line-height: 1.5;">{scope_msg}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    st.caption("OOD detector not available — scope check disabled.")
+        st.error(f"Calibration failed: {cal_err}", icon="🛑")
 
 # === Headline: posterior probabilities ===
 prob_df = pd.DataFrame({
@@ -467,13 +417,7 @@ if recon:
 
 # === Suggested next step ===
 st.write("**Suggested next step**")
-if p_ood is not None and p_ood >= 0.5:
-    st.info(
-        "Out-of-scope. Don't act on this posterior alone. If your data really is "
-        "a survey, double-check the format (numeric columns, NaN-coded missing values). "
-        "Otherwise, treat as exploratory.",
-    )
-elif p_mnar >= 0.50:
+if p_mnar >= 0.50:
     st.info(
         f"**MNAR signal dominant** (P(MNAR) = {p_mnar*100:.1f}%). Standard imputation "
         "(mean, MICE, FIML) will be biased to the extent that the missingness depends on "

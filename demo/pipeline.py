@@ -138,7 +138,6 @@ def cross_column_corr(dataset: ObservedDataset) -> np.ndarray:
 
 
 _CALIBRATION_PATH = Path(__file__).parent.parent / "lacuna_survey" / "deployment" / "calibration.json"
-_OOD_PATH = Path(__file__).parent.parent / "lacuna_survey" / "deployment" / "ood_detector.json"
 
 
 def _apply_vector_scaling(p: np.ndarray, T: float, bias) -> np.ndarray:
@@ -187,24 +186,6 @@ def run_model(model, dataset: ObservedDataset) -> dict:
         except Exception as e:
             calibration_error = f"{type(e).__name__}: {e}"
 
-    # Compute OOD score if a detector is present.
-    p_ood = None
-    ood_error: Optional[str] = None
-    if not _OOD_PATH.exists():
-        ood_error = f"OOD detector not found at {_OOD_PATH}"
-    else:
-        try:
-            from lacuna_survey.ood import features_for_observed, ood_score
-            from lacuna.data.missingness_features import MissingnessFeatureConfig
-            cfg = MissingnessFeatureConfig()
-            f = features_for_observed(dataset, cfg)
-            d = json.loads(_OOD_PATH.read_text())
-            p_ood = float(ood_score(
-                f, np.asarray(d["mean"]), np.asarray(d["std"]),
-                np.asarray(d["weights"]), d["bias"],
-            ))
-        except Exception as e:
-            ood_error = f"{type(e).__name__}: {e}"
 
     p_class = p_class_cal
     return {
@@ -221,7 +202,5 @@ def run_model(model, dataset: ObservedDataset) -> dict:
         "action_id": action_id,
         "action_label": ACTION_LABELS[action_id],
         "recon_errors": recon,
-        "p_ood": p_ood,
         "calibration_error": calibration_error,
-        "ood_error": ood_error,
     }
