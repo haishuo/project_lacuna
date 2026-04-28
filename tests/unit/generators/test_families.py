@@ -11,6 +11,8 @@ from lacuna.generators.families.mcar import MCARBernoulli, MCARColumnGaussian
 from lacuna.generators.families.mcar.blocks import MCARRotatedBooklet
 from lacuna.generators.families.mar import MARLogistic, MARMultiPredictor
 from lacuna.generators.families.mnar import MNARLogistic, MNARSelfCensorHigh
+from lacuna.generators.families.mnar.social import MNARModuleRefusal
+from lacuna.generators.families.mar.survey import MARModuleSkip
 
 
 class TestMCARBernoulli:
@@ -284,11 +286,178 @@ class TestMNARSelfCensorHigh:
     def test_sample_shapes(self):
         gen = MNARSelfCensorHigh(0, "test", GeneratorParams(beta0=0.0, beta1=1.0))
         rng = RNGState(seed=42)
-        
+
         X, R = gen.sample(rng, n=100, d=5)
-        
+
         assert X.shape == (100, 5)
         assert R.shape == (100, 5)
+
+
+class TestMNARModuleRefusal:
+    """Tests for MNARModuleRefusal generator (row-aligned module refusal)."""
+
+    def test_construction(self):
+        gen = MNARModuleRefusal(0, "test",
+            GeneratorParams(module_frac=0.5, baseline_refusal=0.1))
+        assert gen.class_id == MNAR
+
+    def test_missing_param_raises(self):
+        with pytest.raises(ValueError, match="module_frac"):
+            MNARModuleRefusal(0, "test", GeneratorParams(baseline_refusal=0.1))
+        with pytest.raises(ValueError, match="baseline_refusal"):
+            MNARModuleRefusal(0, "test", GeneratorParams(module_frac=0.5))
+
+    def test_invalid_module_frac_raises(self):
+        with pytest.raises(ValueError, match="module_frac"):
+            MNARModuleRefusal(0, "test",
+                GeneratorParams(module_frac=0.0, baseline_refusal=0.1))
+        with pytest.raises(ValueError, match="module_frac"):
+            MNARModuleRefusal(0, "test",
+                GeneratorParams(module_frac=1.0, baseline_refusal=0.1))
+
+    def test_invalid_baseline_refusal_raises(self):
+        with pytest.raises(ValueError, match="baseline_refusal"):
+            MNARModuleRefusal(0, "test",
+                GeneratorParams(module_frac=0.5, baseline_refusal=1.0))
+        with pytest.raises(ValueError, match="baseline_refusal"):
+            MNARModuleRefusal(0, "test",
+                GeneratorParams(module_frac=0.5, baseline_refusal=-0.1))
+
+    def test_sample_shapes(self):
+        gen = MNARModuleRefusal(0, "test",
+            GeneratorParams(module_frac=0.5, baseline_refusal=0.1))
+        X, R = gen.sample(RNGState(seed=42), n=200, d=10)
+        assert X.shape == (200, 10)
+        assert R.shape == (200, 10)
+        assert R.dtype == torch.bool
+
+    def test_demographic_columns_always_observed(self):
+        # 30% module → 7 demographic cols out of 10 are always observed.
+        gen = MNARModuleRefusal(0, "test",
+            GeneratorParams(module_frac=0.30, baseline_refusal=0.20,
+                            selection_strength=2.0))
+        X, R = gen.sample(RNGState(seed=42), n=500, d=10)
+        col_observed = R.float().mean(dim=0)
+        # Exactly 7 columns should be 100% observed (demographics).
+        n_full = int((col_observed == 1.0).sum())
+        assert n_full == 7
+
+    def test_module_columns_have_aligned_refusal(self):
+        # Within the module, each refusing row should have ALL module
+        # cols missing (row-aligned).
+        gen = MNARModuleRefusal(0, "test",
+            GeneratorParams(module_frac=0.5, baseline_refusal=0.20,
+                            selection_strength=1.0))
+        X, R = gen.sample(RNGState(seed=42), n=500, d=10)
+        # Identify module cols (those not at 100% observed)
+        col_obs_rate = R.float().mean(dim=0)
+        module_mask = col_obs_rate < 1.0
+        module_R = R[:, module_mask]
+        # Per row, count of observed module cols should be 0 or all-K
+        per_row_observed = module_R.sum(dim=1)
+        unique_counts = set(per_row_observed.tolist())
+        # Expect only {0, K} where K = number of module cols
+        K = int(module_mask.sum())
+        assert unique_counts <= {0, K}
+
+    def test_selection_strength_zero_is_mcar_like(self):
+        # selection_strength=0 → refusal independent of values.
+        gen = MNARModuleRefusal(0, "test",
+            GeneratorParams(module_frac=0.5, baseline_refusal=0.20,
+                            selection_strength=0.0))
+        X, R = gen.sample(RNGState(seed=42), n=2000, d=8)
+        # Module col observed rate should be ~0.80 (1 - baseline_refusal).
+        col_rates = R.float().mean(dim=0)
+        module_rates = col_rates[col_rates < 1.0]
+        assert (module_rates > 0.70).all() and (module_rates < 0.90).all()
+
+    def test_at_least_one_observed(self):
+        gen = MNARModuleRefusal(0, "test",
+            GeneratorParams(module_frac=0.99, baseline_refusal=0.95,
+                            selection_strength=10.0))
+        X, R = gen.sample(RNGState(seed=42), n=10, d=5)
+        assert R.sum() >= 1
+
+
+class TestMARModuleSkip:
+    """Tests for MARModuleSkip — MAR counterpart to MNARModuleRefusal."""
+
+    def test_construction(self):
+        gen = MARModuleSkip(0, "test",
+            GeneratorParams(module_frac=0.5, baseline_skip=0.1))
+        assert gen.class_id == MAR
+
+    def test_missing_param_raises(self):
+        with pytest.raises(ValueError, match="module_frac"):
+            MARModuleSkip(0, "test", GeneratorParams(baseline_skip=0.1))
+        with pytest.raises(ValueError, match="baseline_skip"):
+            MARModuleSkip(0, "test", GeneratorParams(module_frac=0.5))
+
+    def test_invalid_module_frac_raises(self):
+        with pytest.raises(ValueError, match="module_frac"):
+            MARModuleSkip(0, "test",
+                GeneratorParams(module_frac=1.0, baseline_skip=0.1))
+        with pytest.raises(ValueError, match="module_frac"):
+            MARModuleSkip(0, "test",
+                GeneratorParams(module_frac=0.0, baseline_skip=0.1))
+
+    def test_sample_shapes(self):
+        gen = MARModuleSkip(0, "test",
+            GeneratorParams(module_frac=0.5, baseline_skip=0.15))
+        X, R = gen.sample(RNGState(seed=42), n=200, d=10)
+        assert X.shape == (200, 10)
+        assert R.shape == (200, 10)
+        assert R.dtype == torch.bool
+
+    def test_module_columns_have_aligned_skip(self):
+        # Within the module, each skipped row should have ALL module
+        # cols missing (row-aligned skip pattern, like the MNAR counterpart).
+        gen = MARModuleSkip(0, "test",
+            GeneratorParams(module_frac=0.5, baseline_skip=0.20,
+                            gate_strength=1.0))
+        X, R = gen.sample(RNGState(seed=42), n=500, d=10)
+        col_obs_rate = R.float().mean(dim=0)
+        # Module cols are those not at 100% observed; gate col is at 100%.
+        module_mask = col_obs_rate < 1.0
+        K = int(module_mask.sum())
+        per_row_observed = R[:, module_mask].sum(dim=1)
+        unique_counts = set(per_row_observed.tolist())
+        assert unique_counts <= {0, K}
+
+    def test_skip_correlated_with_gate(self):
+        # With gate_strength > 0, skipping should correlate with the
+        # gate column's value (MAR contract: missingness depends on
+        # observed values).
+        gen = MARModuleSkip(0, "test",
+            GeneratorParams(module_frac=0.5, baseline_skip=0.30,
+                            gate_strength=2.0))
+        X, R = gen.sample(RNGState(seed=42), n=2000, d=8)
+        # Find the gate column (the one always observed within d=8;
+        # there's exactly one such — module_frac=0.5 of 8 = 4 module cols,
+        # leaves 4 demographic-side cols. The gate is one of them — pick
+        # the demographic-side col with the strongest mean-difference
+        # between rows where module is observed vs missing.)
+        col_obs_rate = R.float().mean(dim=0)
+        non_module_cols = (col_obs_rate == 1.0).nonzero().flatten().tolist()
+        # Identify a row's "skipped" status as: any module col is missing.
+        module_cols = (col_obs_rate < 1.0).nonzero().flatten().tolist()
+        skipped = (R[:, module_cols].sum(dim=1) == 0)
+        # Mean of any non-module col should differ between skipped/not-skipped.
+        diffs = []
+        for c in non_module_cols:
+            obs_mean = X[~skipped, c].mean().item()
+            miss_mean = X[skipped, c].mean().item()
+            diffs.append(abs(obs_mean - miss_mean))
+        # At least one non-module col should differ substantially —
+        # the gate.
+        assert max(diffs) > 0.3
+
+    def test_at_least_one_observed(self):
+        gen = MARModuleSkip(0, "test",
+            GeneratorParams(module_frac=0.99, baseline_skip=0.95,
+                            gate_strength=10.0))
+        X, R = gen.sample(RNGState(seed=42), n=10, d=5)
+        assert R.sum() >= 1
 
 
 class TestBaseDataSamplers:

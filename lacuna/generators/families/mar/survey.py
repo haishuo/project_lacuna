@@ -342,3 +342,74 @@ class MARQuotaBased(Generator):
 
     def apply_to(self, X: torch.Tensor, rng: RNGState) -> torch.Tensor:
         return self._compute_missingness(X, rng)
+
+
+class MARModuleSkip(Generator):
+    """MAR counterpart to MNARModuleRefusal — row-aligned module skip
+    where the skip is driven by an OBSERVED gate column (e.g. age,
+    education) rather than the module's own values.
+
+    Produces the same column-bimodal, row-aligned missingness shape
+    as MNARModuleRefusal — same high cross_col_corr signature — but
+    the mechanism is MAR because the skip depends only on observed
+    data. The model needs both this and MNARModuleRefusal in training
+    to learn that high cross_col_corr alone doesn't imply MNAR;
+    value-conditional selection is what distinguishes them.
+
+    Required params:
+        module_frac: Fraction of columns that form the skip-eligible module.
+        baseline_skip: Baseline probability of module skip.
+        gate_strength: Magnitude of the gate->skip coupling. 0 = MCAR-like;
+            larger = stronger demographic gradient.
+    """
+
+    def __init__(self, generator_id: int, name: str, params: GeneratorParams):
+        super().__init__(generator_id, name, MAR, params)
+        if "module_frac" not in params or "baseline_skip" not in params:
+            raise ValueError("MARModuleSkip requires 'module_frac' and 'baseline_skip'")
+        if not (0.0 < params["module_frac"] < 1.0):
+            raise ValueError("MARModuleSkip requires 0 < module_frac < 1")
+        if not (0.0 <= params["baseline_skip"] < 1.0):
+            raise ValueError("MARModuleSkip requires 0 <= baseline_skip < 1")
+
+    def _compute_missingness(self, X: torch.Tensor, rng: RNGState) -> torch.Tensor:
+        n, d = X.shape
+        if d < 2:
+            raise ValueError("MARModuleSkip requires d >= 2")
+
+        module_frac = float(self.params["module_frac"])
+        baseline = float(self.params["baseline_skip"])
+        strength = float(self.params.get("gate_strength", 1.5))
+
+        # Pick gate column + module columns from a random permutation.
+        perm = rng.shuffle_indices(d).tolist()
+        gate_col = int(perm[0])
+        n_module = max(1, min(d - 1, int(round(d * module_frac))))
+        module_cols = [int(c) for c in perm[1:1 + n_module]]
+
+        # Standardise gate values; logistic skip probability.
+        gate = X[:, gate_col]
+        gz = (gate - gate.mean()) / gate.std().clamp(min=1e-6)
+
+        from math import log
+        bias = log(max(baseline, 1e-4) / max(1.0 - baseline, 1e-4))
+        p_skip = torch.sigmoid(bias + strength * gz)
+        skipped = rng.rand(n) < p_skip
+
+        R = torch.ones(n, d, dtype=torch.bool)
+        for c in module_cols:
+            R[skipped, c] = False
+
+        if R.sum() == 0:
+            R[0, 0] = True
+        return R
+
+    def sample(self, rng: RNGState, n: int, d: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        mean = self.params.get("base_mean", 0.0)
+        std = self.params.get("base_std", 1.0)
+        X = sample_gaussian(rng.spawn(), n, d, mean=mean, std=std)
+        R = self._compute_missingness(X, rng.spawn())
+        return X, R
+
+    def apply_to(self, X: torch.Tensor, rng: RNGState) -> torch.Tensor:
+        return self._compute_missingness(X, rng)

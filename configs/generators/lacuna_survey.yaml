@@ -529,3 +529,59 @@ generators:
   params:
     beta_outside_quantile: 2.5
     affected_frac: 0.85
+# 2026-04-27: Module-level refusal/skip pair. The MNAR variants close
+# the synth-MNAR coverage gap diagnosed against the NHANES PHQ-9 anchor
+# (real-world module refusal produces row-aligned NaN with extreme
+# cross-column correlation — was +17.42σ outside the cell-level synth
+# MNAR centroid). The MAR-Skip variants are the matched MAR counterpart
+# (same row-aligned skip pattern, but driven by an OBSERVED gate column
+# rather than the module's own values). Without the MAR counterpart the
+# model collapses high-cross_col_corr → MNAR and misroutes benign MAR
+# cases (yrbss / mass_survey / pbc) — see v10 diagnostic.
+# Tuned conservatively (lower baselines + selection_strength) to avoid
+# the v10 over-aggression that flipped MAR cases.
+- family: mnar
+  variant: ModuleRefusal
+  name: MNAR-Module-PHQ9
+  params:
+    module_frac: 0.65
+    baseline_refusal: 0.08
+    selection_strength: 1.5
+    direction: high
+- family: mnar
+  variant: ModuleRefusal
+  name: MNAR-Module-Income
+  params:
+    module_frac: 0.30
+    baseline_refusal: 0.06
+    selection_strength: 1.5
+    direction: high
+- family: mnar
+  variant: ModuleRefusal
+  name: MNAR-Module-Mild
+  params:
+    module_frac: 0.50
+    baseline_refusal: 0.10
+    selection_strength: 1.0
+    direction: high
+- family: mar
+  variant: ModuleSkip
+  name: MAR-ModuleSkip-PHQ9like
+  params:
+    module_frac: 0.65
+    baseline_skip: 0.08
+    gate_strength: 1.5
+- family: mar
+  variant: ModuleSkip
+  name: MAR-ModuleSkip-Income
+  params:
+    module_frac: 0.30
+    baseline_skip: 0.06
+    gate_strength: 1.5
+- family: mar
+  variant: ModuleSkip
+  name: MAR-ModuleSkip-Mild
+  params:
+    module_frac: 0.50
+    baseline_skip: 0.10
+    gate_strength: 1.0

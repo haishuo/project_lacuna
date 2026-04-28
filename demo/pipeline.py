@@ -137,6 +137,17 @@ def cross_column_corr(dataset: ObservedDataset) -> np.ndarray:
     return np.nan_to_num(corr, nan=0.0)
 
 
+_CALIBRATION_PATH = Path(__file__).parent.parent / "lacuna_survey" / "deployment" / "calibration.json"
+_OOD_PATH = Path(__file__).parent.parent / "lacuna_survey" / "deployment" / "ood_detector.json"
+
+
+def _apply_vector_scaling(p: np.ndarray, T: float, bias) -> np.ndarray:
+    logits = np.log(np.clip(p, 1e-8, 1.0))
+    cal = (logits - np.asarray(bias)) / T
+    e = np.exp(cal - cal.max())
+    return e / e.sum()
+
+
 def run_model(model, dataset: ObservedDataset) -> dict:
     batch = tokenize_and_batch(
         datasets=[dataset],
@@ -146,13 +157,54 @@ def run_model(model, dataset: ObservedDataset) -> dict:
     with torch.no_grad():
         out = model.forward(batch, compute_reconstruction=True, compute_decision=True)
 
-    p_class = out.posterior.p_class[0].cpu().numpy()
+    p_class_raw = out.posterior.p_class[0].cpu().numpy()
     entropy = float(out.posterior.entropy_class[0].cpu().item())
     risks = out.decision.all_risks[0].cpu().numpy()
     action_id = int(out.decision.action_ids[0].cpu().item())
 
+    # Per-mechanism reconstruction error (likelihood-of-data evidence).
+    # Lower = the data is highly self-consistent under that mechanism's
+    # reconstruction model. The MAR head fitting near-zero on data the
+    # gate routes to MNAR is the most informative single signal.
+    recon = {}
+    if out.posterior.reconstruction_errors is not None:
+        for k, v in out.posterior.reconstruction_errors.items():
+            recon[k] = float(v[0].mean().item())
+
+    # Apply post-hoc calibration if present.
+    p_class_cal = p_class_raw
+    calibration_applied = False
+    if _CALIBRATION_PATH.exists():
+        try:
+            cal_payload = json.loads(_CALIBRATION_PATH.read_text())
+            p_class_cal = _apply_vector_scaling(
+                p_class_raw, cal_payload["temperature"], cal_payload["bias"]
+            )
+            calibration_applied = True
+        except Exception:
+            pass
+
+    # Compute OOD score if a detector is present.
+    p_ood = None
+    if _OOD_PATH.exists():
+        try:
+            from lacuna_survey.ood import features_for_observed, ood_score
+            from lacuna.data.missingness_features import MissingnessFeatureConfig
+            cfg = MissingnessFeatureConfig()
+            f = features_for_observed(dataset, cfg)
+            d = json.loads(_OOD_PATH.read_text())
+            p_ood = float(ood_score(
+                f, np.asarray(d["mean"]), np.asarray(d["std"]),
+                np.asarray(d["weights"]), d["bias"],
+            ))
+        except Exception:
+            pass
+
+    p_class = p_class_cal
     return {
         "p_class": p_class.tolist(),
+        "p_class_raw": p_class_raw.tolist(),
+        "calibration_applied": calibration_applied,
         "predicted_class": int(np.argmax(p_class)),
         "predicted_class_name": CLASS_NAMES[int(np.argmax(p_class))],
         "confidence": float(np.max(p_class)),
@@ -162,4 +214,6 @@ def run_model(model, dataset: ObservedDataset) -> dict:
         "expected_risks": risks.tolist(),
         "action_id": action_id,
         "action_label": ACTION_LABELS[action_id],
+        "recon_errors": recon,
+        "p_ood": p_ood,
     }
