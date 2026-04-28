@@ -330,17 +330,68 @@ top_class = result["predicted_class_name"]
 top_prob = result["confidence"]
 p_ood = result.get("p_ood")
 
-# OOD flag — visible at the top so out-of-scope cases are loud
-if p_ood is not None and p_ood >= 0.5:
-    st.warning(
-        f"**Out-of-scope (P(OOD) = {p_ood:.2f}).** This dataset's missingness "
-        "fingerprint sits outside the survey-questionnaire distribution Lacuna-Survey "
-        "was calibrated on. The posterior below is computed but should be treated as "
-        "advisory only. Consider whether your data is actually a survey questionnaire.",
-        icon="⚠️",
+# Surface any silent failures from the pipeline so missing-feature
+# bugs aren't invisible.
+if result.get("calibration_error"):
+    st.error(f"Calibration failed: {result['calibration_error']}", icon="🛑")
+if result.get("ood_error"):
+    st.error(f"OOD detector failed: {result['ood_error']}", icon="🛑")
+
+# OOD scope indicator — always visible so the scope context is loud,
+# not just when out-of-scope.
+if p_ood is not None:
+    if p_ood >= 0.5:
+        scope_color = "#e74c3c"  # red
+        scope_label = "OUT OF SCOPE"
+        scope_msg = (
+            f"P(OOD) = {p_ood:.2f}. This dataset's missingness fingerprint sits "
+            "outside the survey-questionnaire distribution Lacuna-Survey was "
+            "calibrated on. The posterior below is computed but should be treated "
+            "as advisory only. Consider whether your data is actually a survey "
+            "questionnaire."
+        )
+    elif p_ood >= 0.3:
+        scope_color = "#f39c12"  # amber
+        scope_label = "MARGINAL"
+        scope_msg = (
+            f"P(OOD) = {p_ood:.2f}. This dataset's fingerprint is on the edge of "
+            "the survey-questionnaire distribution. The posterior is in-distribution "
+            "enough to be informative, but interpret with extra care."
+        )
+    else:
+        scope_color = "#2ecc71"  # green
+        scope_label = "IN SCOPE"
+        scope_msg = (
+            f"P(OOD) = {p_ood:.2f}. This dataset's fingerprint sits inside the "
+            "survey-questionnaire distribution Lacuna-Survey was calibrated on."
+        )
+    st.markdown(
+        f"""
+        <div style="
+            border-left: 6px solid {scope_color};
+            background: rgba(0,0,0,0.03);
+            padding: 12px 18px;
+            margin: 12px 0 18px 0;
+            border-radius: 6px;
+        ">
+            <div style="
+                display: inline-block;
+                font-size: 12px;
+                letter-spacing: 0.16em;
+                font-weight: 700;
+                padding: 3px 10px;
+                background: {scope_color};
+                color: white;
+                border-radius: 4px;
+                vertical-align: middle;
+            ">SCOPE · {scope_label}</div>
+            <div style="margin-top: 10px; font-size: 14px; line-height: 1.5;">{scope_msg}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-elif p_ood is not None:
-    st.caption(f"In-scope check: P(OOD) = {p_ood:.2f} — within the survey-questionnaire distribution.")
+else:
+    st.caption("OOD detector not available — scope check disabled.")
 
 # === Headline: posterior probabilities ===
 prob_df = pd.DataFrame({

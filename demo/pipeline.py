@@ -174,19 +174,25 @@ def run_model(model, dataset: ObservedDataset) -> dict:
     # Apply post-hoc calibration if present.
     p_class_cal = p_class_raw
     calibration_applied = False
-    if _CALIBRATION_PATH.exists():
+    calibration_error: Optional[str] = None
+    if not _CALIBRATION_PATH.exists():
+        calibration_error = f"calibration file not found at {_CALIBRATION_PATH}"
+    else:
         try:
             cal_payload = json.loads(_CALIBRATION_PATH.read_text())
             p_class_cal = _apply_vector_scaling(
                 p_class_raw, cal_payload["temperature"], cal_payload["bias"]
             )
             calibration_applied = True
-        except Exception:
-            pass
+        except Exception as e:
+            calibration_error = f"{type(e).__name__}: {e}"
 
     # Compute OOD score if a detector is present.
     p_ood = None
-    if _OOD_PATH.exists():
+    ood_error: Optional[str] = None
+    if not _OOD_PATH.exists():
+        ood_error = f"OOD detector not found at {_OOD_PATH}"
+    else:
         try:
             from lacuna_survey.ood import features_for_observed, ood_score
             from lacuna.data.missingness_features import MissingnessFeatureConfig
@@ -197,8 +203,8 @@ def run_model(model, dataset: ObservedDataset) -> dict:
                 f, np.asarray(d["mean"]), np.asarray(d["std"]),
                 np.asarray(d["weights"]), d["bias"],
             ))
-        except Exception:
-            pass
+        except Exception as e:
+            ood_error = f"{type(e).__name__}: {e}"
 
     p_class = p_class_cal
     return {
@@ -216,4 +222,6 @@ def run_model(model, dataset: ObservedDataset) -> dict:
         "action_label": ACTION_LABELS[action_id],
         "recon_errors": recon,
         "p_ood": p_ood,
+        "calibration_error": calibration_error,
+        "ood_error": ood_error,
     }
