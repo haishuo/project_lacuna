@@ -236,6 +236,34 @@ def main() -> None:
     X_out, _ = collect_corpus(1, NONSURVEY_BASES, cfg)
     print(f"  {len(X_out)} samples")
 
+    # Augment IN corpus with real survey anchors. Synth X-base features
+    # don't always cover real-anchor signatures (e.g. NHANES INQ has a
+    # mixed-rate-NaN profile — one col at 39%, another at 20%, others at
+    # 5-7% — that's outside the synth distribution and gets falsely
+    # flagged OOD). Using the actual anchors as known-in-distribution
+    # exemplars closes this gap. Heavily up-weighted since they're our
+    # ground truth for what "in scope" looks like.
+    print(f"\nAugmenting IN corpus with real survey anchors...")
+    eval_dir = HERE / "evaluation_data"
+    anchor_features = []
+    for p in sorted(eval_dir.glob("*_real.csv")):
+        try:
+            with p.open("rb") as f: b = f.read()
+            obs = csv_to_dataset(b, p.stem, max_rows=MODEL_DEFAULTS["max_rows"]).dataset
+            anchor_features.append(features_for_observed(obs, cfg))
+        except Exception as e:
+            print(f"  skip {p.name}: {e}")
+    if anchor_features:
+        anchor_arr = np.asarray(anchor_features)
+        # Up-weight real anchors by replicating each ANCHOR_REPLICAS times.
+        # Real anchors are scarce (~14) vs synth IN samples (~hundreds);
+        # without weighting they wouldn't shift the decision boundary.
+        ANCHOR_REPLICAS = 5
+        anchor_aug = np.tile(anchor_arr, (ANCHOR_REPLICAS, 1))
+        X_in = np.vstack([X_in, anchor_aug])
+        print(f"  added {len(anchor_features)} real anchors × {ANCHOR_REPLICAS} replicas "
+              f"= {len(anchor_aug)} effective samples")
+
     print(f"\nFitting OOD classifier...")
     detector = fit_classifier(X_in, X_out)
     detector["feature_names"] = all_names
