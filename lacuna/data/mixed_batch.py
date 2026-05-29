@@ -1,0 +1,127 @@
+"""
+lacuna.data.mixed_batch
+
+Build per-column-labelled training/eval batches for the column-level experiment (Stage 1,
+ADR-0006). Each batch item is a mixed-mechanism dataset (different mechanism per column,
+clean-MAR regime) produced by `compose_mixed_missingness`; the per-column ground-truth
+mechanism labels travel alongside the TokenBatch as separate tensors (the frozen TokenBatch
+type is left unchanged).
+
+Returns, per batch:
+  - TokenBatch        : tokens/row_mask/col_mask, exactly as the dataset-level path expects.
+  - labels [B, C]     : per-column mechanism class (MCAR/MAR/MNAR) at supervised positions;
+                        0 (placeholder) elsewhere.
+  - supervision_mask  : [B, C] bool — True only for columns with a known mechanism
+                        (non-OBSERVED, non-padding). Loss/metrics mask on this.
+  - compositions      : list of the per-item column_classes tuples (ground truth for analysis).
+
+Determinism (Coding Bible Rule 6): all randomness flows through an explicit RNGState.
+"""
+
+from dataclasses import dataclass
+from typing import List, Tuple
+
+import torch
+
+from lacuna.core.rng import RNGState
+from lacuna.core.types import TokenBatch, MCAR, MAR, MNAR
+from lacuna.data.ingestion import RawDataset
+from lacuna.data.semisynthetic import subsample_raw
+from lacuna.data.mixed_missingness import compose_mixed_missingness, OBSERVED
+from lacuna.data.tokenization import tokenize_and_batch
+
+_MECHANISMS = (MCAR, MAR, MNAR)
+
+
+@dataclass(frozen=True)
+class MixedBatch:
+    """A per-column-labelled batch (TokenBatch + per-column targets)."""
+    batch: TokenBatch
+    labels: torch.Tensor            # [B, max_cols] long
+    supervision_mask: torch.Tensor  # [B, max_cols] bool
+    compositions: Tuple[Tuple[int, ...], ...]  # per-item column_classes
+
+
+def sample_column_classes(d: int, rng: RNGState, p_observed: float = 0.25) -> Tuple[int, ...]:
+    """Sample a per-column mechanism assignment for a d-column dataset.
+
+    Each column is OBSERVED (fully observed) with probability `p_observed`, else a uniform
+    draw from {MCAR, MAR, MNAR}. Two guards keep the result valid for the composer:
+      - at least one OBSERVED-or-MCAR column exists (a clean MAR predictor; ADR-0006);
+      - at least one column carries a mechanism (otherwise nothing is supervised).
+    For d < 2 the logistic MAR/MNAR generators are unusable, so only {OBSERVED, MCAR} are drawn.
+    """
+    if not 0.0 <= p_observed <= 1.0:
+        raise ValueError(f"p_observed must be in [0, 1], got {p_observed}")
+    if d < 1:
+        raise ValueError(f"d must be >= 1, got {d}")
+
+    pool_choices = (OBSERVED, MCAR) if d < 2 else (OBSERVED, MCAR, MAR, MNAR)
+    classes = []
+    for _ in range(d):
+        if rng.rand(1).item() < p_observed:
+            classes.append(OBSERVED)
+        else:
+            # uniform over mechanisms available at this d
+            mechs = (MCAR,) if d < 2 else _MECHANISMS
+            classes.append(mechs[rng.randint(0, len(mechs), (1,)).item()])
+
+    # Guard 1: ensure a clean predictor (OBSERVED or MCAR) for any MAR columns.
+    if not any(c in (OBSERVED, MCAR) for c in classes):
+        classes[rng.randint(0, d, (1,)).item()] = MCAR
+    # Guard 2: ensure at least one supervised (mechanism-bearing) column.
+    if not any(c in _MECHANISMS for c in classes):
+        classes[rng.randint(0, d, (1,)).item()] = MCAR
+    return tuple(classes)
+
+
+def build_mixed_batch(
+    raws: List[RawDataset],
+    rng: RNGState,
+    *,
+    max_rows: int,
+    max_cols: int,
+    batch_size: int,
+    p_observed: float = 0.25,
+    target_miss_rate: float = 0.25,
+    mar_strength: float = 1.5,
+    mnar_strength: float = 1.5,
+) -> MixedBatch:
+    """Assemble one per-column-labelled batch by sampling datasets and mixed compositions."""
+    if not raws:
+        raise ValueError("raws must be non-empty")
+    if batch_size < 1:
+        raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+
+    observed_datasets = []
+    compositions: List[Tuple[int, ...]] = []
+
+    for _ in range(batch_size):
+        item_rng = rng.spawn()
+        raw = raws[item_rng.randint(0, len(raws), (1,)).item()]
+        raw_sub = subsample_raw(raw, max_rows=max_rows, rng=item_rng.spawn())
+        classes = sample_column_classes(raw_sub.d, item_rng.spawn(), p_observed=p_observed)
+        res = compose_mixed_missingness(
+            raw_sub, classes, item_rng.spawn(),
+            target_miss_rate=target_miss_rate,
+            mar_strength=mar_strength, mnar_strength=mnar_strength,
+        )
+        observed_datasets.append(res.observed)
+        compositions.append(res.column_classes)
+
+    batch = tokenize_and_batch(observed_datasets, max_rows=max_rows, max_cols=max_cols)
+
+    labels = torch.zeros(batch_size, max_cols, dtype=torch.long)
+    sup_mask = torch.zeros(batch_size, max_cols, dtype=torch.bool)
+    for i, classes in enumerate(compositions):
+        for j, c in enumerate(classes):  # j < d_i <= max_cols (validated upstream)
+            if c in _MECHANISMS:
+                labels[i, j] = c
+                sup_mask[i, j] = True
+
+    return MixedBatch(
+        batch=batch,
+        labels=labels,
+        supervision_mask=sup_mask,
+        compositions=tuple(compositions),
+    )
