@@ -139,3 +139,57 @@ def test_ce_no_supervised_columns_raises():
 def test_bad_n_classes_raises():
     with pytest.raises(ValueError, match="n_classes"):
         ColumnReadoutHead(hidden_dim=16, n_classes=1)
+
+
+# ---------------------------------------------------------------------------
+# Extra per-column features (Stage 2)
+# ---------------------------------------------------------------------------
+
+def _head_extra(hidden_dim=32, n_extra=2):
+    torch.manual_seed(0)
+    return ColumnReadoutHead(hidden_dim=hidden_dim, n_extra_features=n_extra,
+                             head_hidden=16, dropout=0.0).eval()
+
+
+def test_extra_features_shape():
+    head = _head_extra(n_extra=2)
+    tr, rm, cm = _inputs(B=2, C=4, H=32)
+    extra = torch.randn(2, 4, 2)
+    assert head(tr, rm, cm, extra).shape == (2, 4, 3)
+
+
+def test_extra_features_change_logits():
+    head = _head_extra(n_extra=2)
+    tr, rm, cm = _inputs(B=2, C=4, H=32)
+    e1 = torch.zeros(2, 4, 2)
+    e2 = torch.ones(2, 4, 2) * 3.0
+    a = head(tr, rm, cm, e1)
+    b = head(tr, rm, cm, e2)
+    # valid columns' logits must respond to the extra features
+    assert not torch.allclose(a[cm], b[cm], atol=1e-4)
+
+
+def test_missing_extra_raises():
+    head = _head_extra(n_extra=2)
+    tr, rm, cm = _inputs(B=2, C=4, H=32)
+    with pytest.raises(ValueError, match="extra_features was not provided"):
+        head(tr, rm, cm)
+
+
+def test_extra_wrong_shape_raises():
+    head = _head_extra(n_extra=2)
+    tr, rm, cm = _inputs(B=2, C=4, H=32)
+    with pytest.raises(ValueError, match="extra_features shape"):
+        head(tr, rm, cm, torch.randn(2, 4, 3))  # n_extra mismatch
+
+
+def test_extra_provided_when_zero_raises():
+    head = _head()  # n_extra_features=0
+    tr, rm, cm = _inputs(B=2, C=4, H=32)
+    with pytest.raises(ValueError, match="n_extra_features=0"):
+        head(tr, rm, cm, torch.randn(2, 4, 2))
+
+
+def test_bad_n_extra_raises():
+    with pytest.raises(ValueError, match="n_extra_features"):
+        ColumnReadoutHead(hidden_dim=16, n_extra_features=-1)

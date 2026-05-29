@@ -39,17 +39,21 @@ class ColumnReadoutHead(nn.Module):
         n_classes: int = 3,
         head_hidden: int = 64,
         dropout: float = 0.1,
+        n_extra_features: int = 0,
     ):
         super().__init__()
         if hidden_dim <= 0:
             raise ValueError(f"hidden_dim must be positive, got {hidden_dim}")
         if n_classes < 2:
             raise ValueError(f"n_classes must be >= 2, got {n_classes}")
+        if n_extra_features < 0:
+            raise ValueError(f"n_extra_features must be >= 0, got {n_extra_features}")
 
         self.hidden_dim = hidden_dim
         self.n_classes = n_classes
+        self.n_extra_features = n_extra_features  # per-column features concatenated post-pool (Stage 2)
         self.mlp = nn.Sequential(
-            nn.Linear(hidden_dim, head_hidden),
+            nn.Linear(hidden_dim + n_extra_features, head_hidden),
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(head_hidden, n_classes),
@@ -60,10 +64,13 @@ class ColumnReadoutHead(nn.Module):
         token_repr: torch.Tensor,  # [B, R, C, H]
         row_mask: torch.Tensor,    # [B, R] bool (True = real row)
         col_mask: torch.Tensor,    # [B, C] bool (True = real column)
+        extra_features: Optional[torch.Tensor] = None,  # [B, C, n_extra_features] (Stage 2)
     ) -> torch.Tensor:
         """Return per-column logits [B, C, n_classes].
 
-        Pooling is a row-masked mean over valid rows, computed per column. Padding columns
+        Pooling is a row-masked mean over valid rows, computed per column. When the head was
+        built with `n_extra_features > 0`, `extra_features` (per-column, e.g. reconstruction-error
+        features) is concatenated to the pooled representation before the MLP. Padding columns
         are zeroed (their logits are not meaningful; mask them downstream).
         """
         if token_repr.dim() != 4:
@@ -81,6 +88,22 @@ class ColumnReadoutHead(nn.Module):
         summed = (token_repr * rm).sum(dim=1)                          # [B, C, H]
         count = row_mask.to(token_repr.dtype).sum(dim=1).clamp(min=1.0).view(B, 1, 1)
         pooled = summed / count                                        # [B, C, H]
+
+        # Concatenate per-column extra features (Stage 2: reconstruction-error signal).
+        if self.n_extra_features > 0:
+            if extra_features is None:
+                raise ValueError(
+                    f"head built with n_extra_features={self.n_extra_features} but "
+                    f"extra_features was not provided"
+                )
+            if extra_features.shape != (B, C, self.n_extra_features):
+                raise ValueError(
+                    f"extra_features shape {tuple(extra_features.shape)} != "
+                    f"({B}, {C}, {self.n_extra_features})"
+                )
+            pooled = torch.cat([pooled, extra_features.to(pooled.dtype)], dim=-1)
+        elif extra_features is not None:
+            raise ValueError("extra_features provided but head has n_extra_features=0")
 
         logits = self.mlp(pooled)                                      # [B, C, n_classes]
 

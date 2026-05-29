@@ -34,6 +34,9 @@ from lacuna.core.types import CLASS_NAMES
 from lacuna.config import load_config
 from lacuna.models.encoder import create_encoder
 from lacuna.models.column_head import ColumnReadoutHead, masked_per_column_ce, per_column_posterior
+from lacuna.models.column_recon_features import (
+    per_column_recon_features, load_reconstruction_heads_from_baseline,
+)
 from lacuna.data.catalog import create_default_catalog
 from lacuna.data.mixed_batch import build_mixed_batch
 
@@ -63,8 +66,19 @@ def init_encoder(ckpt, dims, device):
     return enc.to(device)
 
 
+def _forward_logits(encoder, head, recon_heads, b):
+    """Per-column logits. When recon_heads is set (Stage 2), augment the head input with
+    per-column reconstruction-error features."""
+    tr = encoder.get_token_representations(b.tokens, b.row_mask, b.col_mask)
+    extra = None
+    if recon_heads is not None:
+        extra = per_column_recon_features(
+            recon_heads, tr, b.tokens, b.row_mask, b.col_mask, b.original_values)
+    return head(tr, b.row_mask, b.col_mask, extra)
+
+
 def evaluate(encoder, head, raws, *, n_batches, batch_size, max_rows, max_cols, device, seed,
-             mixture_kwargs):
+             mixture_kwargs, recon_heads=None):
     """Per-column metrics over fixed eval batches (supervised columns only)."""
     encoder.eval(); head.eval()
     K = 3
@@ -78,8 +92,7 @@ def evaluate(encoder, head, raws, *, n_batches, batch_size, max_rows, max_cols, 
             mb = build_mixed_batch(raws, rng.spawn(), max_rows=max_rows, max_cols=max_cols,
                                    batch_size=batch_size, **mixture_kwargs)
             b = mb.batch.to(device)
-            tr = encoder.get_token_representations(b.tokens, b.row_mask, b.col_mask)
-            probs = per_column_posterior(head(tr, b.row_mask, b.col_mask)).cpu()  # [B,C,K]
+            probs = per_column_posterior(_forward_logits(encoder, head, recon_heads, b)).cpu()  # [B,C,K]
             preds = probs.argmax(-1)                                              # [B,C]
             labels, mask = mb.labels, mb.supervision_mask
 
@@ -132,6 +145,8 @@ def main():
     ap.add_argument("--baseline-checkpoint", default=f"{BASELINE}/checkpoints/best_model.pt")
     ap.add_argument("--baseline-config", default=f"{BASELINE}/config.yaml")
     ap.add_argument("--freeze-encoder", action="store_true")
+    ap.add_argument("--use-recon-features", action="store_true",
+                    help="Stage 2: feed per-column reconstruction-error features into the head")
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--batches-per-epoch", type=int, default=100)
     ap.add_argument("--batch-size", type=int, default=16)
@@ -153,7 +168,22 @@ def main():
     mixture_kwargs = dict(p_observed=args.p_observed, target_miss_rate=args.target_miss_rate)
 
     encoder = init_encoder(args.baseline_checkpoint, dims, args.device)
-    head = ColumnReadoutHead(hidden_dim=cfg.model.hidden_dim, dropout=cfg.model.dropout).to(args.device)
+
+    # Stage 2: load the baseline reconstruction heads (kept FROZEN — they are the fixed signal
+    # source, like a feature extractor) and size the column head to take their per-column errors.
+    recon_heads = None
+    n_extra = 0
+    if args.use_recon_features:
+        recon_heads = load_reconstruction_heads_from_baseline(
+            args.baseline_checkpoint, hidden_dim=cfg.model.hidden_dim,
+            dropout=cfg.model.dropout, device=args.device)
+        for p in recon_heads.parameters():
+            p.requires_grad = False
+        recon_heads.eval()
+        n_extra = recon_heads.n_heads
+
+    head = ColumnReadoutHead(hidden_dim=cfg.model.hidden_dim, dropout=cfg.model.dropout,
+                             n_extra_features=n_extra).to(args.device)
 
     if args.freeze_encoder:
         for p in encoder.parameters():
@@ -164,6 +194,8 @@ def main():
     else:
         params = list(encoder.parameters()) + list(head.parameters())
         mode = "fine-tune"
+    if args.use_recon_features:
+        mode += "+recon"
     print(f"Mode: {mode} | trainable params: {sum(p.numel() for p in params):,} | device: {args.device}")
 
     train_raws = load_raws(cfg.data.train_datasets, max_cols)
@@ -182,8 +214,7 @@ def main():
             mb = build_mixed_batch(train_raws, rng.spawn(), max_rows=max_rows, max_cols=max_cols,
                                    batch_size=args.batch_size, **mixture_kwargs)
             b = mb.batch.to(args.device)
-            tr = encoder.get_token_representations(b.tokens, b.row_mask, b.col_mask)
-            logits = head(tr, b.row_mask, b.col_mask)
+            logits = _forward_logits(encoder, head, recon_heads, b)
             loss = masked_per_column_ce(logits, mb.labels.to(args.device),
                                         mb.supervision_mask.to(args.device))
             opt.zero_grad(); loss.backward()
@@ -194,10 +225,11 @@ def main():
 
     metrics = evaluate(encoder, head, val_raws, n_batches=args.eval_batches,
                        batch_size=args.batch_size, max_rows=max_rows, max_cols=max_cols,
-                       device=args.device, seed=args.seed + 7, mixture_kwargs=mixture_kwargs)
+                       device=args.device, seed=args.seed + 7, mixture_kwargs=mixture_kwargs,
+                       recon_heads=recon_heads)
 
     print("\n" + "=" * 70)
-    print(f"STAGE 1 ({mode}) — per-column evaluation on held-out mixtures")
+    print(f"STAGE 1/2 ({mode}) — per-column evaluation on held-out mixtures")
     print("=" * 70)
     print(f"  per-column accuracy : {metrics['per_column_accuracy']}")
     print(f"  per-class recall    : {metrics['per_class_recall']}")
