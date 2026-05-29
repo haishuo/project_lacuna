@@ -253,6 +253,10 @@ def main():
     ap.add_argument("--eval-batches", type=int, default=60)
     ap.add_argument("--p-observed", type=float, default=0.25)
     ap.add_argument("--target-miss-rate", type=float, default=0.25)
+    ap.add_argument("--legacy-rate", action="store_true",
+                    help="use the uncompensated composer intercept (direct MAR/MNAR overshoot to "
+                         "~0.30); default compensates so every mechanism hits ~target_miss_rate "
+                         "(confound control: the ONLY variable across arms is diversity)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--output-dir", type=Path, default=Path(f"{BASELINE}/stage5_true_mixtures"))
     ap.add_argument("--quick", action="store_true", help="fast smoke test (1 seed, 2 epochs, few batches)")
@@ -266,7 +270,8 @@ def main():
                 n_layers=cfg.model.n_layers, n_heads=cfg.model.n_heads,
                 max_cols=cfg.data.max_cols, dropout=cfg.model.dropout)
     max_rows, max_cols = cfg.data.max_rows, cfg.data.max_cols
-    mixture = dict(p_observed=args.p_observed, target_miss_rate=args.target_miss_rate)
+    mixture = dict(p_observed=args.p_observed, target_miss_rate=args.target_miss_rate,
+                   compensate_rate=not args.legacy_rate)
 
     encoder = init_encoder(args.baseline_checkpoint, dims, args.device)
     train_raws = load_raws(cfg.data.train_datasets, max_cols)

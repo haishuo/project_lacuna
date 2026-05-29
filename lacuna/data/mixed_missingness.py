@@ -53,6 +53,7 @@ from lacuna.generators.families.mar.simple import MARLogistic
 from lacuna.generators.families.mnar.self_censoring import MNARLogistic
 from lacuna.data.mnar_column_pool import sample_mnar_column_generator
 from lacuna.data.mar_column_pool import sample_mar_column_generator
+from lacuna.data._column_pool_math import comp_beta0
 from lacuna.data.ingestion import RawDataset
 # Reuse the EXACT predictor-view scaling the training path uses, so generator
 # saturation behaviour matches apply_missingness. Intentional, explicit coupling.
@@ -149,6 +150,7 @@ def compose_mixed_missingness(
     mnar_strength: float = 1.5,
     mnar_diverse: bool = False,
     mar_diverse: bool = False,
+    compensate_rate: bool = False,
 ) -> MixedMissingnessResult:
     """Apply a per-column mixture of MCAR/MAR/MNAR mechanisms to a complete dataset.
 
@@ -175,6 +177,13 @@ def compose_mixed_missingness(
             discrete/realistic; see `mar_column_pool`), preserving the clean-MAR regime (the
             predictor is still a clean observed/MCAR column). Recorded in `mar_subtypes`. Setting
             BOTH diverse flags yields the full-diversity true-mixture regime (Stage 5).
+        compensate_rate: if False (default), the DIRECT (non-diverse) logistic-MAR and
+            self-censoring-MNAR paths use intercept = logit(target_miss_rate) — the original
+            Stage 0–4b behaviour, which OVERSHOOTS the target (the logistic slope inflates the
+            marginal to ~0.30 for target 0.25). If True, those direct paths use the
+            slope-compensated intercept (`comp_beta0`) so they hit ~target_miss_rate, matching the
+            pools' compensated rates. Use True to hold per-column miss rate constant across ALL
+            mechanisms and arms (Stage 5 confound control); the MCAR path is exact either way.
 
     Returns:
         MixedMissingnessResult.
@@ -191,6 +200,11 @@ def compose_mixed_missingness(
     Z = _zscore_columns(X)
 
     intercept = _logit(target_miss_rate)
+    # Direct-path intercepts. By default = logit(rate) (legacy; overshoots to ~0.30 because the
+    # logistic slope inflates the marginal). With compensate_rate, slope-compensated so the direct
+    # logistic-MAR / self-censoring-MNAR marginals hit ~rate, matching the pools (Stage 5 confound).
+    mar_intercept = comp_beta0(target_miss_rate, mar_strength) if compensate_rate else intercept
+    mnar_intercept = comp_beta0(target_miss_rate, mnar_strength) if compensate_rate else intercept
     R = torch.ones(n, d, dtype=torch.bool)
     mar_predictors: Dict[int, int] = {}
     mnar_subtypes: Dict[int, str] = {}
@@ -226,7 +240,7 @@ def compose_mixed_missingness(
                 gen = MARLogistic(
                     0, "mixed_mar",
                     GeneratorParams(
-                        alpha0=intercept, alpha1=mar_strength,
+                        alpha0=mar_intercept, alpha1=mar_strength,
                         target_col_idx=j, predictor_col_idx=predictor,
                     ),
                 )
@@ -247,7 +261,7 @@ def compose_mixed_missingness(
                 gen = MNARLogistic(
                     0, "mixed_mnar",
                     GeneratorParams(
-                        beta0=intercept, beta1=0.0, beta2=mnar_strength,
+                        beta0=mnar_intercept, beta1=0.0, beta2=mnar_strength,
                         target_col_idx=j,
                     ),
                 )

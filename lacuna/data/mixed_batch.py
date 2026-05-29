@@ -97,6 +97,7 @@ def build_mixed_batch(
     mnar_strength: float = 1.5,
     mnar_diverse: bool = False,
     mar_diverse: bool = False,
+    compensate_rate: bool = False,
 ) -> MixedBatch:
     """Assemble one per-column-labelled batch by sampling datasets and mixed compositions.
 
@@ -127,6 +128,7 @@ def build_mixed_batch(
             target_miss_rate=target_miss_rate,
             mar_strength=mar_strength, mnar_strength=mnar_strength,
             mnar_diverse=mnar_diverse, mar_diverse=mar_diverse,
+            compensate_rate=compensate_rate,
         )
         observed_datasets.append(res.observed)
         compositions.append(res.column_classes)

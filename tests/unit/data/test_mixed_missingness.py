@@ -298,6 +298,41 @@ def test_diverse_mar_deterministic_under_same_seed():
     assert torch.equal(a.observed.r, b.observed.r)
 
 
+def test_compensate_rate_default_is_logit_intercept():
+    """Default (compensate_rate=False) is bit-identical to the legacy logit-intercept path."""
+    raw = _make_raw(seed=9)
+    classes = (OBSERVED, MAR, MNAR, MCAR, MAR, MNAR)
+    a = compose_mixed_missingness(raw, classes, RNGState(seed=1))
+    b = compose_mixed_missingness(raw, classes, RNGState(seed=1), compensate_rate=False)
+    assert torch.equal(a.observed.r, b.observed.r)
+
+
+def test_compensate_rate_brings_direct_paths_to_target():
+    """compensate_rate makes the direct logistic-MAR / self-censoring-MNAR marginals hit ~target,
+    instead of overshooting to ~0.30 (the slope-inflation the legacy path exhibits)."""
+    raw = _make_raw(n=4000, d=6, seed=5)
+    classes = (OBSERVED, MAR, MAR, MNAR, MNAR, MCAR)
+    legacy = compose_mixed_missingness(raw, classes, RNGState(seed=2), target_miss_rate=0.25)
+    comp = compose_mixed_missingness(raw, classes, RNGState(seed=2), target_miss_rate=0.25,
+                                     compensate_rate=True)
+    # Legacy MAR/MNAR overshoot; compensated land near 0.25.
+    for j in (1, 2, 3, 4):
+        assert legacy.per_column_miss_rate[j] > 0.27, (j, legacy.per_column_miss_rate[j])
+        assert 0.20 <= comp.per_column_miss_rate[j] <= 0.30, (j, comp.per_column_miss_rate[j])
+
+
+def test_compensate_rate_composes_with_diversity():
+    """compensate_rate only touches the DIRECT paths; with diversity on it is a no-op on labels
+    (the pools already compensate) and still produces valid per-column subtypes."""
+    raw = _make_raw(n=300)
+    classes = (OBSERVED, MAR, MNAR, MCAR, MAR, MNAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=3),
+                                    mar_diverse=True, mnar_diverse=True, compensate_rate=True)
+    assert res.column_classes == classes
+    for j in (1, 2, 4, 5):
+        assert res.per_column_miss_rate[j] > 0.0
+
+
 def test_full_diversity_both_mar_and_mnar():
     """Stage 5 regime: diverse MAR AND diverse MNAR coexist across columns in one dataset."""
     raw = _make_raw(n=300)
