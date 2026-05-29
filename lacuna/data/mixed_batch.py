@@ -35,11 +35,18 @@ _MECHANISMS = (MCAR, MAR, MNAR)
 
 @dataclass(frozen=True)
 class MixedBatch:
-    """A per-column-labelled batch (TokenBatch + per-column targets)."""
+    """A per-column-labelled batch (TokenBatch + per-column targets).
+
+    `complete_values` carries the TRUE (un-zeroed) values for every cell, padded to
+    [B, max_rows, max_cols]. It is only knowable because the data is semi-synthetic; Stage 2b
+    uses it as the reconstruction target so per-column reconstruction error reflects genuine
+    accuracy rather than prediction magnitude (vs the zeroed `TokenBatch.original_values`).
+    """
     batch: TokenBatch
     labels: torch.Tensor            # [B, max_cols] long
     supervision_mask: torch.Tensor  # [B, max_cols] bool
     compositions: Tuple[Tuple[int, ...], ...]  # per-item column_classes
+    complete_values: torch.Tensor   # [B, max_rows, max_cols] true values (un-zeroed)
 
 
 def sample_column_classes(d: int, rng: RNGState, p_observed: float = 0.25) -> Tuple[int, ...]:
@@ -95,6 +102,7 @@ def build_mixed_batch(
 
     observed_datasets = []
     compositions: List[Tuple[int, ...]] = []
+    complete_data = []  # per-item true (complete) values, numpy [n_i, d_i]
 
     for _ in range(batch_size):
         item_rng = rng.spawn()
@@ -108,20 +116,26 @@ def build_mixed_batch(
         )
         observed_datasets.append(res.observed)
         compositions.append(res.column_classes)
+        complete_data.append(raw_sub.data)  # row order matches the observed dataset / tokenizer
 
     batch = tokenize_and_batch(observed_datasets, max_rows=max_rows, max_cols=max_cols)
 
     labels = torch.zeros(batch_size, max_cols, dtype=torch.long)
     sup_mask = torch.zeros(batch_size, max_cols, dtype=torch.bool)
+    complete_values = torch.zeros(batch_size, max_rows, max_cols, dtype=torch.float32)
     for i, classes in enumerate(compositions):
         for j, c in enumerate(classes):  # j < d_i <= max_cols (validated upstream)
             if c in _MECHANISMS:
                 labels[i, j] = c
                 sup_mask[i, j] = True
+        data = complete_data[i]
+        n, d = data.shape  # n <= max_rows (subsampled upstream), d <= max_cols
+        complete_values[i, :n, :d] = torch.from_numpy(data.astype("float32"))
 
     return MixedBatch(
         batch=batch,
         labels=labels,
         supervision_mask=sup_mask,
         compositions=tuple(compositions),
+        complete_values=complete_values,
     )

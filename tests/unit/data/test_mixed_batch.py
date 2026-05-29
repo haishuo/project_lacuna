@@ -120,6 +120,25 @@ def test_at_least_one_supervised_column_per_item():
     assert torch.all(mb.supervision_mask.any(dim=1)), "every item must have ≥1 supervised col"
 
 
+def test_complete_values_shape_and_truth():
+    mb = build_mixed_batch(_raws(d=6), RNGState(seed=2), max_rows=64, max_cols=8, batch_size=4)
+    assert mb.complete_values.shape == (4, 64, 8)
+    is_obs = mb.batch.tokens[..., 1] > 0.5  # IDX_OBSERVED
+    orig = mb.batch.original_values
+    # At observed cells, complete == original (both carry the true value).
+    assert torch.allclose(mb.complete_values[is_obs], orig[is_obs], atol=1e-5)
+    # complete carries info the zeroed original_values lost: some missing cell has a true ≠ 0.
+    valid = mb.batch.row_mask.unsqueeze(-1) & mb.batch.col_mask.unsqueeze(1)
+    missing = valid & ~is_obs
+    assert torch.any(mb.complete_values[missing] != 0.0)
+
+
+def test_complete_values_deterministic():
+    a = build_mixed_batch(_raws(d=6), RNGState(seed=9), max_rows=64, max_cols=8, batch_size=3)
+    b = build_mixed_batch(_raws(d=6), RNGState(seed=9), max_rows=64, max_cols=8, batch_size=3)
+    assert torch.equal(a.complete_values, b.complete_values)
+
+
 def test_empty_raws_raises():
     with pytest.raises(ValueError, match="non-empty"):
         build_mixed_batch([], RNGState(seed=0), max_rows=64, max_cols=8, batch_size=2)

@@ -66,19 +66,21 @@ def init_encoder(ckpt, dims, device):
     return enc.to(device)
 
 
-def _forward_logits(encoder, head, recon_heads, b):
-    """Per-column logits. When recon_heads is set (Stage 2), augment the head input with
-    per-column reconstruction-error features."""
+def _forward_logits(encoder, head, recon_heads, b, recon_target=None):
+    """Per-column logits. When recon_heads is set, augment the head input with per-column
+    reconstruction-error features computed against `recon_target` (Stage 2b: the true complete
+    values) or, if None, the batch's zeroed `original_values` (Stage 2)."""
     tr = encoder.get_token_representations(b.tokens, b.row_mask, b.col_mask)
     extra = None
     if recon_heads is not None:
+        target = recon_target if recon_target is not None else b.original_values
         extra = per_column_recon_features(
-            recon_heads, tr, b.tokens, b.row_mask, b.col_mask, b.original_values)
+            recon_heads, tr, b.tokens, b.row_mask, b.col_mask, target)
     return head(tr, b.row_mask, b.col_mask, extra)
 
 
 def evaluate(encoder, head, raws, *, n_batches, batch_size, max_rows, max_cols, device, seed,
-             mixture_kwargs, recon_heads=None):
+             mixture_kwargs, recon_heads=None, use_true_target=False):
     """Per-column metrics over fixed eval batches (supervised columns only)."""
     encoder.eval(); head.eval()
     K = 3
@@ -92,7 +94,9 @@ def evaluate(encoder, head, raws, *, n_batches, batch_size, max_rows, max_cols, 
             mb = build_mixed_batch(raws, rng.spawn(), max_rows=max_rows, max_cols=max_cols,
                                    batch_size=batch_size, **mixture_kwargs)
             b = mb.batch.to(device)
-            probs = per_column_posterior(_forward_logits(encoder, head, recon_heads, b)).cpu()  # [B,C,K]
+            recon_target = mb.complete_values.to(device) if use_true_target else None
+            probs = per_column_posterior(
+                _forward_logits(encoder, head, recon_heads, b, recon_target)).cpu()  # [B,C,K]
             preds = probs.argmax(-1)                                              # [B,C]
             labels, mask = mb.labels, mb.supervision_mask
 
@@ -147,6 +151,9 @@ def main():
     ap.add_argument("--freeze-encoder", action="store_true")
     ap.add_argument("--use-recon-features", action="store_true",
                     help="Stage 2: feed per-column reconstruction-error features into the head")
+    ap.add_argument("--true-recon-target", action="store_true",
+                    help="Stage 2b: compute recon features vs the TRUE complete values "
+                         "(implies --use-recon-features)")
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--batches-per-epoch", type=int, default=100)
     ap.add_argument("--batch-size", type=int, default=16)
@@ -158,6 +165,8 @@ def main():
     ap.add_argument("--p-observed", type=float, default=0.25)
     ap.add_argument("--target-miss-rate", type=float, default=0.25)
     args = ap.parse_args()
+    if args.true_recon_target:
+        args.use_recon_features = True  # true-target recon implies recon features
 
     torch.manual_seed(args.seed)
     cfg = load_config(args.baseline_config)
@@ -195,7 +204,7 @@ def main():
         params = list(encoder.parameters()) + list(head.parameters())
         mode = "fine-tune"
     if args.use_recon_features:
-        mode += "+recon"
+        mode += "+recon-true" if args.true_recon_target else "+recon"
     print(f"Mode: {mode} | trainable params: {sum(p.numel() for p in params):,} | device: {args.device}")
 
     train_raws = load_raws(cfg.data.train_datasets, max_cols)
@@ -214,7 +223,8 @@ def main():
             mb = build_mixed_batch(train_raws, rng.spawn(), max_rows=max_rows, max_cols=max_cols,
                                    batch_size=args.batch_size, **mixture_kwargs)
             b = mb.batch.to(args.device)
-            logits = _forward_logits(encoder, head, recon_heads, b)
+            recon_target = mb.complete_values.to(args.device) if args.true_recon_target else None
+            logits = _forward_logits(encoder, head, recon_heads, b, recon_target)
             loss = masked_per_column_ce(logits, mb.labels.to(args.device),
                                         mb.supervision_mask.to(args.device))
             opt.zero_grad(); loss.backward()
@@ -226,7 +236,7 @@ def main():
     metrics = evaluate(encoder, head, val_raws, n_batches=args.eval_batches,
                        batch_size=args.batch_size, max_rows=max_rows, max_cols=max_cols,
                        device=args.device, seed=args.seed + 7, mixture_kwargs=mixture_kwargs,
-                       recon_heads=recon_heads)
+                       recon_heads=recon_heads, use_true_target=args.true_recon_target)
 
     print("\n" + "=" * 70)
     print(f"STAGE 1/2 ({mode}) — per-column evaluation on held-out mixtures")
