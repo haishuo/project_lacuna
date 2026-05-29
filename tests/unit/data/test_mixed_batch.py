@@ -178,3 +178,58 @@ def test_mnar_diverse_deterministic():
                           batch_size=4, mnar_diverse=True)
     assert torch.equal(a.batch.tokens, b.batch.tokens)
     assert torch.equal(a.labels, b.labels)
+
+
+# ---------------------------------------------------------------------------
+# Subtype carrying + diverse MAR (Stage 5)
+# ---------------------------------------------------------------------------
+
+def test_batch_carries_per_item_subtype_maps():
+    """MixedBatch exposes per-item realised MNAR/MAR subtype dicts for per-subtype eval."""
+    mb = build_mixed_batch(_raws(d=6), RNGState(seed=21), max_rows=64, max_cols=8,
+                           batch_size=8, mnar_diverse=True, mar_diverse=True)
+    assert len(mb.mnar_subtypes) == 8 and len(mb.mar_subtypes) == 8
+    from lacuna.data.mnar_column_pool import MNAR_SUBTYPES
+    from lacuna.data.mar_column_pool import MAR_SUBTYPES
+    # Every recorded subtype is a valid pool member and its column is supervised as the right class.
+    for i in range(8):
+        for col, sub in mb.mnar_subtypes[i].items():
+            assert sub in MNAR_SUBTYPES
+            assert mb.supervision_mask[i, col] and mb.labels[i, col].item() == MNAR
+        for col, sub in mb.mar_subtypes[i].items():
+            assert sub in MAR_SUBTYPES
+            assert mb.supervision_mask[i, col] and mb.labels[i, col].item() == MAR
+
+
+def test_default_subtype_maps_are_single_family():
+    """Without the diverse flags, recorded subtypes collapse to the single default family."""
+    mb = build_mixed_batch(_raws(d=6), RNGState(seed=22), max_rows=64, max_cols=8, batch_size=8)
+    mnar_vals = {s for d in mb.mnar_subtypes for s in d.values()}
+    mar_vals = {s for d in mb.mar_subtypes for s in d.values()}
+    assert mnar_vals.issubset({"self_censoring"})
+    assert mar_vals.issubset({"logistic"})
+
+
+def test_mar_diverse_threads_through_and_preserves_labels():
+    mb = build_mixed_batch(_raws(d=6), RNGState(seed=23), max_rows=64, max_cols=8,
+                           batch_size=8, mar_diverse=True)
+    sup_labels = mb.labels[mb.supervision_mask]
+    assert sup_labels.numel() > 0
+    assert set(sup_labels.tolist()).issubset(set(_MECHS))
+
+
+def test_mar_diverse_changes_masks_vs_default():
+    common = dict(max_rows=64, max_cols=8, batch_size=8)
+    default = build_mixed_batch(_raws(d=6), RNGState(seed=34), **common, mar_diverse=False)
+    diverse = build_mixed_batch(_raws(d=6), RNGState(seed=34), **common, mar_diverse=True)
+    assert torch.equal(default.labels, diverse.labels)
+    assert torch.equal(default.supervision_mask, diverse.supervision_mask)
+    assert not torch.equal(default.batch.tokens, diverse.batch.tokens)
+
+
+def test_full_diversity_deterministic():
+    common = dict(max_rows=64, max_cols=8, batch_size=4, mnar_diverse=True, mar_diverse=True)
+    a = build_mixed_batch(_raws(d=6), RNGState(seed=45), **common)
+    b = build_mixed_batch(_raws(d=6), RNGState(seed=45), **common)
+    assert torch.equal(a.batch.tokens, b.batch.tokens)
+    assert a.mnar_subtypes == b.mnar_subtypes and a.mar_subtypes == b.mar_subtypes

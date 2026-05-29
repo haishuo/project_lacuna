@@ -19,7 +19,7 @@ Determinism (Coding Bible Rule 6): all randomness flows through an explicit RNGS
 """
 
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import torch
 
@@ -47,6 +47,8 @@ class MixedBatch:
     supervision_mask: torch.Tensor  # [B, max_cols] bool
     compositions: Tuple[Tuple[int, ...], ...]  # per-item column_classes
     complete_values: torch.Tensor   # [B, max_rows, max_cols] true values (un-zeroed)
+    mnar_subtypes: Tuple[Dict[int, str], ...]  # per-item {col -> MNAR subtype} (realised mechanism)
+    mar_subtypes: Tuple[Dict[int, str], ...]   # per-item {col -> MAR subtype} (realised mechanism)
 
 
 def sample_column_classes(d: int, rng: RNGState, p_observed: float = 0.25) -> Tuple[int, ...]:
@@ -94,12 +96,15 @@ def build_mixed_batch(
     mar_strength: float = 1.5,
     mnar_strength: float = 1.5,
     mnar_diverse: bool = False,
+    mar_diverse: bool = False,
 ) -> MixedBatch:
     """Assemble one per-column-labelled batch by sampling datasets and mixed compositions.
 
-    `mnar_diverse` (default False) is forwarded to `compose_mixed_missingness`: when True, MNAR
-    columns draw diverse subtypes (threshold/detection/self-censoring) instead of self-censoring
-    only. The per-column LABEL is still MNAR either way — only the realised subtype varies.
+    `mnar_diverse` / `mar_diverse` (both default False) are forwarded to
+    `compose_mixed_missingness`: when True, MNAR / MAR columns draw diverse subtypes instead of
+    the single-family default. The per-column LABEL is unchanged (MNAR / MAR); only the realised
+    subtype varies. The realised subtypes are returned per item (`mnar_subtypes`, `mar_subtypes`)
+    so evaluation can break detectability down by subtype (Stage 5, ADR-0006).
     """
     if not raws:
         raise ValueError("raws must be non-empty")
@@ -109,6 +114,8 @@ def build_mixed_batch(
     observed_datasets = []
     compositions: List[Tuple[int, ...]] = []
     complete_data = []  # per-item true (complete) values, numpy [n_i, d_i]
+    mnar_subtypes: List[Dict[int, str]] = []
+    mar_subtypes: List[Dict[int, str]] = []
 
     for _ in range(batch_size):
         item_rng = rng.spawn()
@@ -119,11 +126,13 @@ def build_mixed_batch(
             raw_sub, classes, item_rng.spawn(),
             target_miss_rate=target_miss_rate,
             mar_strength=mar_strength, mnar_strength=mnar_strength,
-            mnar_diverse=mnar_diverse,
+            mnar_diverse=mnar_diverse, mar_diverse=mar_diverse,
         )
         observed_datasets.append(res.observed)
         compositions.append(res.column_classes)
         complete_data.append(raw_sub.data)  # row order matches the observed dataset / tokenizer
+        mnar_subtypes.append(res.mnar_subtypes)
+        mar_subtypes.append(res.mar_subtypes)
 
     batch = tokenize_and_batch(observed_datasets, max_rows=max_rows, max_cols=max_cols)
 
@@ -145,4 +154,6 @@ def build_mixed_batch(
         supervision_mask=sup_mask,
         compositions=tuple(compositions),
         complete_values=complete_values,
+        mnar_subtypes=tuple(mnar_subtypes),
+        mar_subtypes=tuple(mar_subtypes),
     )

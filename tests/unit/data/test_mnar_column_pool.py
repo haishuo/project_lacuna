@@ -40,9 +40,41 @@ def test_targets_only_the_named_column(Z):
 def test_all_subtypes_reachable_over_many_draws():
     """Over many draws the pool should exercise the full subtype set (no dead branch)."""
     rng = RNGState(seed=1)
-    seen = Counter(sample_mnar_column_generator(1, rng.spawn())[0] for _ in range(600))
-    # All 8 subtypes should appear at least once.
+    seen = Counter(sample_mnar_column_generator(1, rng.spawn())[0] for _ in range(2000))
+    # Every declared subtype should appear at least once.
     assert set(seen) == set(MNAR_SUBTYPES), f"missing: {set(MNAR_SUBTYPES) - set(seen)}"
+
+
+def test_pool_is_diverse_and_spans_families():
+    """The expanded pool spans self-censoring, threshold, detection, social, strategic,
+    informative and selection families — full subtype diversity (Stage 5, not the 8-subtype
+    Stage 4b pool). Under-diversity has tanked results before; lock the breadth in."""
+    assert len(MNAR_SUBTYPES) >= 20, f"pool shrank to {len(MNAR_SUBTYPES)} subtypes"
+    # representative members of each family must be present
+    for required in ("self_censoring", "selfcensor_strong", "threshold_left", "detection_lower",
+                     "under_report", "gaming", "symptom_triggered", "competing_events"):
+        assert required in MNAR_SUBTYPES, f"{required} missing from pool"
+
+
+def test_pool_excludes_mar_adjacent_and_degenerate_subtypes():
+    """Curation guard: row/other-column/sequence-driven subtypes are NOT in the per-column MNAR
+    pool (they would inject label noise). The targeting CAPABILITY exists on those families, but
+    pool membership is restricted to clean own-value MNAR. See module docstring."""
+    excluded = {"truncation", "berkson", "risk_based_monitoring", "outcome_dependent",
+                "adaptive_sampling", "attrition", "module_refusal", "competitive",
+                "latent_health", "latent_ses", "latent_motivation"}
+    assert excluded.isdisjoint(set(MNAR_SUBTYPES))
+
+
+def test_miss_rate_in_tolerance_across_seeds():
+    """Stronger confound-control guard than the single-seed check: every subtype lands within
+    [0.15, 0.40] across multiple data seeds (mechanism TYPE varies, missing QUANTITY ~fixed)."""
+    for sd in range(5):
+        Z = _zscore_columns(RNGState(seed=200 + sd).randn(1500, 5))
+        for name, gen in _builders(target_col_idx=2, target_miss_rate=0.25, strength=1.5):
+            R = gen.apply_to(Z, RNGState(seed=11 + sd))
+            rate = 1.0 - R[:, 2].float().mean().item()
+            assert 0.15 <= rate <= 0.40, f"{name} seed {sd}: realized rate {rate:.3f} out of band"
 
 
 def test_builders_cover_declared_subtypes():

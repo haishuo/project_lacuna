@@ -36,7 +36,11 @@ def per_column_deployable_features(
     col_mask: torch.Tensor,  # [B, C] bool
     eps: float = 1e-6,
 ) -> torch.Tensor:
-    """Per-column scale-free distributional features from observed values only → [B, C, 3]."""
+    """Per-column scale-free distributional features from observed values only → [B, C, 5].
+
+    The 5 features are [missing_rate, robust_skew, excess_kurtosis, signed_skew, smd_to_others]
+    (see module docstring); `N_DEPLOYABLE_FEATURES` is the source of truth for the count.
+    """
     B, R, C, _ = tokens.shape
     vals = tokens[..., IDX_VALUE]                                  # [B, R, C]
     is_obs = tokens[..., IDX_OBSERVED] > 0.5

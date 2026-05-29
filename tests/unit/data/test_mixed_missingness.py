@@ -229,3 +229,86 @@ def test_diverse_mnar_deterministic_under_same_seed():
     b = compose_mixed_missingness(raw, classes, RNGState(seed=7), mnar_diverse=True)
     assert a.mnar_subtypes == b.mnar_subtypes
     assert torch.equal(a.observed.r, b.observed.r)
+
+
+# ---------------------------------------------------------------------------
+# Diverse MAR (Stage 5) — mirrors the diverse-MNAR contract
+# ---------------------------------------------------------------------------
+
+def test_default_mar_is_logistic_only():
+    """Without mar_diverse, every MAR column is the single logistic family (Stage 0-4b)."""
+    raw = _make_raw()
+    classes = (OBSERVED, MAR, MAR, MAR, MCAR, MAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=1))
+    assert set(res.mar_subtypes.keys()) == {1, 2, 3, 5}
+    assert set(res.mar_subtypes.values()) == {"logistic"}
+
+
+def test_diverse_mar_records_subtype_per_mar_column():
+    raw = _make_raw()
+    classes = (OBSERVED, MAR, MAR, MAR, MCAR, MAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=1), mar_diverse=True)
+    assert set(res.mar_subtypes.keys()) == {1, 2, 3, 5}
+    from lacuna.data.mar_column_pool import MAR_SUBTYPES
+    assert all(v in MAR_SUBTYPES for v in res.mar_subtypes.values())
+
+
+def test_diverse_mar_labels_stay_mar():
+    raw = _make_raw()
+    classes = (OBSERVED, MAR, MAR, MAR, MCAR, MAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=2), mar_diverse=True)
+    assert res.column_classes == classes
+
+
+def test_diverse_mar_predictors_stay_clean():
+    """The clean-MAR regime must hold under diversity: every MAR predictor is OBSERVED or MCAR
+    and never the column itself."""
+    raw = _make_raw()
+    classes = (OBSERVED, MAR, MAR, MAR, MCAR, MAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=4), mar_diverse=True)
+    for target, predictor in res.mar_predictors.items():
+        assert predictor != target
+        assert classes[predictor] in (OBSERVED, MCAR), (target, predictor, classes[predictor])
+
+
+def test_diverse_mar_columns_actually_go_missing():
+    raw = _make_raw(n=300)
+    classes = (OBSERVED, MAR, MAR, MAR, MCAR, MAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=3), mar_diverse=True)
+    for j in (1, 2, 3, 5):
+        assert res.per_column_miss_rate[j] > 0.0, (j, res.per_column_miss_rate)
+
+
+def test_diverse_mar_produces_subtype_variety_across_seeds():
+    raw = _make_raw(n=200)
+    classes = (OBSERVED, MAR, MAR, MAR, MAR, MCAR)
+    seen = set()
+    for s in range(40):
+        res = compose_mixed_missingness(raw, classes, RNGState(seed=s), mar_diverse=True)
+        seen.update(res.mar_subtypes.values())
+    assert len(seen) >= 4, f"diverse MAR regime collapsed to {seen}"
+
+
+def test_diverse_mar_deterministic_under_same_seed():
+    raw = _make_raw()
+    classes = (OBSERVED, MAR, MAR, MNAR, MCAR, MAR)
+    a = compose_mixed_missingness(raw, classes, RNGState(seed=7), mar_diverse=True)
+    b = compose_mixed_missingness(raw, classes, RNGState(seed=7), mar_diverse=True)
+    assert a.mar_subtypes == b.mar_subtypes
+    assert torch.equal(a.observed.r, b.observed.r)
+
+
+def test_full_diversity_both_mar_and_mnar():
+    """Stage 5 regime: diverse MAR AND diverse MNAR coexist across columns in one dataset."""
+    raw = _make_raw(n=300)
+    classes = (OBSERVED, MAR, MNAR, MAR, MCAR, MNAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=5),
+                                    mar_diverse=True, mnar_diverse=True)
+    from lacuna.data.mar_column_pool import MAR_SUBTYPES
+    from lacuna.data.mnar_column_pool import MNAR_SUBTYPES
+    assert set(res.mar_subtypes.keys()) == {1, 3}
+    assert set(res.mnar_subtypes.keys()) == {2, 5}
+    assert all(v in MAR_SUBTYPES for v in res.mar_subtypes.values())
+    assert all(v in MNAR_SUBTYPES for v in res.mnar_subtypes.values())
+    for j in (1, 2, 3, 5):
+        assert res.per_column_miss_rate[j] > 0.0
