@@ -1,4 +1,11 @@
-"""MNAR threshold/censoring generators."""
+"""MNAR threshold/censoring generators.
+
+Every generator here accepts an optional `target_col_idx` param (in addition to its documented
+params). When set, the per-column censoring rule is applied to EXACTLY that one column (negative
+indices wrap from the end, matching `self_censoring.MNARLogistic`); when absent, behaviour is
+unchanged — a random `affected_frac` fraction of columns. This lets diverse MNAR subtypes be
+spliced into per-column mechanism mixtures (ADR-0006). See `_affected_cols.resolve_affected_cols`.
+"""
 
 from typing import Tuple
 import torch
@@ -8,6 +15,7 @@ from lacuna.core.types import MNAR
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from ..base_data import sample_gaussian
+from ._affected_cols import resolve_affected_cols
 
 
 class MNARThresholdLeft(Generator):
@@ -32,9 +40,9 @@ class MNARThresholdLeft(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         percentile = self.params.get("percentile", 70)
         miss_prob = self.params.get("miss_prob", 0.7)
@@ -98,9 +106,9 @@ class MNARThresholdRight(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         percentile = self.params.get("percentile", 30)
         miss_prob = self.params.get("miss_prob", 0.7)
@@ -148,9 +156,9 @@ class MNARThresholdTwoSided(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         lower_pct = self.params.get("lower_percentile", 20)
         upper_pct = self.params.get("upper_percentile", 80)
@@ -200,9 +208,9 @@ class MNARSoftThreshold(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         percentile = self.params.get("percentile", 70)
         steepness = self.params.get("steepness", 3.0)
@@ -259,9 +267,9 @@ class MNARMultiThreshold(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         percentiles = self.params["percentiles"]
         miss_probs = self.params["miss_probs"]
@@ -309,9 +317,9 @@ class MNARQuantile70(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         miss_prob = self.params.get("miss_prob", 0.7)
 
@@ -353,9 +361,9 @@ class MNARQuantile80(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         miss_prob = self.params.get("miss_prob", 0.7)
 
@@ -397,9 +405,9 @@ class MNARQuantile90(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         miss_prob = self.params.get("miss_prob", 0.7)
 
@@ -445,9 +453,10 @@ class MNARColumnSpecificThreshold(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
+        n_affected = len(affected_cols)
 
         pct_range = self.params.get("percentile_range", [60, 90])
         miss_prob = self.params.get("miss_prob", 0.7)

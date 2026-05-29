@@ -1,4 +1,11 @@
-"""MNAR detection limit generators (lab assay-style)."""
+"""MNAR detection limit generators (lab assay-style).
+
+Every generator here accepts an optional `target_col_idx` param (in addition to its documented
+params). When set, the detection-limit rule is applied to EXACTLY that one column (negative
+indices wrap from the end, matching `self_censoring.MNARLogistic`); when absent, behaviour is
+unchanged — a random `affected_frac` fraction of columns. This lets diverse MNAR subtypes be
+spliced into per-column mechanism mixtures (ADR-0006). See `_affected_cols.resolve_affected_cols`.
+"""
 
 from typing import Tuple
 import torch
@@ -8,6 +15,7 @@ from lacuna.core.types import MNAR
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from ..base_data import sample_gaussian
+from ._affected_cols import resolve_affected_cols
 
 
 class MNARDetectionLower(Generator):
@@ -28,9 +36,9 @@ class MNARDetectionLower(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         det_pct = self.params.get("detection_percentile", 15)
 
@@ -73,9 +81,9 @@ class MNARDetectionUpper(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         det_pct = self.params.get("detection_percentile", 85)
 
@@ -118,9 +126,9 @@ class MNARDetectionBoth(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         lo_pct = self.params.get("lower_percentile", 10)
         hi_pct = self.params.get("upper_percentile", 90)
