@@ -13,6 +13,16 @@ posterior probability distribution over three mechanism classes:
 This is a diagnostic problem, not an imputation problem. The output is a
 dataset-level label with calibrated uncertainty, not per-cell predictions.
 
+> **Document status — updated 2026-05-29.** This file describes the **base-Lacuna
+> Experiment-10** architecture: **16 missingness features / 83-dim MoE gate**. That is the
+> dissertation's final general-tabular model (run `RUN-054`, tagged `v1.0-canonical`, commit
+> `e3f8547`) — *not* what current code builds. April's ADR-0001/0004 removed the point-biserial
+> and distributional feature groups and the cached Little's slot and added value-conditional
+> (SMD) features, so the **current default gate is 10 features / 77-dim**
+> (`lacuna/data/missingness_features.py`); ADR-0005 then added the survey-specialised models.
+> Consequently **current code cannot load the RUN-054 checkpoint** (gate-dimension mismatch).
+> Read the feature, gate, and performance figures below as the *dissertation* configuration.
+
 ---
 
 ## Data Flow
@@ -302,7 +312,7 @@ record of what was run, with what config, and what it achieved.
 
 ---
 
-## Active Configuration (`semisynthetic_full.yaml`)
+## Configuration — dissertation model (Experiment 10, `semisynthetic_full.yaml`)
 
 | Parameter | Value |
 |---|---|
@@ -325,10 +335,13 @@ record of what was run, with what config, and what it achieved.
 
 ---
 
-## Current Performance
+## Performance — dissertation model (Experiment 10)
 
-Best run: RUN-054 (`lacuna_semisyn_20260329_032848`)
+RUN-054 (`lacuna_semisyn_20260329_032848`), tagged `v1.0-canonical`.
 Calibrated checkpoint, T ≈ 1.96, 800 eval samples across 7 held-out datasets.
+This is the 16-feature dissertation model; **current code (10-feature gate) cannot load it.**
+A current-code general baseline retrained for the column-level experiment (RUN-071) scores
+~79–82% / ECE 0.056 — comparable, not identical.
 
 | Metric | Value |
 |---|---|

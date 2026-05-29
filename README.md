@@ -357,6 +357,8 @@ An approximation of Little's (1988) MCAR test statistic, which tests the null hy
 
 These 16 features are concatenated with the evidence vector and the reconstruction errors to form the input to the MoE gating network. They provide a "cheat sheet" of summary statistics that complement the learned evidence vector.
 
+> **Note (2026-05-29):** the 16-feature set above is the *dissertation-era* configuration (base Lacuna, Experiment 10 / RUN-054). The **current default is 10 features**: the point-biserial and distributional groups were removed (ADR-0001), the cached Little's slot was dropped from the default (ADR-0004), and value-conditional (SMD) features were added (2026-04-26). The live set is `missing-rate stats (4) + cross-column correlations (3) + value-conditional SMD (3)` → a 77-dim gate; see `lacuna/data/missingness_features.py`. Current code therefore **cannot load the 16-feature RUN-054 checkpoint**.
+
 ---
 
 ### Mixture of Experts
