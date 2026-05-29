@@ -207,3 +207,34 @@ above as non-identifiable in principle — not merely hard — and is deliberate
 - Real-data anchors and identifiability bound: `lacuna_survey/anchors.py`.
 - Output-schema stability posture: `ROADMAP.md` §2.2.
 - Predecessor: `docs/decisions/0005-lacuna-survey-iteration-arc.md`.
+
+## Correction (2026-05-29) — control arm and the v1.0 tag
+
+The pre-registration above named **RUN-054 as the control arm** and assumed the tagged
+`v1.0-canonical` code could load it. Both points were wrong, discovered when Stage 0 began:
+
+- RUN-054's MoE gate is **83-dim** (64 evidence + 3 reconstruction + **16** missingness
+  features). Current code builds a **77-dim** gate (**10** features): April's ADR-0001 and
+  ADR-0004 *deleted* the point-biserial and distributional feature groups, and the deleted
+  code cannot be reconstructed. `load_state_dict(RUN-054)` therefore **fails** under current
+  code. The only checkpoints current code can load are the survey-specialised models
+  (`lacuna_survey_v4…v12`).
+- RUN-054 **is** the dissertation's final base-Lacuna model — **Experiment 10** (Exp-9
+  checkpoint + temperature scaling T=1.96; 81.5% overall accuracy, ECE ~0.037). Its code is
+  commit **e3f8547** (2026-03-29, the 16-feature era). `v1.0-canonical` was **re-pointed**
+  from `ebae77a` to `e3f8547` so the tag marks the actual dissertation model.
+
+The dissertation commit (March) also predates two later, material changes: the
+`_zscore_columns` predictor scaling that fixed a generator-saturation bug (41/116 generators
+degenerated on real data), and the value-conditional/SMD features added specifically to aid
+MAR-vs-MNAR discrimination — both introduced in `d4691cb` (2026-04-26).
+
+**Decision (user, 2026-05-29):** the column-level experiment builds on **current code** (the
+bug-fixed, SMD-equipped line), NOT the March dissertation code. The Stage 0 **control arm is a
+freshly-retrained general-tabular baseline** trained with current code on
+`configs/training/semisynthetic_full.yaml` (run name `stage0_general_baseline`) — the
+current-code analogue of RUN-054. RUN-054 / `v1.0-canonical` (`e3f8547`) remains the frozen
+**dissertation reference**, not the live experimental control.
+
+Read every "control arm = RUN-054 / v1.0-canonical" reference above accordingly: the live
+control is the current-code general baseline; RUN-054 is the historical dissertation anchor.
