@@ -1,4 +1,16 @@
-"""MNAR sample selection generators."""
+"""MNAR sample selection generators.
+
+Every generator here accepts an optional `target_col_idx` param: when set, missingness is
+confined to EXACTLY that one column (negative indices wrap from the end); when absent, behaviour
+is unchanged. The per-affected-column families (Truncation/Berkson/Volunteer/CompetingEvents) use
+`resolve_affected_cols`; the sequential progressive-dropout family (Attrition) computes its joint
+mask first and then `restrict_to_target_col`s it. This lets these subtypes be spliced into
+per-column mechanism mixtures (ADR-0006). NOTE on label honesty: Truncation and Berkson select on
+*other* columns / row aggregates, so a single targeted column's missingness is driven by other
+values — closer to MAR than MNAR per-column. The diverse MNAR *pool* (`mnar_column_pool`) therefore
+draws only the own-value selection subtypes (Volunteer, CompetingEvents); the targeting capability
+is added uniformly here, but pool membership is curated for clean per-column MNAR labels.
+"""
 
 from typing import Tuple
 import torch
@@ -8,6 +20,7 @@ from lacuna.core.types import MNAR
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from ..base_data import sample_gaussian
+from ._affected_cols import resolve_affected_cols, restrict_to_target_col
 
 
 class MNARTruncation(Generator):
@@ -33,10 +46,9 @@ class MNARTruncation(Generator):
         sel_var = self.params.get("selection_variable", 0) % d
         sel_threshold = self.params.get("selection_threshold", 40)
         miss_prob = self.params.get("miss_prob", 0.7)
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         # Rows below threshold on selection variable
         threshold_val = torch.quantile(X[:, sel_var], sel_threshold / 100.0)
@@ -82,10 +94,9 @@ class MNARBerkson(Generator):
         R = torch.ones(n, d, dtype=torch.bool)
 
         selection_strength = self.params.get("selection_strength", 0.5)
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         # Selection probability based on row sum
         row_sums = X.sum(dim=1)
@@ -131,10 +142,9 @@ class MNARVolunteer(Generator):
         R = torch.ones(n, d, dtype=torch.bool)
 
         volunteer_tendency = self.params.get("volunteer_tendency", 0.5)
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         for col in affected_cols:
             vals = X[:, col]
@@ -203,6 +213,11 @@ class MNARAttrition(Generator):
             dropped = dropped | new_drops
             R[new_drops, j] = False
 
+        # Per-column targeting (ADR-0006): confine the sequential dropout to one column when
+        # requested. No-op by default. (Attrition is sequence-based; a single-column projection
+        # is supported for API uniformity but excluded from the diverse MNAR pool — see module doc.)
+        R = restrict_to_target_col(R, self.params, d)
+
         if R.sum() == 0:
             R[0, 0] = True
 
@@ -241,10 +256,9 @@ class MNARCompetingEvents(Generator):
 
         event_threshold = self.params.get("event_threshold", 80)
         event_prob = self.params.get("event_prob", 0.6)
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         for col in affected_cols:
             vals = X[:, col]

@@ -1,4 +1,13 @@
-"""MNAR social desirability generators."""
+"""MNAR social desirability generators.
+
+The own-value cell-level families (UnderReport / OverReport / NonLinearSocial) accept an optional
+`target_col_idx`: when set, the desirability rule applies to EXACTLY that column (negative indices
+wrap); when absent, behaviour is unchanged. ModuleRefusal is a battery mechanism (a block of
+columns refused together); under `target_col_idx` it collapses to a one-item module — its own
+standardized value drives refusal, a genuine per-column MNAR but redundant with self-censoring, so
+it is given the capability for API uniformity but is excluded from the diverse MNAR pool
+(`mnar_column_pool`). See `_affected_cols`.
+"""
 
 from typing import Tuple
 import torch
@@ -8,6 +17,7 @@ from lacuna.core.types import MNAR
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from ..base_data import sample_gaussian
+from ._affected_cols import resolve_affected_cols, _resolve_single_target
 
 
 class MNARUnderReport(Generator):
@@ -29,9 +39,9 @@ class MNARUnderReport(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         threshold_pct = self.params.get("threshold_percentile", 75)
         under_report_prob = self.params.get("under_report_prob", 0.6)
@@ -78,9 +88,9 @@ class MNAROverReport(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         threshold_pct = self.params.get("threshold_percentile", 25)
         over_report_prob = self.params.get("over_report_prob", 0.6)
@@ -127,9 +137,9 @@ class MNARNonLinearSocial(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         center = self.params.get("center_value", 0.0)
         sensitivity = self.params.get("sensitivity", 1.0)
@@ -212,10 +222,18 @@ class MNARModuleRefusal(Generator):
         demo_strength = float(self.params.get("demo_strength", 0.0))
         direction = str(self.params.get("direction", "high"))
 
-        n_module = max(1, min(d - 1, int(round(d * module_frac))))
-        perm = rng.shuffle_indices(d)
-        module_cols = perm[:n_module]
-        non_module_cols = perm[n_module:]
+        if "target_col_idx" in self.params:
+            # Per-column targeting (ADR-0006): collapse the module to the single targeted column,
+            # so refusal depends on that column's own standardized value. Excluded from the pool
+            # (redundant with self-censoring) but supported for API uniformity.
+            target = _resolve_single_target(self.params, d)
+            module_cols = torch.tensor([target], dtype=torch.long)
+            non_module_cols = torch.tensor([c for c in range(d) if c != target], dtype=torch.long)
+        else:
+            n_module = max(1, min(d - 1, int(round(d * module_frac))))
+            perm = rng.shuffle_indices(d)
+            module_cols = perm[:n_module]
+            non_module_cols = perm[n_module:]
 
         # Latent score per row: standardized mean of module-column values.
         module_vals = X[:, module_cols]

@@ -1,4 +1,13 @@
-"""MNAR self-censoring and logistic generators."""
+"""MNAR self-censoring and logistic generators.
+
+The self-censoring family (high/low/extreme/weak/strong, value-dependent-strength,
+column-specific, demographic-dependent) accepts an optional `target_col_idx` param: when set,
+the self-censoring rule applies to EXACTLY that one column (negative indices wrap from the end);
+when absent, behaviour is unchanged — a random `affected_frac` fraction of columns. This lets
+the genuinely-per-column (own-value) self-censoring subtypes be spliced into per-column
+mechanism mixtures (ADR-0006). `MNARLogistic` already targeted a single column directly. See
+`_affected_cols.resolve_affected_cols`.
+"""
 
 from typing import Tuple
 import torch
@@ -8,6 +17,7 @@ from lacuna.core.types import MNAR
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from ..base_data import sample_gaussian
+from ._affected_cols import resolve_affected_cols
 
 
 class MNARLogistic(Generator):
@@ -177,10 +187,9 @@ class MNARSelfCensorHigh(Generator):
 
         beta0 = self.params["beta0"]
         beta1 = self.params["beta1"]
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         R = torch.ones(n, d, dtype=torch.bool)
 
@@ -251,10 +260,9 @@ class MNARSelfCensorLow(Generator):
         n, d = X.shape
         beta0 = self.params["beta0"]
         beta1 = self.params["beta1"]
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         R = torch.ones(n, d, dtype=torch.bool)
 
@@ -307,10 +315,9 @@ class MNARSelfCensorExtreme(Generator):
         n, d = X.shape
         beta0 = self.params["beta0"]
         beta_q = self.params["beta_quadratic"]
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         R = torch.ones(n, d, dtype=torch.bool)
 
@@ -370,10 +377,9 @@ class MNARSelfCensorWeak(Generator):
         n, d = X.shape
         beta0 = self.params["beta0"]
         beta1 = self.params["beta1"]
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         R = torch.ones(n, d, dtype=torch.bool)
 
@@ -430,10 +436,9 @@ class MNARSelfCensorStrong(Generator):
         n, d = X.shape
         beta0 = self.params["beta0"]
         beta1 = self.params["beta1"]
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         R = torch.ones(n, d, dtype=torch.bool)
 
@@ -490,10 +495,9 @@ class MNARValueDependentStrength(Generator):
         beta0 = self.params["beta0"]
         beta1_low = self.params["beta1_low"]
         beta1_high = self.params["beta1_high"]
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         R = torch.ones(n, d, dtype=torch.bool)
 
@@ -543,9 +547,10 @@ class MNARColumnSpecificCensor(Generator):
 
     def _compute_missingness(self, X: torch.Tensor, rng: RNGState) -> torch.Tensor:
         n, d = X.shape
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
+        n_affected = len(affected_cols)
 
         b0_range = self.params.get("beta0_range", [-1.0, 1.0])
         b1_range = self.params.get("beta1_range", [0.5, 3.0])
@@ -609,10 +614,9 @@ class MNARDemographicDependent(Generator):
         n, d = X.shape
         n_groups = self.params["n_groups"]
         beta_per_group = self.params["beta_per_group"]
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         # Assign rows to groups
         group_assignments = rng.randint(0, n_groups, (n,))

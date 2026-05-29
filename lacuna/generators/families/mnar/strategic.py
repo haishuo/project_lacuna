@@ -1,4 +1,12 @@
-"""MNAR strategic non-response generators."""
+"""MNAR strategic non-response generators.
+
+Gaming / Privacy / Competitive all censor based on a column's OWN value (near an incentive
+threshold, above a privacy percentile, near a benchmark). Each accepts an optional
+`target_col_idx`: when set, the rule applies to EXACTLY that column (negative indices wrap); when
+absent, behaviour is unchanged — a random `affected_frac` fraction of columns. These are genuine
+per-column MNAR subtypes and are included in the diverse MNAR pool (`mnar_column_pool`). See
+`_affected_cols.resolve_affected_cols`.
+"""
 
 from typing import Tuple
 import torch
@@ -8,6 +16,7 @@ from lacuna.core.types import MNAR
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from ..base_data import sample_gaussian
+from ._affected_cols import resolve_affected_cols
 
 
 class MNARGaming(Generator):
@@ -36,9 +45,9 @@ class MNARGaming(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         threshold = self.params["incentive_threshold"]
         radius = self.params["gaming_radius"]
@@ -85,9 +94,9 @@ class MNARPrivacy(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         privacy_threshold = self.params.get("privacy_threshold", 80)
         miss_prob = self.params.get("miss_prob", 0.7)
@@ -141,9 +150,9 @@ class MNARCompetitive(Generator):
         n, d = X.shape
         R = torch.ones(n, d, dtype=torch.bool)
 
-        affected_frac = self.params.get("affected_frac", 0.5)
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         benchmark = self.params["benchmark_value"]
         radius = self.params["competitive_radius"]

@@ -3,6 +3,14 @@
 The key pattern: a latent (unobserved) factor Z drives both the data X
 and the missingness R. Because Z is unobserved, the missingness is MNAR
 (it depends on values that are themselves affected by the latent).
+
+Each family's `apply_to` accepts an optional `target_col_idx`: when set, the latent-driven
+missingness is confined to EXACTLY that one column (others forced observed); when absent,
+behaviour is unchanged. This is added for registry uniformity (ADR-0006). NOTE: `apply_to`
+approximates the unobserved latent as the row mean of X, so a single targeted column's
+missingness depends on the row's other observed values — closer to MAR than MNAR per column.
+The latent families are therefore EXCLUDED from the diverse MNAR pool (`mnar_column_pool`); the
+capability exists so the registry is uniformly per-column-targetable. See `_affected_cols`.
 """
 
 from typing import Tuple
@@ -13,6 +21,7 @@ from lacuna.core.types import MNAR
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from ..base_data import sample_gaussian
+from ._affected_cols import restrict_to_target_col
 
 
 class MNARLatentHealth(Generator):
@@ -75,6 +84,11 @@ class MNARLatentHealth(Generator):
         P_miss = torch.sigmoid(logits)
         R = rng.rand(n, d) >= P_miss
 
+        # Per-column targeting (ADR-0006): confine latent-driven missingness to one column when
+        # requested. No-op by default → bit-identical. (Latent families are excluded from the
+        # diverse MNAR pool; see module docstring.)
+        R = restrict_to_target_col(R, self.params, d)
+
         if R.sum() == 0:
             R[0, 0] = True
 
@@ -132,6 +146,11 @@ class MNARLatentSES(Generator):
         logits = Z_approx @ miss_loadings
         P_miss = torch.sigmoid(logits)
         R = rng.rand(n, d) >= P_miss
+
+        # Per-column targeting (ADR-0006): confine latent-driven missingness to one column when
+        # requested. No-op by default → bit-identical. (Latent families are excluded from the
+        # diverse MNAR pool; see module docstring.)
+        R = restrict_to_target_col(R, self.params, d)
 
         if R.sum() == 0:
             R[0, 0] = True
@@ -191,6 +210,11 @@ class MNARLatentMotivation(Generator):
         P_miss = torch.sigmoid(logits)
         R = rng.rand(n, d) >= P_miss
 
+        # Per-column targeting (ADR-0006): confine latent-driven missingness to one column when
+        # requested. No-op by default → bit-identical. (Latent families are excluded from the
+        # diverse MNAR pool; see module docstring.)
+        R = restrict_to_target_col(R, self.params, d)
+
         if R.sum() == 0:
             R[0, 0] = True
 
@@ -249,6 +273,11 @@ class MNARLatentMeasurementError(Generator):
         logits = Z_approx @ miss_loadings
         P_miss = torch.sigmoid(logits)
         R = rng.rand(n, d) >= P_miss
+
+        # Per-column targeting (ADR-0006): confine latent-driven missingness to one column when
+        # requested. No-op by default → bit-identical. (Latent families are excluded from the
+        # diverse MNAR pool; see module docstring.)
+        R = restrict_to_target_col(R, self.params, d)
 
         if R.sum() == 0:
             R[0, 0] = True
@@ -332,6 +361,11 @@ class MNARLatentOrthogonal(Generator):
         logits = Z_approx @ miss_loadings
         P_miss = torch.sigmoid(logits)
         R = rng.rand(n, d) >= P_miss
+
+        # Per-column targeting (ADR-0006): confine latent-driven missingness to one column when
+        # requested. No-op by default → bit-identical. (Latent families are excluded from the
+        # diverse MNAR pool; see module docstring.)
+        R = restrict_to_target_col(R, self.params, d)
 
         if R.sum() == 0:
             R[0, 0] = True
@@ -435,6 +469,11 @@ class MNARLatentCorrelated(Generator):
         logits = Z @ miss_loadings
         P_miss = torch.sigmoid(logits)
         R = rng.rand(n, d) >= P_miss
+
+        # Per-column targeting (ADR-0006): confine latent-driven missingness to one column when
+        # requested. No-op by default → bit-identical. (Latent families are excluded from the
+        # diverse MNAR pool; see module docstring.)
+        R = restrict_to_target_col(R, self.params, d)
 
         if R.sum() == 0:
             R[0, 0] = True

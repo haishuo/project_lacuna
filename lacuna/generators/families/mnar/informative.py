@@ -1,4 +1,13 @@
-"""MNAR informative observation generators."""
+"""MNAR informative observation generators.
+
+Each generator accepts an optional `target_col_idx`: when set, missingness is confined to EXACTLY
+that one column (negative indices wrap); when absent, behaviour is unchanged. SymptomTriggered
+(own |value|) is a genuine per-column MNAR and is pooled. RiskBasedMonitoring (row-abs-sum),
+OutcomeDependent (another column drives missingness) and AdaptiveSampling (per-column variance →
+within-column-constant rate, i.e. MCAR-like per column) are NOT clean per-column MNAR when
+restricted to one column, so they are given the targeting capability for API uniformity but are
+excluded from the diverse MNAR pool (`mnar_column_pool`). See `_affected_cols`.
+"""
 
 from typing import Tuple
 import torch
@@ -8,6 +17,7 @@ from lacuna.core.types import MNAR
 from lacuna.generators.base import Generator
 from lacuna.generators.params import GeneratorParams
 from ..base_data import sample_gaussian
+from ._affected_cols import resolve_affected_cols, _resolve_single_target
 
 
 class MNARSymptomTriggered(Generator):
@@ -35,10 +45,9 @@ class MNARSymptomTriggered(Generator):
 
         symptom_threshold = self.params.get("symptom_threshold", 75)
         trigger_prob = self.params.get("trigger_prob", 0.6)
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         for col in affected_cols:
             vals = X[:, col].abs()
@@ -94,10 +103,9 @@ class MNARRiskBasedMonitoring(Generator):
         risk_threshold = self.params.get("risk_threshold", 70)
         monitoring_boost = self.params.get("monitoring_boost", 0.5)
         base_miss_prob = self.params.get("base_miss_prob", 0.5)
-        affected_frac = self.params.get("affected_frac", 0.5)
-
-        n_affected = max(1, int(d * affected_frac))
-        affected_cols = rng.choice(d, size=n_affected, replace=False)
+        # Affected columns: random fraction (legacy) or a single targeted column when
+        # `target_col_idx` is set (per-column mixtures; ADR-0006). Default behaviour unchanged.
+        affected_cols = resolve_affected_cols(self.params, d, rng)
 
         # Risk score per row = sum of absolute values
         risk_scores = X.abs().sum(dim=1)
@@ -151,7 +159,11 @@ class MNARAdaptiveSampling(Generator):
         adaptation_rate = self.params.get("adaptation_rate", 1.0)
         baseline_prob = self.params.get("baseline_prob", 0.0)
 
-        for col in range(d):
+        # Default: every column. Targeted (ADR-0006): only the requested column. Excluded from the
+        # pool (the per-column rate is constant across rows → MCAR-like) but supported for API
+        # uniformity. Default path iterates range(d) unchanged → bit-identical.
+        cols = [_resolve_single_target(self.params, d)] if "target_col_idx" in self.params else range(d)
+        for col in cols:
             col_std = X[:, col].std()
             logit = -adaptation_rate * col_std + baseline_prob
             p_missing = torch.sigmoid(logit)
@@ -209,13 +221,23 @@ class MNAROutcomeDependent(Generator):
         outcome_col = self.params.get("outcome_col", 0) % d
         affected_frac = self.params.get("affected_frac", 0.5)
 
-        # Select affected columns (excluding the outcome column)
-        other_cols = [c for c in range(d) if c != outcome_col]
-        n_affected = max(1, int(len(other_cols) * affected_frac))
-        if n_affected > len(other_cols):
-            n_affected = len(other_cols)
-        affected_cols = rng.choice(len(other_cols), size=n_affected, replace=False)
-        affected_cols = [other_cols[i] for i in affected_cols]
+        # Select affected columns (excluding the outcome column).
+        if "target_col_idx" in self.params:
+            # Per-column targeting (ADR-0006): the outcome still drives missingness, now confined
+            # to the single targeted column. If the target IS the outcome, shift the outcome to a
+            # neighbour so the cross-column dependence is preserved. Excluded from the pool (the
+            # missingness is driven by ANOTHER column → MAR-adjacent per column) but supported here.
+            target = _resolve_single_target(self.params, d)
+            if target == outcome_col:
+                outcome_col = (outcome_col + 1) % d
+            affected_cols = [target]
+        else:
+            other_cols = [c for c in range(d) if c != outcome_col]
+            n_affected = max(1, int(len(other_cols) * affected_frac))
+            if n_affected > len(other_cols):
+                n_affected = len(other_cols)
+            affected_cols = rng.choice(len(other_cols), size=n_affected, replace=False)
+            affected_cols = [other_cols[i] for i in affected_cols]
 
         # Outcome drives missingness in other columns
         outcome_vals = X[:, outcome_col]
