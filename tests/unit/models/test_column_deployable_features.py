@@ -87,3 +87,31 @@ def test_skew_detects_asymmetry():
     rm = torch.ones(B, R, dtype=torch.bool); cm = torch.ones(B, C, dtype=torch.bool)
     f = per_column_deployable_features(_tokens(values, is_obs), rm, cm)
     assert float(f[0, 1, 1]) > float(f[0, 0, 1])  # robust_skew: skewed col > symmetric col
+
+
+def test_signed_skew_direction():
+    """signed_skew (index 3) captures the DIRECTION of asymmetry."""
+    g = torch.Generator().manual_seed(9)
+    B, R = 1, 300
+    right = torch.randn(B, R, 1, generator=g).abs()    # mass low, tail high → positive skew
+    left = -torch.randn(B, R, 1, generator=g).abs()    # mass high, tail low → negative skew
+    values = torch.cat([right, left], dim=2)
+    is_obs = torch.ones(B, R, 2, dtype=torch.bool)
+    rm = torch.ones(B, R, dtype=torch.bool); cm = torch.ones(B, 2, dtype=torch.bool)
+    f = per_column_deployable_features(_tokens(values, is_obs), rm, cm)
+    assert float(f[0, 0, 3]) > 0.0 > float(f[0, 1, 3])  # right-skew > 0 > left-skew
+
+
+def test_smd_detects_mar():
+    """smd_to_others (index 4) is high when a column's missingness tracks another column."""
+    g = torch.Generator().manual_seed(11)
+    B, R = 1, 400
+    col0 = torch.randn(B, R, generator=g)              # predictor, always observed
+    values = torch.stack([col0, torch.randn(B, R, generator=g),
+                          torch.randn(B, R, generator=g)], dim=-1)  # [B,R,3]
+    is_obs = torch.ones(B, R, 3, dtype=torch.bool)
+    is_obs[0, :, 1] = col0[0] <= 0.0                   # col1 missing where col0 > 0 (MAR on col0)
+    is_obs[0, :, 2] = torch.rand(R, generator=g) > 0.5  # col2 missing at random
+    rm = torch.ones(B, R, dtype=torch.bool); cm = torch.ones(B, 3, dtype=torch.bool)
+    f = per_column_deployable_features(_tokens(values, is_obs), rm, cm)
+    assert float(f[0, 1, 4]) > float(f[0, 2, 4])  # MAR column's SMD > random column's SMD

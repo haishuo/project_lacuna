@@ -14,6 +14,10 @@ so scale-dependent features would be uninformative across datasets):
   - missing_rate:    fraction missing among valid rows.
   - robust_skew:     |mean - median| / std of observed values (truncation skews this).
   - excess_kurtosis: m4 / var^2 - 3 of observed values (truncation reduces tail weight).
+  - signed_skew:     m3 / std^3 (DIRECTION of truncation — self-censoring is one-sided).
+  - smd_to_others:   mean over other columns k of |E[X_k | this col missing] - E[X_k | observed]|
+                     / std(X_k) — the MAR axis (does this column's missingness track other
+                     observed values?), with a minimum-group-size guard.
 
 Deterministic. Returns [B, C, N_DEPLOYABLE_FEATURES]; padding / too-few-observed columns are 0.
 """
@@ -22,7 +26,8 @@ import torch
 
 from lacuna.data.tokenization import IDX_VALUE, IDX_OBSERVED
 
-N_DEPLOYABLE_FEATURES = 3  # [missing_rate, robust_skew, excess_kurtosis]
+N_DEPLOYABLE_FEATURES = 5  # [missing_rate, robust_skew, excess_kurtosis, signed_skew, smd_to_others]
+_MIN_GROUP = 5.0  # minimum per-group sample size for the SMD-to-others feature
 
 
 def per_column_deployable_features(
@@ -57,8 +62,30 @@ def per_column_deployable_features(
     robust_skew = (mean - median).abs() / std                    # [B, C], scale-free
     m4 = (diff ** 4).sum(dim=1) / nden
     excess_kurt = m4 / (var ** 2).clamp(min=eps) - 3.0           # [B, C], scale-free
+    m3 = (diff ** 3).sum(dim=1) / nden
+    signed_skew = (m3 / (std ** 3).clamp(min=eps)).clamp(min=-10.0, max=10.0)  # [B, C], scale-free
 
-    feats = torch.stack([miss_rate, robust_skew, excess_kurt], dim=-1)  # [B, C, 3]
+    # SMD-to-others (MAR axis): does THIS column's missingness shift OTHER columns' observed means?
+    miss = (valid & ~is_obs).to(vals.dtype)                      # [B, R, C]
+    weighted = vals * obs                                        # observed X (0 elsewhere)
+    numer_miss = torch.einsum("brj,brk->bjk", miss, weighted)    # sum X_k over rows where j missing & k obs
+    denom_miss = torch.einsum("brj,brk->bjk", miss, obs)         # count thereof
+    numer_obs = torch.einsum("brj,brk->bjk", obs, weighted)      # j observed & k observed
+    denom_obs = torch.einsum("brj,brk->bjk", obs, obs)
+    mean_k_miss = numer_miss / denom_miss.clamp(min=1.0)
+    mean_k_obs = numer_obs / denom_obs.clamp(min=1.0)
+    smd_jk = (mean_k_miss - mean_k_obs).abs() / std.unsqueeze(1).clamp(min=eps)  # [B, j, k]
+    eye = torch.eye(C, dtype=torch.bool, device=vals.device).unsqueeze(0)
+    valid_pair = ((denom_miss >= _MIN_GROUP) & (denom_obs >= _MIN_GROUP) & ~eye
+                  & col_mask.unsqueeze(1) & col_mask.unsqueeze(2))
+    smd_jk = torch.where(valid_pair, smd_jk, torch.zeros_like(smd_jk))
+    smd_jk = torch.where(torch.isnan(smd_jk) | torch.isinf(smd_jk), torch.zeros_like(smd_jk), smd_jk)
+    n_pairs = valid_pair.to(vals.dtype).sum(dim=2).clamp(min=1.0)  # [B, j]
+    smd_to_others = (smd_jk.sum(dim=2) / n_pairs).clamp(min=0.0, max=10.0)  # [B, C]
+
+    feats = torch.stack(
+        [miss_rate, robust_skew, excess_kurt, signed_skew, smd_to_others], dim=-1
+    )  # [B, C, 5]
 
     # Columns with <2 observed values have undefined shape stats → zero them.
     too_few = (n_obs < 2).unsqueeze(-1)
