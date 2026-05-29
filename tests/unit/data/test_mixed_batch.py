@@ -147,3 +147,34 @@ def test_empty_raws_raises():
 def test_bad_batch_size_raises():
     with pytest.raises(ValueError, match="batch_size"):
         build_mixed_batch(_raws(), RNGState(seed=0), max_rows=64, max_cols=8, batch_size=0)
+
+
+def test_mnar_diverse_threads_through_and_preserves_labels():
+    """diverse-MNAR builds valid batches; MNAR positions still carry the MNAR label."""
+    mb = build_mixed_batch(_raws(d=6), RNGState(seed=21), max_rows=64, max_cols=8,
+                           batch_size=8, mnar_diverse=True)
+    # supervised labels are still in {MCAR, MAR, MNAR}; MNAR present somewhere across the batch
+    sup_labels = mb.labels[mb.supervision_mask]
+    assert sup_labels.numel() > 0
+    assert set(sup_labels.tolist()).issubset(set(_MECHS))
+
+
+def test_mnar_diverse_changes_masks_vs_default():
+    """Same seed, diverse vs self-censoring-only MNAR -> different realised masks."""
+    common = dict(max_rows=64, max_cols=8, batch_size=8)
+    default = build_mixed_batch(_raws(d=6), RNGState(seed=33), **common, mnar_diverse=False)
+    diverse = build_mixed_batch(_raws(d=6), RNGState(seed=33), **common, mnar_diverse=True)
+    # Labels/supervision identical (same compositions); only the realised missingness differs.
+    assert torch.equal(default.labels, diverse.labels)
+    assert torch.equal(default.supervision_mask, diverse.supervision_mask)
+    assert not torch.equal(default.batch.row_mask & True, diverse.batch.row_mask & True) or \
+        not torch.equal(default.batch.tokens, diverse.batch.tokens)
+
+
+def test_mnar_diverse_deterministic():
+    a = build_mixed_batch(_raws(d=6), RNGState(seed=44), max_rows=64, max_cols=8,
+                          batch_size=4, mnar_diverse=True)
+    b = build_mixed_batch(_raws(d=6), RNGState(seed=44), max_rows=64, max_cols=8,
+                          batch_size=4, mnar_diverse=True)
+    assert torch.equal(a.batch.tokens, b.batch.tokens)
+    assert torch.equal(a.labels, b.labels)

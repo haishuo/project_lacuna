@@ -93,8 +93,14 @@ def build_mixed_batch(
     target_miss_rate: float = 0.25,
     mar_strength: float = 1.5,
     mnar_strength: float = 1.5,
+    mnar_diverse: bool = False,
 ) -> MixedBatch:
-    """Assemble one per-column-labelled batch by sampling datasets and mixed compositions."""
+    """Assemble one per-column-labelled batch by sampling datasets and mixed compositions.
+
+    `mnar_diverse` (default False) is forwarded to `compose_mixed_missingness`: when True, MNAR
+    columns draw diverse subtypes (threshold/detection/self-censoring) instead of self-censoring
+    only. The per-column LABEL is still MNAR either way — only the realised subtype varies.
+    """
     if not raws:
         raise ValueError("raws must be non-empty")
     if batch_size < 1:
@@ -113,6 +119,7 @@ def build_mixed_batch(
             raw_sub, classes, item_rng.spawn(),
             target_miss_rate=target_miss_rate,
             mar_strength=mar_strength, mnar_strength=mnar_strength,
+            mnar_diverse=mnar_diverse,
         )
         observed_datasets.append(res.observed)
         compositions.append(res.column_classes)

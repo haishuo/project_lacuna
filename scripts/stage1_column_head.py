@@ -173,6 +173,9 @@ def main():
     ap.add_argument("--output", type=Path, default=None)
     ap.add_argument("--p-observed", type=float, default=0.25)
     ap.add_argument("--target-miss-rate", type=float, default=0.25)
+    ap.add_argument("--diverse-mnar", action="store_true",
+                    help="Stage 4 follow-up: draw MNAR columns from the full subtype pool "
+                         "(threshold/detection/self-censoring) instead of self-censoring only")
     args = ap.parse_args()
     if args.true_recon_target:
         args.use_recon_features = True  # true-target recon implies recon features
@@ -183,7 +186,8 @@ def main():
                 n_layers=cfg.model.n_layers, n_heads=cfg.model.n_heads,
                 max_cols=cfg.data.max_cols, dropout=cfg.model.dropout)
     max_rows, max_cols = cfg.data.max_rows, cfg.data.max_cols
-    mixture_kwargs = dict(p_observed=args.p_observed, target_miss_rate=args.target_miss_rate)
+    mixture_kwargs = dict(p_observed=args.p_observed, target_miss_rate=args.target_miss_rate,
+                          mnar_diverse=args.diverse_mnar)
 
     encoder = init_encoder(args.baseline_checkpoint, dims, args.device)
 
@@ -218,6 +222,8 @@ def main():
         mode += "+recon-true" if args.true_recon_target else "+recon"
     if args.deployable_features:
         mode += "+deploy"
+    if args.diverse_mnar:
+        mode += "+diversemnar"
     print(f"Mode: {mode} | trainable params: {sum(p.numel() for p in params):,} | device: {args.device}")
 
     train_raws = load_raws(cfg.data.train_datasets, max_cols)

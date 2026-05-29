@@ -51,6 +51,7 @@ from lacuna.generators.params import GeneratorParams
 from lacuna.generators.families.mcar.bernoulli import MCARBernoulli
 from lacuna.generators.families.mar.simple import MARLogistic
 from lacuna.generators.families.mnar.self_censoring import MNARLogistic
+from lacuna.data.mnar_column_pool import sample_mnar_column_generator
 from lacuna.data.ingestion import RawDataset
 # Reuse the EXACT predictor-view scaling the training path uses, so generator
 # saturation behaviour matches apply_missingness. Intentional, explicit coupling.
@@ -74,12 +75,17 @@ class MixedMissingnessResult:
         per_column_miss_rate: length-d tuple of the ACTUAL missing fraction realised
             in each column (reported, never silently assumed — Coding Bible Rule 1).
         mar_predictors: {target_col -> predictor_col} for every MAR column.
+        mnar_subtypes: {target_col -> subtype_name} for every MNAR column. Always
+            "self_censoring" in the default regime; varied (threshold/detection/...) when
+            `mnar_diverse=True`. Reported so the realised MNAR subtype mix is never a
+            silent assumption (Coding Bible Rule 1).
         source_name: name of the source RawDataset.
     """
     observed: ObservedDataset
     column_classes: Tuple[int, ...]
     per_column_miss_rate: Tuple[float, ...]
     mar_predictors: Dict[int, int]
+    mnar_subtypes: Dict[int, str]
     source_name: str
 
 
@@ -136,6 +142,7 @@ def compose_mixed_missingness(
     target_miss_rate: float = 0.25,
     mar_strength: float = 1.5,
     mnar_strength: float = 1.5,
+    mnar_diverse: bool = False,
 ) -> MixedMissingnessResult:
     """Apply a per-column mixture of MCAR/MAR/MNAR mechanisms to a complete dataset.
 
@@ -148,7 +155,14 @@ def compose_mixed_missingness(
             comparable missingness amounts — controlling the miss-rate confound so the
             model's response reflects mechanism *type*, not *quantity*.
         mar_strength: Logistic slope (alpha1) coupling a MAR column to its predictor.
-        mnar_strength: Logistic slope (beta2) coupling an MNAR column to its own value.
+        mnar_strength: Logistic slope (beta2) coupling an MNAR column to its own value
+            (used only for the self-censoring subtype).
+        mnar_diverse: if False (default), every MNAR column is logistic self-censoring —
+            the original Stage 0–3 behaviour, unchanged. If True, each MNAR column draws a
+            subtype from the full per-column-targetable MNAR pool (self-censoring + threshold
+            + detection-limit families; see `mnar_column_pool`), so mixtures contain real MNAR
+            subtype diversity (ADR-0006 / Stage 4 follow-up). The drawn subtype per column is
+            recorded in the result's `mnar_subtypes`.
 
     Returns:
         MixedMissingnessResult.
@@ -167,6 +181,7 @@ def compose_mixed_missingness(
     intercept = _logit(target_miss_rate)
     R = torch.ones(n, d, dtype=torch.bool)
     mar_predictors: Dict[int, int] = {}
+    mnar_subtypes: Dict[int, str] = {}
 
     for j, cls in enumerate(column_classes):
         if cls == OBSERVED:
@@ -194,14 +209,25 @@ def compose_mixed_missingness(
             )
             r_full = gen.apply_to(Z, rng.spawn())
 
-        else:  # MNAR — pure self-censoring: missingness depends on the column's own value.
-            gen = MNARLogistic(
-                0, "mixed_mnar",
-                GeneratorParams(
-                    beta0=intercept, beta1=0.0, beta2=mnar_strength,
-                    target_col_idx=j,
-                ),
-            )
+        else:  # MNAR — missingness depends on the column's own value.
+            if mnar_diverse:
+                # Draw a diverse MNAR subtype (self-censoring / threshold / detection),
+                # each targeting THIS column at ~target_miss_rate.
+                subtype, gen = sample_mnar_column_generator(
+                    j, rng.spawn(),
+                    target_miss_rate=target_miss_rate, strength=mnar_strength,
+                )
+            else:
+                # Default Stage 0–3 regime: pure logistic self-censoring.
+                subtype = "self_censoring"
+                gen = MNARLogistic(
+                    0, "mixed_mnar",
+                    GeneratorParams(
+                        beta0=intercept, beta1=0.0, beta2=mnar_strength,
+                        target_col_idx=j,
+                    ),
+                )
+            mnar_subtypes[j] = subtype
             r_full = gen.apply_to(Z, rng.spawn())
 
         R[:, j] = r_full[:, j]
@@ -230,5 +256,6 @@ def compose_mixed_missingness(
         column_classes=tuple(column_classes),
         per_column_miss_rate=tuple(round(float(m), 4) for m in miss_rate),
         mar_predictors=mar_predictors,
+        mnar_subtypes=mnar_subtypes,
         source_name=raw.name,
     )

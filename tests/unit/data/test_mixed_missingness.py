@@ -170,3 +170,62 @@ def test_mar_requires_two_columns():
     raw = _make_raw(n=50, d=1)
     with pytest.raises(ValueError, match="d >= 2"):
         compose_mixed_missingness(raw, (MAR,), RNGState(seed=0))
+
+
+# ---------------------------------------------------------------------------
+# Diverse-MNAR regime (Stage 4 follow-up)
+# ---------------------------------------------------------------------------
+
+def test_default_mnar_is_self_censoring_only():
+    """Without mnar_diverse, every MNAR column is self-censoring (Stage 0-3 behaviour)."""
+    raw = _make_raw()
+    classes = (OBSERVED, MNAR, MNAR, MNAR, MCAR, MNAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=1))
+    assert set(res.mnar_subtypes.keys()) == {1, 2, 3, 5}
+    assert set(res.mnar_subtypes.values()) == {"self_censoring"}
+
+
+def test_diverse_mnar_records_subtype_per_mnar_column():
+    raw = _make_raw()
+    classes = (OBSERVED, MNAR, MNAR, MNAR, MCAR, MNAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=1), mnar_diverse=True)
+    # one subtype recorded per MNAR column, no others
+    assert set(res.mnar_subtypes.keys()) == {1, 2, 3, 5}
+    from lacuna.data.mnar_column_pool import MNAR_SUBTYPES
+    assert all(v in MNAR_SUBTYPES for v in res.mnar_subtypes.values())
+
+
+def test_diverse_mnar_labels_stay_mnar():
+    """The per-column CLASS is still MNAR regardless of the realised subtype."""
+    raw = _make_raw()
+    classes = (OBSERVED, MNAR, MNAR, MNAR, MCAR, MNAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=2), mnar_diverse=True)
+    assert res.column_classes == classes  # labels unchanged
+
+
+def test_diverse_mnar_columns_actually_go_missing():
+    raw = _make_raw(n=300)
+    classes = (OBSERVED, MNAR, MNAR, MNAR, MCAR, MNAR)
+    res = compose_mixed_missingness(raw, classes, RNGState(seed=3), mnar_diverse=True)
+    for j in (1, 2, 3, 5):
+        assert res.per_column_miss_rate[j] > 0.0, (j, res.per_column_miss_rate)
+
+
+def test_diverse_mnar_produces_subtype_variety_across_seeds():
+    """Across many composes, MNAR columns realise more than one subtype (not collapsed)."""
+    raw = _make_raw(n=200)
+    classes = (OBSERVED, MNAR, MNAR, MNAR, MNAR, MCAR)
+    seen = set()
+    for s in range(40):
+        res = compose_mixed_missingness(raw, classes, RNGState(seed=s), mnar_diverse=True)
+        seen.update(res.mnar_subtypes.values())
+    assert len(seen) >= 4, f"diverse regime collapsed to {seen}"
+
+
+def test_diverse_mnar_deterministic_under_same_seed():
+    raw = _make_raw()
+    classes = (OBSERVED, MNAR, MNAR, MAR, MCAR, MNAR)
+    a = compose_mixed_missingness(raw, classes, RNGState(seed=7), mnar_diverse=True)
+    b = compose_mixed_missingness(raw, classes, RNGState(seed=7), mnar_diverse=True)
+    assert a.mnar_subtypes == b.mnar_subtypes
+    assert torch.equal(a.observed.r, b.observed.r)
