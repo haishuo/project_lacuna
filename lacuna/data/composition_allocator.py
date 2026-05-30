@@ -200,7 +200,7 @@ def plan_allocation(
     rng: RNGState,
     *,
     frac_observed_range: Tuple[float, float] = (0.1, 0.35),
-    block_rate_share: float = 0.7,
+    block_rate_share: float = 0.85,
     rate_spread: float = 1.2,
     max_block_width: int = 8,
 ) -> AllocationPlan:
