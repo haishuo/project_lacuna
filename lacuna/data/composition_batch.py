@@ -30,20 +30,29 @@ from lacuna.core.types import TokenBatch
 from lacuna.data.ingestion import RawDataset
 from lacuna.data.semisynthetic import subsample_raw
 from lacuna.data.tokenization import tokenize_and_batch
+from lacuna.data.missingness_footprint import missingness_footprint, FOOTPRINT_FEATURES
 from lacuna.data.composition_target import sample_composition_target
 from lacuna.data.composition_sampler import compose_composition_missingness
+
+N_FOOTPRINT_FEATURES = len(FOOTPRINT_FEATURES)
 
 _MIN_D = 4  # the composition sampler needs >= 4 columns to host a 3-class composition
 
 
 @dataclass(frozen=True)
 class CompositionBatch:
-    """A composition-labelled batch (TokenBatch + the realised by-cell composition target)."""
+    """A composition-labelled batch (TokenBatch + the realised by-cell composition target).
+
+    `footprints` is the [B, 20] observable missingness footprint per item (or None if not requested):
+    the explicit cross-column features the encoder's pooled evidence under-represents (Stage-C
+    attribution). Computed from each item's mask + observed values — deployable (no oracle).
+    """
     batch: TokenBatch
     composition: torch.Tensor       # [B, 3] realised by-cell composition (supervised target)
     target_drawn: torch.Tensor      # [B, 3] composition drawn from the prior (analysis only)
     miss_rate: torch.Tensor         # [B] realised overall missing fraction
     source_names: Tuple[str, ...]
+    footprints: torch.Tensor = None  # [B, 20] observable footprint, or None
 
 
 def build_composition_batch(
@@ -57,6 +66,7 @@ def build_composition_batch(
     miss_rate_range: Tuple[float, float] = (0.05, 0.6),
     strength: float = 1.5,
     block_rate_share: float = 0.85,
+    with_footprints: bool = False,
 ) -> CompositionBatch:
     """Assemble one composition-labelled batch by sampling datasets and drawn compositions.
 
@@ -68,9 +78,11 @@ def build_composition_batch(
         concentration: Dirichlet concentration of the composition prior (1.0 = uniform simplex).
         miss_rate_range: overall miss-rate prior range.
         strength, block_rate_share: forwarded to the Stage-B sampler.
+        with_footprints: also compute the [B, 20] observable footprint per item (deployable
+            features for the composition head; off by default to avoid the cost when unused).
 
     Returns:
-        CompositionBatch.
+        CompositionBatch (footprints is None unless with_footprints=True).
 
     Raises:
         ValueError: on empty `raws`, batch_size < 1, or a dataset with d < 4 or d > max_cols.
@@ -88,6 +100,7 @@ def build_composition_batch(
     drawn: List[Tuple[float, float, float]] = []
     miss: List[float] = []
     names: List[str] = []
+    footprints: List[List[float]] = []
 
     for _ in range(batch_size):
         item_rng = rng.spawn()
@@ -103,6 +116,9 @@ def build_composition_batch(
         drawn.append(target.as_fractions())
         miss.append(res.realized_miss_rate)
         names.append(res.source_name)
+        if with_footprints:
+            fp = missingness_footprint(res.observed.x, res.observed.r)
+            footprints.append([fp[k] for k in FOOTPRINT_FEATURES])
 
     batch = tokenize_and_batch(observed_datasets, max_rows=max_rows, max_cols=max_cols)
     return CompositionBatch(
@@ -111,4 +127,5 @@ def build_composition_batch(
         target_drawn=torch.tensor(drawn, dtype=torch.float32),
         miss_rate=torch.tensor(miss, dtype=torch.float32),
         source_names=tuple(names),
+        footprints=torch.tensor(footprints, dtype=torch.float32) if with_footprints else None,
     )

@@ -45,18 +45,27 @@ class CompositionHead(nn.Module):
         hidden_dim: optional hidden layer; None = direct linear projection.
         n_classes: composition dimension (3 = MCAR/MAR/MNAR).
         dropout: dropout rate (only used when hidden_dim is set).
+        n_extra_features: width of optional explicit per-dataset features concatenated to the
+            evidence (e.g. the observable missingness footprint). 0 (default) = evidence only, so
+            the original behaviour is unchanged. When > 0, the extra features are BatchNorm-
+            standardised (they are heterogeneous in scale) before concatenation. This is the
+            composition-level analogue of the column arc's deployable-features path: the encoder's
+            pooled evidence misses cross-column structure that the footprint makes explicit.
     """
 
     def __init__(self, evidence_dim: int, hidden_dim: Optional[int] = 64,
-                 n_classes: int = _N_CLASSES, dropout: float = 0.1):
+                 n_classes: int = _N_CLASSES, dropout: float = 0.1, n_extra_features: int = 0):
         super().__init__()
         self.evidence_dim = evidence_dim
         self.n_classes = n_classes
+        self.n_extra_features = n_extra_features
+        self.extra_norm = nn.BatchNorm1d(n_extra_features) if n_extra_features > 0 else None
+        in_dim = evidence_dim + n_extra_features
         if hidden_dim is None:
-            self.net = nn.Linear(evidence_dim, n_classes)
+            self.net = nn.Linear(in_dim, n_classes)
         else:
             self.net = nn.Sequential(
-                nn.Linear(evidence_dim, hidden_dim),
+                nn.Linear(in_dim, hidden_dim),
                 nn.GELU(),
                 nn.Dropout(dropout),
                 nn.Linear(hidden_dim, n_classes),
@@ -67,10 +76,19 @@ class CompositionHead(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-    def forward(self, evidence: torch.Tensor) -> torch.Tensor:
-        """Evidence [B, evidence_dim] -> Dirichlet concentration alpha [B, n_classes] (alpha_k >= 1)."""
-        logits = self.net(evidence)
-        return torch.nn.functional.softplus(logits) + 1.0
+    def forward(self, evidence: torch.Tensor, extra: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Evidence [B, evidence_dim] (+ optional extra [B, n_extra_features]) -> alpha [B, n_classes].
+
+        Returns Dirichlet concentrations alpha_k >= 1 (softplus + 1).
+        """
+        if self.n_extra_features > 0:
+            if extra is None or extra.shape[-1] != self.n_extra_features:
+                raise ValueError(f"head expects extra features of width {self.n_extra_features}, "
+                                 f"got {None if extra is None else tuple(extra.shape)}")
+            x = torch.cat([evidence, self.extra_norm(extra)], dim=-1)
+        else:
+            x = evidence
+        return torch.nn.functional.softplus(self.net(x)) + 1.0
 
 
 def _check_alpha(alpha: torch.Tensor) -> None:

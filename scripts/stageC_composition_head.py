@@ -39,7 +39,7 @@ from lacuna.models.composition_head import (
 )
 from lacuna.training.composition_loss import dirichlet_edl_loss
 from lacuna.data.catalog import create_default_catalog
-from lacuna.data.composition_batch import build_composition_batch
+from lacuna.data.composition_batch import build_composition_batch, N_FOOTPRINT_FEATURES
 
 BASELINE = "/mnt/artifacts/project_lacuna/runs/stage0_general_baseline"
 _QUERY_THRESHOLDS = (0.33, 0.5, 0.66)   # simplex-region queries: P(f_c >= t) per class c
@@ -68,13 +68,13 @@ def init_encoder(ckpt, dims, device):
     return enc.to(device)
 
 
-def forward_alpha(encoder, head, b):
+def forward_alpha(encoder, head, b, extra=None):
     evidence = encoder(b.tokens, b.row_mask, b.col_mask)   # [B, evidence_dim]
-    return head(evidence)
+    return head(evidence, extra)
 
 
 def train_head(encoder, head, raws, *, freeze, epochs, batches_per_epoch, batch_size, max_rows,
-               max_cols, lr, kl_max, device, seed, block_rate_share):
+               max_cols, lr, kl_max, device, seed, block_rate_share, use_footprints):
     if freeze:
         for p in encoder.parameters():
             p.requires_grad = False
@@ -93,9 +93,11 @@ def train_head(encoder, head, raws, *, freeze, epochs, batches_per_epoch, batch_
         ep_loss = 0.0
         for _ in range(batches_per_epoch):
             mb = build_composition_batch(raws, rng.spawn(), max_rows=max_rows, max_cols=max_cols,
-                                         batch_size=batch_size, block_rate_share=block_rate_share)
+                                         batch_size=batch_size, block_rate_share=block_rate_share,
+                                         with_footprints=use_footprints)
             b = mb.batch.to(device)
-            alpha = forward_alpha(encoder, head, b)
+            extra = mb.footprints.to(device) if use_footprints else None
+            alpha = forward_alpha(encoder, head, b, extra)
             loss = dirichlet_edl_loss(alpha, mb.composition.to(device), kl_weight=kl_weight)
             opt.zero_grad(); loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -105,14 +107,17 @@ def train_head(encoder, head, raws, *, freeze, epochs, batches_per_epoch, batch_
               flush=True)
 
 
-def _make_eval_set(raws, *, n_batches, batch_size, max_rows, max_cols, device, seed, block_rate_share):
+def _make_eval_set(raws, *, n_batches, batch_size, max_rows, max_cols, device, seed,
+                   block_rate_share, use_footprints):
     """Fixed held-out eval batches (same data for every ensemble member)."""
     rng = RNGState(seed=seed)
     out = []
     for _ in range(n_batches):
         mb = build_composition_batch(raws, rng.spawn(), max_rows=max_rows, max_cols=max_cols,
-                                     batch_size=batch_size, block_rate_share=block_rate_share)
-        out.append((mb.batch.to(device), mb.composition.clone()))
+                                     batch_size=batch_size, block_rate_share=block_rate_share,
+                                     with_footprints=use_footprints)
+        extra = mb.footprints.to(device) if use_footprints else None
+        out.append((mb.batch.to(device), extra, mb.composition.clone()))
     return out
 
 
@@ -125,8 +130,8 @@ def _collect_alpha(encoder, heads, eval_set):
     with torch.no_grad():
         for m, head in enumerate(heads):
             alphas = []
-            for b, comp in eval_set:
-                alphas.append(forward_alpha(encoder, head, b).cpu())
+            for b, extra, comp in eval_set:
+                alphas.append(forward_alpha(encoder, head, b, extra).cpu())
                 if m == 0:
                     realised.append(comp)
             per_model.append(torch.cat(alphas, dim=0))
@@ -196,6 +201,9 @@ def main():
     ap.add_argument("--kl-max", type=float, default=0.5, help="max EDL KL weight (annealed)")
     ap.add_argument("--eval-batches", type=int, default=40)
     ap.add_argument("--head-hidden", type=int, default=64)
+    ap.add_argument("--use-footprint-features", action="store_true",
+                    help="concatenate the 20-D observable footprint to the encoder evidence "
+                         "(deployable; Stage-C attribution: the encoder under-represents it)")
     ap.add_argument("--block-rate-share", type=float, default=0.85)
     ap.add_argument("--seed", type=int, default=20260530)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -209,6 +217,9 @@ def main():
                 max_cols=cfg.data.max_cols, dropout=cfg.model.dropout)
     max_rows, max_cols = cfg.data.max_rows, cfg.data.max_cols
     mode = "frozen-probe" if args.freeze_encoder else "fine-tune"
+    if args.use_footprint_features:
+        mode += "+footprint"
+    n_extra = N_FOOTPRINT_FEATURES if args.use_footprint_features else 0
     print(f"Mode: {mode} | ensemble {args.n_models} | device {args.device}")
 
     train_raws = load_raws(cfg.data.train_datasets, max_cols)
@@ -220,7 +231,7 @@ def main():
     for m in range(args.n_models):
         print(f"--- training head {m+1}/{args.n_models} ---", flush=True)
         head = CompositionHead(cfg.model.evidence_dim, hidden_dim=args.head_hidden,
-                               dropout=cfg.model.dropout).to(args.device)
+                               dropout=cfg.model.dropout, n_extra_features=n_extra).to(args.device)
         # Each ensemble member: own encoder copy only if fine-tuning (frozen shares the one encoder).
         enc_m = encoder
         if not args.freeze_encoder and m > 0:
@@ -228,12 +239,14 @@ def main():
         train_head(enc_m, head, train_raws, freeze=args.freeze_encoder, epochs=args.epochs,
                    batches_per_epoch=args.batches_per_epoch, batch_size=args.batch_size,
                    max_rows=max_rows, max_cols=max_cols, lr=args.lr, kl_max=args.kl_max,
-                   device=args.device, seed=args.seed + 101 * m, block_rate_share=args.block_rate_share)
+                   device=args.device, seed=args.seed + 101 * m, block_rate_share=args.block_rate_share,
+                   use_footprints=args.use_footprint_features)
         heads.append(head)
 
     eval_set = _make_eval_set(val_raws, n_batches=args.eval_batches, batch_size=args.batch_size,
                               max_rows=max_rows, max_cols=max_cols, device=args.device,
-                              seed=args.seed + 7, block_rate_share=args.block_rate_share)
+                              seed=args.seed + 7, block_rate_share=args.block_rate_share,
+                              use_footprints=args.use_footprint_features)
     alpha_per_model, realised = _collect_alpha(encoder, heads, eval_set)
     eval_rng = RNGState(seed=args.seed + 13)
 

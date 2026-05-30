@@ -5,7 +5,9 @@ import torch
 
 from lacuna.core.rng import RNGState
 from lacuna.data.ingestion import RawDataset
-from lacuna.data.composition_batch import build_composition_batch, CompositionBatch
+from lacuna.data.composition_batch import (
+    build_composition_batch, CompositionBatch, N_FOOTPRINT_FEATURES,
+)
 
 MAX_ROWS, MAX_COLS = 64, 16
 
@@ -43,6 +45,19 @@ def test_composition_is_valid_simplex():
     assert torch.allclose(mb.composition.sum(-1), torch.ones(12), atol=1e-5)
     assert bool((mb.composition >= 0).all()) and bool((mb.composition <= 1).all())
     assert torch.allclose(mb.target_drawn.sum(-1), torch.ones(12), atol=1e-5)
+
+
+def test_footprints_optional():
+    """footprints is None by default, and a [B, 20] tensor when requested (deployable features)."""
+    off = build_composition_batch(_raws(), RNGState(seed=4),
+                                  max_rows=MAX_ROWS, max_cols=MAX_COLS, batch_size=6)
+    assert off.footprints is None
+    on = build_composition_batch(_raws(), RNGState(seed=4),
+                                 max_rows=MAX_ROWS, max_cols=MAX_COLS, batch_size=6,
+                                 with_footprints=True)
+    assert on.footprints is not None
+    assert on.footprints.shape == (6, N_FOOTPRINT_FEATURES)
+    assert torch.isfinite(on.footprints).all()
 
 
 def test_miss_rate_in_range():

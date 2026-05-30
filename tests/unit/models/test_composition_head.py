@@ -35,6 +35,27 @@ def test_head_is_differentiable():
     assert ev.grad is not None and torch.isfinite(ev.grad).all()
 
 
+def test_extra_features_path():
+    """With n_extra_features>0 the head consumes evidence + explicit footprint features."""
+    head = CompositionHead(evidence_dim=64, n_extra_features=20)
+    alpha = head(torch.randn(8, 64), torch.randn(8, 20))
+    assert alpha.shape == (8, 3) and bool((alpha >= 1.0).all())
+
+
+def test_extra_features_missing_raises():
+    head = CompositionHead(evidence_dim=64, n_extra_features=20)
+    with pytest.raises(ValueError, match="expects extra features of width 20"):
+        head(torch.randn(8, 64))
+    with pytest.raises(ValueError, match="width 20"):
+        head(torch.randn(8, 64), torch.randn(8, 5))
+
+
+def test_extra_features_default_is_evidence_only():
+    """Default n_extra_features=0 keeps the evidence-only signature (extra ignored)."""
+    head = CompositionHead(evidence_dim=32, n_extra_features=0)
+    assert head(torch.randn(4, 32)).shape == (4, 3)
+
+
 # ---------------------------------------------------------------------------
 # Queries on the Dirichlet
 # ---------------------------------------------------------------------------
