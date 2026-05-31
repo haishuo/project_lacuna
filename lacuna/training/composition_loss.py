@@ -100,3 +100,34 @@ def dirichlet_edl_loss(
     alpha_tilde = 1.0 + (1.0 - target) * (alpha - 1.0)   # evidence the target does not support
     kl = kl_dirichlet_uniform(alpha_tilde).mean()
     return ce + kl_weight * kl
+
+
+def composition_hybrid_loss(
+    alpha: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    kl_weight: float = 0.0,
+    mse_weight: float = 0.0,
+) -> torch.Tensor:
+    """Evidential loss + an explicit MSE pull on the Dirichlet MEAN toward the target.
+
+    `dirichlet_edl_loss(...) + mse_weight · ||alpha/alpha0 − target||²`. The EDL/KL terms shape the
+    calibrated distribution (concentration / can't-tell mass); the MSE term directly pulls the mean
+    toward the realised composition — the point-accuracy term the Bayes-risk CE leaves slightly shrunk
+    toward uniform. Tests whether point accuracy and calibration can be had together (Stage C-v2 lead).
+
+    Args:
+        alpha, target: as in `dirichlet_edl_loss`.
+        kl_weight: EDL KL weight (>= 0).
+        mse_weight: weight on the mean-MSE term (>= 0; 0 recovers `dirichlet_edl_loss`).
+
+    Raises:
+        ValueError: on contract violations or mse_weight < 0.
+    """
+    if mse_weight < 0.0:
+        raise ValueError(f"mse_weight must be >= 0, got {mse_weight}")
+    loss = dirichlet_edl_loss(alpha, target, kl_weight=kl_weight)
+    if mse_weight > 0.0:
+        mean = alpha / alpha.sum(dim=-1, keepdim=True)
+        loss = loss + mse_weight * ((mean - target) ** 2).sum(dim=-1).mean()
+    return loss

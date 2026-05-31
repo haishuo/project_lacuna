@@ -6,6 +6,7 @@ import torch
 from lacuna.models.composition_head import composition_mean, cant_tell_mass
 from lacuna.training.composition_loss import (
     kl_dirichlet_uniform, expected_cross_entropy, dirichlet_nll, dirichlet_edl_loss,
+    composition_hybrid_loss,
 )
 
 
@@ -91,6 +92,38 @@ def test_kl_term_keeps_uncertainty_higher():
     ct_off = float(cant_tell_mass(fit(0.0)))
     ct_on = float(cant_tell_mass(fit(0.5)))
     assert ct_on > ct_off
+
+
+def test_hybrid_loss_pulls_mean_to_target():
+    """The MSE term drives the Dirichlet mean to the target more tightly than pure EDL (kl=0)."""
+    target = torch.tensor([[0.15, 0.25, 0.60]])
+    def fit(mse_w):
+        raw = torch.zeros(1, 3, requires_grad=True)
+        opt = torch.optim.Adam([raw], lr=0.05)
+        for _ in range(400):
+            opt.zero_grad()
+            a = torch.nn.functional.softplus(raw) + 1.0
+            composition_hybrid_loss(a, target, kl_weight=0.0, mse_weight=mse_w).backward()
+            opt.step()
+        a = torch.nn.functional.softplus(raw).detach() + 1.0
+        return float((a / a.sum() - target).abs().sum())
+    l1_pure = fit(0.0)
+    l1_hybrid = fit(5.0)
+    assert l1_hybrid < l1_pure, f"hybrid L1 {l1_hybrid:.3f} not below pure-EDL {l1_pure:.3f}"
+    assert l1_hybrid < 0.03
+
+
+def test_hybrid_mse_weight_zero_equals_edl():
+    alpha = torch.rand(6, 3) + 1.0
+    target = torch.softmax(torch.randn(6, 3), dim=-1)
+    assert torch.allclose(composition_hybrid_loss(alpha, target, kl_weight=0.3, mse_weight=0.0),
+                          dirichlet_edl_loss(alpha, target, kl_weight=0.3))
+
+
+def test_hybrid_negative_mse_weight_raises():
+    t = torch.tensor([[0.34, 0.33, 0.33]])
+    with pytest.raises(ValueError, match="mse_weight"):
+        composition_hybrid_loss(torch.ones(1, 3), t, mse_weight=-1.0)
 
 
 def test_gradients_finite():

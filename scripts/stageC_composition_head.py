@@ -37,7 +37,7 @@ from lacuna.models.encoder import create_encoder
 from lacuna.models.composition_head import (
     CompositionHead, composition_mean, cant_tell_mass, ensemble_alpha, prob_region,
 )
-from lacuna.training.composition_loss import dirichlet_edl_loss
+from lacuna.training.composition_loss import composition_hybrid_loss
 from lacuna.data.catalog import create_default_catalog
 from lacuna.data.composition_batch import build_composition_batch, N_FOOTPRINT_FEATURES
 
@@ -74,7 +74,8 @@ def forward_alpha(encoder, head, b, extra=None):
 
 
 def train_head(encoder, head, raws, *, freeze, epochs, batches_per_epoch, batch_size, max_rows,
-               max_cols, lr, kl_max, device, seed, block_rate_share, use_footprints, offline_corpus=0):
+               max_cols, lr, kl_max, device, seed, block_rate_share, use_footprints, offline_corpus=0,
+               mse_weight=0.0):
     """Train the head. Default = ONLINE (fresh batch each step). offline_corpus>0 = pre-generate that
     many batches ONCE and loop epochs over them (repeated passes over a fixed corpus) — the regime an
     offline-fit reference uses; closes the residual ceiling gap the online single-pass regime leaves."""
@@ -110,7 +111,8 @@ def train_head(encoder, head, raws, *, freeze, epochs, batches_per_epoch, batch_
             b = mb.batch.to(device)
             extra = mb.footprints.to(device) if use_footprints else None
             alpha = forward_alpha(encoder, head, b, extra)
-            loss = dirichlet_edl_loss(alpha, mb.composition.to(device), kl_weight=kl_weight)
+            loss = composition_hybrid_loss(alpha, mb.composition.to(device),
+                                           kl_weight=kl_weight, mse_weight=mse_weight)
             opt.zero_grad(); loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
             opt.step()
@@ -214,6 +216,8 @@ def main():
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--kl-max", type=float, default=0.5, help="max EDL KL weight (annealed)")
+    ap.add_argument("--mse-weight", type=float, default=0.0,
+                    help="weight on the MSE-on-Dirichlet-mean term (hybrid loss; 0 = pure EDL)")
     ap.add_argument("--eval-batches", type=int, default=40)
     ap.add_argument("--head-hidden", type=int, default=64)
     ap.add_argument("--head-layers", type=int, default=1,
@@ -266,7 +270,8 @@ def main():
                    batches_per_epoch=args.batches_per_epoch, batch_size=args.batch_size,
                    max_rows=max_rows, max_cols=max_cols, lr=args.lr, kl_max=args.kl_max,
                    device=args.device, seed=args.seed + 101 * m, block_rate_share=args.block_rate_share,
-                   use_footprints=args.use_footprint_features, offline_corpus=args.offline_corpus)
+                   use_footprints=args.use_footprint_features, offline_corpus=args.offline_corpus,
+                   mse_weight=args.mse_weight)
         heads.append(head)
 
     eval_set = _make_eval_set(val_raws, n_batches=args.eval_batches, batch_size=args.batch_size,
