@@ -42,6 +42,21 @@ def test_extra_features_path():
     assert alpha.shape == (8, 3) and bool((alpha >= 1.0).all())
 
 
+def test_footprint_only_head_ignores_evidence():
+    """use_evidence=False: a footprint-only head (the input is the normalised extra features alone)."""
+    head = CompositionHead(evidence_dim=64, n_extra_features=20, use_evidence=False)
+    # net input width is the footprint only (20), not evidence+footprint (84)
+    first = next(m for m in head.net.modules() if isinstance(m, torch.nn.Linear))
+    assert first.in_features == 20
+    alpha = head(torch.randn(8, 64), torch.randn(8, 20))   # evidence is accepted but ignored
+    assert alpha.shape == (8, 3) and bool((alpha >= 1.0).all())
+
+
+def test_no_evidence_without_extra_raises():
+    with pytest.raises(ValueError, match="requires n_extra_features"):
+        CompositionHead(evidence_dim=64, n_extra_features=0, use_evidence=False)
+
+
 def test_extra_features_missing_raises():
     head = CompositionHead(evidence_dim=64, n_extra_features=20)
     with pytest.raises(ValueError, match="expects extra features of width 20"):
@@ -54,6 +69,16 @@ def test_extra_features_default_is_evidence_only():
     """Default n_extra_features=0 keeps the evidence-only signature (extra ignored)."""
     head = CompositionHead(evidence_dim=32, n_extra_features=0)
     assert head(torch.randn(4, 32)).shape == (4, 3)
+
+
+def test_deeper_head_has_more_layers_and_runs():
+    """n_hidden_layers adds capacity; default (1) keeps the original net.0/net.3 layout."""
+    shallow = CompositionHead(evidence_dim=64, hidden_dim=64, n_hidden_layers=1)
+    deep = CompositionHead(evidence_dim=64, hidden_dim=64, n_hidden_layers=3)
+    n_lin = lambda h: sum(1 for m in h.net.modules() if isinstance(m, torch.nn.Linear))
+    assert n_lin(shallow) == 2 and n_lin(deep) == 4          # default unchanged; deeper has more
+    alpha = deep(torch.randn(8, 64))
+    assert alpha.shape == (8, 3) and bool((alpha >= 1.0).all())
 
 
 # ---------------------------------------------------------------------------

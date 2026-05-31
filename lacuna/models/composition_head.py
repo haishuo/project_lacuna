@@ -54,22 +54,28 @@ class CompositionHead(nn.Module):
     """
 
     def __init__(self, evidence_dim: int, hidden_dim: Optional[int] = 64,
-                 n_classes: int = _N_CLASSES, dropout: float = 0.1, n_extra_features: int = 0):
+                 n_classes: int = _N_CLASSES, dropout: float = 0.1, n_extra_features: int = 0,
+                 n_hidden_layers: int = 1, use_evidence: bool = True):
         super().__init__()
         self.evidence_dim = evidence_dim
         self.n_classes = n_classes
         self.n_extra_features = n_extra_features
+        self.use_evidence = use_evidence
+        if not use_evidence and n_extra_features <= 0:
+            raise ValueError("use_evidence=False requires n_extra_features > 0 (nothing to read otherwise)")
         self.extra_norm = nn.BatchNorm1d(n_extra_features) if n_extra_features > 0 else None
-        in_dim = evidence_dim + n_extra_features
-        if hidden_dim is None:
+        in_dim = (evidence_dim if use_evidence else 0) + n_extra_features
+        if hidden_dim is None or n_hidden_layers < 1:
             self.net = nn.Linear(in_dim, n_classes)
         else:
-            self.net = nn.Sequential(
-                nn.Linear(in_dim, hidden_dim),
-                nn.GELU(),
-                nn.Dropout(dropout),
-                nn.Linear(hidden_dim, n_classes),
-            )
+            # `n_hidden_layers` hidden blocks; default 1 reproduces the original
+            # Linear→GELU→Dropout→Linear (net.0/net.3) so saved heads load unchanged.
+            layers, d = [], in_dim
+            for _ in range(n_hidden_layers):
+                layers += [nn.Linear(d, hidden_dim), nn.GELU(), nn.Dropout(dropout)]
+                d = hidden_dim
+            layers += [nn.Linear(d, n_classes)]
+            self.net = nn.Sequential(*layers)
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
@@ -85,7 +91,8 @@ class CompositionHead(nn.Module):
             if extra is None or extra.shape[-1] != self.n_extra_features:
                 raise ValueError(f"head expects extra features of width {self.n_extra_features}, "
                                  f"got {None if extra is None else tuple(extra.shape)}")
-            x = torch.cat([evidence, self.extra_norm(extra)], dim=-1)
+            extra = self.extra_norm(extra)
+            x = torch.cat([evidence, extra], dim=-1) if self.use_evidence else extra
         else:
             x = evidence
         return torch.nn.functional.softplus(self.net(x)) + 1.0

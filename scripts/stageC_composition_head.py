@@ -201,9 +201,14 @@ def main():
     ap.add_argument("--kl-max", type=float, default=0.5, help="max EDL KL weight (annealed)")
     ap.add_argument("--eval-batches", type=int, default=40)
     ap.add_argument("--head-hidden", type=int, default=64)
+    ap.add_argument("--head-layers", type=int, default=1,
+                    help="hidden layers in the composition head (capacity knob; default 1)")
     ap.add_argument("--use-footprint-features", action="store_true",
                     help="concatenate the 20-D observable footprint to the encoder evidence "
                          "(deployable; Stage-C attribution: the encoder under-represents it)")
+    ap.add_argument("--no-evidence", action="store_true",
+                    help="footprint-only head: ignore the encoder evidence (tests whether the frozen "
+                         "evidence dilutes the footprint signal). Requires --use-footprint-features.")
     ap.add_argument("--block-rate-share", type=float, default=0.85)
     ap.add_argument("--seed", type=int, default=20260530)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -219,7 +224,11 @@ def main():
     mode = "frozen-probe" if args.freeze_encoder else "fine-tune"
     if args.use_footprint_features:
         mode += "+footprint"
+    if args.no_evidence:
+        mode += "+noevidence"
     n_extra = N_FOOTPRINT_FEATURES if args.use_footprint_features else 0
+    if args.no_evidence and not args.use_footprint_features:
+        ap.error("--no-evidence requires --use-footprint-features")
     print(f"Mode: {mode} | ensemble {args.n_models} | device {args.device}")
 
     train_raws = load_raws(cfg.data.train_datasets, max_cols)
@@ -231,7 +240,9 @@ def main():
     for m in range(args.n_models):
         print(f"--- training head {m+1}/{args.n_models} ---", flush=True)
         head = CompositionHead(cfg.model.evidence_dim, hidden_dim=args.head_hidden,
-                               dropout=cfg.model.dropout, n_extra_features=n_extra).to(args.device)
+                               dropout=cfg.model.dropout, n_extra_features=n_extra,
+                               n_hidden_layers=args.head_layers,
+                               use_evidence=not args.no_evidence).to(args.device)
         # Each ensemble member: own encoder copy only if fine-tuning (frozen shares the one encoder).
         enc_m = encoder
         if not args.freeze_encoder and m > 0:
