@@ -5,7 +5,7 @@ import torch
 
 from lacuna.models.composition_head import composition_mean, cant_tell_mass
 from lacuna.training.composition_loss import (
-    kl_dirichlet_uniform, expected_cross_entropy, dirichlet_edl_loss,
+    kl_dirichlet_uniform, expected_cross_entropy, dirichlet_nll, dirichlet_edl_loss,
 )
 
 
@@ -34,6 +34,24 @@ def test_expected_ce_lower_when_mean_matches_target():
     aligned = torch.tensor([[20.0, 30.0, 50.0]])      # mean == target, concentrated
     misaligned = torch.tensor([[50.0, 30.0, 20.0]])   # mean wrong
     assert float(expected_cross_entropy(aligned, target)) < float(expected_cross_entropy(misaligned, target))
+
+
+def test_dirichlet_nll_penalises_confident_wrong():
+    """NLL of the realised composition: a sharp CORRECT Dirichlet scores far better (lower) than a
+    sharp WRONG one, and spreading the wrong one toward uniform reduces the penalty — the property
+    that lets it train a reliability-tracking temperature."""
+    target = torch.tensor([[0.7, 0.2, 0.1]])
+    sharp_right = torch.tensor([[70.0, 20.0, 10.0]])
+    sharp_wrong = torch.tensor([[10.0, 20.0, 70.0]])
+    spread_wrong = 1.0 + (sharp_wrong - 1.0) / 10.0
+    assert float(dirichlet_nll(sharp_right, target)) < float(dirichlet_nll(sharp_wrong, target))
+    assert float(dirichlet_nll(spread_wrong, target)) < float(dirichlet_nll(sharp_wrong, target))
+
+
+def test_dirichlet_nll_handles_zero_component():
+    """A realised zero component (e.g. no MCAR columns) must not produce a non-finite NLL."""
+    target = torch.tensor([[0.0, 0.6, 0.4]])
+    assert torch.isfinite(dirichlet_nll(torch.tensor([[1.0, 6.0, 4.0]]), target)).all()
 
 
 def test_loss_decreases_under_optimization():

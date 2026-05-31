@@ -56,6 +56,21 @@ def expected_cross_entropy(alpha: torch.Tensor, target: torch.Tensor) -> torch.T
     return (target * (torch.digamma(a0) - torch.digamma(alpha))).sum(dim=-1)
 
 
+def dirichlet_nll(alpha: torch.Tensor, target: torch.Tensor, *, eps: float = 1e-3) -> torch.Tensor:
+    """Negative log Dirichlet density of `target` under Dir(alpha) per row [B] — a PROPER score.
+
+    `-[lnΓ(alpha0) - Σ lnΓ(alpha_k) + Σ (alpha_k-1) ln target_k]`, with `target` clamped to `eps` to
+    keep the log finite when a composition has a zero component. Unlike the Bayes-risk expected CE
+    (which over-rewards sharpening-when-right and so will not separate reliable from unreliable
+    datasets), this NLL penalises confident-AND-wrong sharply, so minimising it on held-out data
+    drives the concentration DOWN exactly where the mean is unreliable — the objective that makes a
+    feature-conditional temperature track error (Stage D-v2).
+    """
+    a0 = alpha.sum(dim=-1)
+    log_t = target.clamp(min=eps).log()
+    return -(torch.lgamma(a0) - torch.lgamma(alpha).sum(dim=-1) + ((alpha - 1.0) * log_t).sum(dim=-1))
+
+
 def dirichlet_edl_loss(
     alpha: torch.Tensor,
     target: torch.Tensor,
