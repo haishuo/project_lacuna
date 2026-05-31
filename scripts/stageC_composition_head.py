@@ -74,7 +74,10 @@ def forward_alpha(encoder, head, b, extra=None):
 
 
 def train_head(encoder, head, raws, *, freeze, epochs, batches_per_epoch, batch_size, max_rows,
-               max_cols, lr, kl_max, device, seed, block_rate_share, use_footprints):
+               max_cols, lr, kl_max, device, seed, block_rate_share, use_footprints, offline_corpus=0):
+    """Train the head. Default = ONLINE (fresh batch each step). offline_corpus>0 = pre-generate that
+    many batches ONCE and loop epochs over them (repeated passes over a fixed corpus) — the regime an
+    offline-fit reference uses; closes the residual ceiling gap the online single-pass regime leaves."""
     if freeze:
         for p in encoder.parameters():
             p.requires_grad = False
@@ -85,16 +88,25 @@ def train_head(encoder, head, raws, *, freeze, epochs, batches_per_epoch, batch_
     opt = torch.optim.Adam(params, lr=lr, weight_decay=0.01)
     rng = RNGState(seed=seed)
     anneal = max(1, epochs // 2)
+
+    corpus = None
+    if offline_corpus > 0:
+        crng = RNGState(seed=seed + 5000)
+        corpus = [build_composition_batch(raws, crng.spawn(), max_rows=max_rows, max_cols=max_cols,
+                                          batch_size=batch_size, block_rate_share=block_rate_share,
+                                          with_footprints=use_footprints) for _ in range(offline_corpus)]
+    n_steps = offline_corpus if corpus is not None else batches_per_epoch
+
     for epoch in range(epochs):
         if not freeze:
             encoder.train()
         head.train()
         kl_weight = kl_max * min(1.0, (epoch + 1) / anneal)   # EDL anneal: fit first, calibrate later
         ep_loss = 0.0
-        for _ in range(batches_per_epoch):
-            mb = build_composition_batch(raws, rng.spawn(), max_rows=max_rows, max_cols=max_cols,
-                                         batch_size=batch_size, block_rate_share=block_rate_share,
-                                         with_footprints=use_footprints)
+        for i in range(n_steps):
+            mb = corpus[i] if corpus is not None else build_composition_batch(
+                raws, rng.spawn(), max_rows=max_rows, max_cols=max_cols,
+                batch_size=batch_size, block_rate_share=block_rate_share, with_footprints=use_footprints)
             b = mb.batch.to(device)
             extra = mb.footprints.to(device) if use_footprints else None
             alpha = forward_alpha(encoder, head, b, extra)
@@ -103,7 +115,7 @@ def train_head(encoder, head, raws, *, freeze, epochs, batches_per_epoch, batch_
             torch.nn.utils.clip_grad_norm_(params, 1.0)
             opt.step()
             ep_loss += loss.item()
-        print(f"  epoch {epoch+1:2d}/{epochs}  loss={ep_loss/batches_per_epoch:.4f}  kl_w={kl_weight:.3f}",
+        print(f"  epoch {epoch+1:2d}/{epochs}  loss={ep_loss/n_steps:.4f}  kl_w={kl_weight:.3f}",
               flush=True)
 
 
@@ -196,6 +208,9 @@ def main():
     ap.add_argument("--n-models", type=int, default=3, help="deep ensemble size")
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--batches-per-epoch", type=int, default=50)
+    ap.add_argument("--offline-corpus", type=int, default=0,
+                    help="0 = online (fresh batch per step); >0 = pre-generate that many batches once "
+                         "and loop epochs over them (fixed-corpus repeated-pass training)")
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--kl-max", type=float, default=0.5, help="max EDL KL weight (annealed)")
@@ -251,7 +266,7 @@ def main():
                    batches_per_epoch=args.batches_per_epoch, batch_size=args.batch_size,
                    max_rows=max_rows, max_cols=max_cols, lr=args.lr, kl_max=args.kl_max,
                    device=args.device, seed=args.seed + 101 * m, block_rate_share=args.block_rate_share,
-                   use_footprints=args.use_footprint_features)
+                   use_footprints=args.use_footprint_features, offline_corpus=args.offline_corpus)
         heads.append(head)
 
     eval_set = _make_eval_set(val_raws, n_batches=args.eval_batches, batch_size=args.batch_size,
