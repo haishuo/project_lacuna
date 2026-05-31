@@ -70,11 +70,25 @@ This lead does NOT produce a better head — because the premise (a closable arc
 a measurement artifact. The honest outcome: the gap is attributed (split artifact + calibrated-head
 cost), every head knob is ruled out, and the calibrated head stands. A clean negative-with-correction.
 
-## Lead (if point accuracy is ever wanted alongside calibration)
+## The hybrid objective was tried — it does NOT reconcile accuracy and calibration (null)
 
-A **hybrid objective** — `dirichlet_edl_loss + λ·MSE(Dirichlet mean, target)` — could pull the mean to
-the held-out ceiling (≈0.49) while the EDL/KL terms keep the concentration calibrated. Untested; it
-trades a new hyperparameter and a possible calibration interaction for ~0.10 L1 on a secondary metric.
+The proposed fix — `composition_hybrid_loss = dirichlet_edl_loss + λ·MSE(Dirichlet mean, target)` —
+was swept over λ ∈ {0, 0.5, 1, 3, 10, 50} (footprint-only, offline, n=640 held-out):
+
+| λ (mse_weight) | 0 | 0.5 | 1 | 3 | 10 | 50 |
+|---|--:|--:|--:|--:|--:|--:|
+| composition L1 | 0.646 | 0.636 | 0.672 | 0.720 | 0.747 | 0.762 |
+| query ECE | 0.072 | 0.084 | 0.120 | 0.154 | 0.189 | 0.192 |
+
+It is a **null**: only at a negligible λ=0.5 does L1 improve at all (0.646→0.636, within seed noise),
+and even there calibration worsens; at any meaningful weight it is monotonically worse on BOTH L1 and
+ECE, and it never approaches the 0.487 MSE ceiling. The MSE-on-the-Dirichlet-mean gradient conflicts
+with the evidential objective rather than complementing it. **Point accuracy (the MSE ceiling) and a
+calibrated distribution (the EDL head) are genuinely in tension in this parameterisation** — the 0.487
+ceiling is attainable only by a pure point regressor that emits no posterior / can't-tell mass. With the
+hybrid added, every lever (capacity, depth, evidence, online/offline regime, KL weight, MSE hybrid) has
+now been tried; the calibrated head's ~0.10 residual above the held-out ceiling is the firm,
+fully-characterised cost of the calibrated-distribution estimand, and the calibrated head stands.
 
 ## Reproduce
 
