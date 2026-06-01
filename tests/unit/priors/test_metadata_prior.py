@@ -7,7 +7,7 @@ from lacuna.priors.metadata_prior import (
     MCAR, MAR, MNAR, N_CLASSES, SEMANTIC_PRIOR_SPEC,
     reliability_to_strength, semantic_prior_alpha, combine_prior_likelihood,
     prior_mean, channel_disagreement, aggregate_column_priors, semantic_tier,
-    gated_reliability, gated_semantic_prior_alpha, _GATE_FLOOR,
+    gated_reliability, gated_semantic_prior_alpha, _GATE_FLOOR, selective_decision,
 )
 
 
@@ -177,6 +177,34 @@ def test_low_confidence_fact_prior_is_more_overridable():
 def test_gated_bad_confidence_raises():
     with pytest.raises(ValueError, match="confidence must be in"):
         gated_reliability("planned_random", 1.5)
+
+
+# ---------------------------------------------------------------------------
+# Selective decision — the "unable to determine" abstention (Stage-P6 lead 3)
+# ---------------------------------------------------------------------------
+
+def test_selective_decision_commits_when_confident():
+    alpha = np.array([1.0, 1.0, 9.0])  # peaked on MNAR, p_max = 9/11 ~ 0.82
+    cls, p = selective_decision(alpha, commit_threshold=0.7)
+    assert cls == MNAR and p > 0.7
+
+
+def test_selective_decision_abstains_when_uncertain():
+    alpha = np.array([1.0, 1.0, 1.0])  # flat, p_max = 1/3
+    cls, p = selective_decision(alpha, commit_threshold=0.5)
+    assert cls is None and abs(p - 1 / N_CLASSES) < 1e-9
+
+
+def test_selective_decision_threshold_boundary():
+    alpha = np.array([1.0, 1.0, 9.0])  # p_max ~ 0.818
+    assert selective_decision(alpha, 0.818)[0] == MNAR        # >= commits
+    assert selective_decision(alpha, 0.83)[0] is None         # just above p_max abstains
+
+
+@pytest.mark.parametrize("bad", [0.0, 1.5, -0.1])
+def test_selective_decision_bad_threshold_raises(bad):
+    with pytest.raises(ValueError, match="commit_threshold"):
+        selective_decision(np.ones(N_CLASSES), bad)
 
 
 # ---------------------------------------------------------------------------

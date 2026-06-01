@@ -198,3 +198,19 @@ def channel_disagreement(alpha_prior: np.ndarray, alpha_like: np.ndarray) -> flo
     """L1 distance between the prior-mean and likelihood-mean composition — the size of the
     prior-vs-data tension, reported as a first-class output (ADR-0008 commitment 1)."""
     return float(np.abs(prior_mean(alpha_prior) - prior_mean(alpha_like)).sum())
+
+
+def selective_decision(alpha: np.ndarray, commit_threshold: float):
+    """The 'unable to determine' decision: commit to the argmax mechanism only if confident enough.
+
+    Returns ``(committed_class_index or None, p_max)`` where `p_max` is the posterior probability of the
+    most-likely mechanism. If `p_max < commit_threshold` the instrument ABSTAINS (class ``None`` = "unable
+    to determine") rather than name a mechanism it cannot support — the ADR-0008 property-3 output. The
+    threshold is fit by a risk-coverage analysis (scripts/stageP6_abstention.py) so that, among the datasets
+    on which the instrument commits, it is right at a target rate.
+    """
+    if not 0.0 < commit_threshold <= 1.0:
+        raise ValueError(f"commit_threshold must be in (0, 1], got {commit_threshold}")
+    m = prior_mean(np.asarray(alpha, dtype=float))
+    p_max = float(m.max())
+    return (int(np.argmax(m)) if p_max >= commit_threshold else None), p_max
