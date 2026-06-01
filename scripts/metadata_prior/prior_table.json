@@ -1,0 +1,111 @@
+{
+  "table": {
+    "lab_lod": {
+      "alpha": [
+        1.0,
+        1.0,
+        4.6667
+      ],
+      "favored": "MNAR",
+      "target_reliability": 0.7,
+      "favored_prob": 0.7
+    },
+    "skip_gated": {
+      "alpha": [
+        1.0,
+        4.6667,
+        1.0
+      ],
+      "favored": "MAR",
+      "target_reliability": 0.7,
+      "favored_prob": 0.7
+    },
+    "planned_random": {
+      "alpha": [
+        4.6667,
+        1.0,
+        1.0
+      ],
+      "favored": "MCAR",
+      "target_reliability": 0.7,
+      "favored_prob": 0.7
+    },
+    "sensitive_disclosure": {
+      "alpha": [
+        1.0,
+        1.0,
+        3.7143
+      ],
+      "favored": "MNAR",
+      "target_reliability": 0.65,
+      "favored_prob": 0.65
+    },
+    "administrative": {
+      "alpha": [
+        3.2632,
+        1.0,
+        1.0
+      ],
+      "favored": "MCAR",
+      "target_reliability": 0.62,
+      "favored_prob": 0.62
+    },
+    "demographic_core": {
+      "alpha": [
+        1.0,
+        2.1667,
+        1.0
+      ],
+      "favored": "MAR",
+      "target_reliability": 0.52,
+      "favored_prob": 0.52
+    },
+    "routine_measure": {
+      "alpha": [
+        1.0,
+        2.1667,
+        1.0
+      ],
+      "favored": "MAR",
+      "target_reliability": 0.52,
+      "favored_prob": 0.52
+    },
+    "indeterminate": {
+      "alpha": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "favored": null,
+      "target_reliability": 0.3333,
+      "favored_prob": 0.3333
+    }
+  },
+  "validation": {
+    "curated": {
+      "acc_clear": 1.0,
+      "acc_strong": 1.0,
+      "acc_consensus": 1.0,
+      "acc_weak": 1.0,
+      "abstain_recall": 1.0,
+      "over_abstain": 0.0,
+      "n_clear": 43,
+      "n_strong": 24,
+      "n_abstain": 6
+    },
+    "llm_driven": {
+      "acc_clear": 0.837,
+      "acc_strong": 0.917,
+      "acc_consensus": 1.0,
+      "acc_weak": 0.444,
+      "abstain_recall": 0.333,
+      "over_abstain": 0.0,
+      "n_clear": 43,
+      "n_strong": 24,
+      "n_abstain": 6,
+      "n_scored": 49,
+      "model": "Qwen2.5-14B (name+desc)"
+    }
+  },
+  "note": "Prior strengths are capped (favoured prob <= 0.70) so the data likelihood can override the prior (ADR-0008 commitment 1); the prior is a nudge, re-fit in P2."
+}
