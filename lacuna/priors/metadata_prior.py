@@ -98,6 +98,47 @@ def semantic_tier(semantic_class: str) -> str:
     return SEMANTIC_PRIOR_SPEC[semantic_class][2]
 
 
+# A fact-tier prior is only as trustworthy as the fact-tier LABEL. P3 showed a strong fact-tier prior
+# AMPLIFIES a misclassification INTO the fact tier (a column wrongly called skip_gated gets a strong MAR
+# prior that the data struggles to override). The gate de-rates the fact-tier strength by the classifier's
+# CONFIDENCE in that label: a stably-classified design fact (e.g. a rotated booklet -> planned_random every
+# time) keeps full strength; an unstably-classified one drops toward an overridable hunch. Non-fact tiers
+# ignore confidence (they are already capped/weak). Confidence is metadata-only (e.g. self-consistency over
+# stochastic classifications), so the gate does NOT couple the prior to the data channel.
+_GATE_FLOOR = 0.60  # de-rated fact-tier favoured probability at zero confidence (weak, overridable)
+
+
+def gated_reliability(semantic_class: str, confidence: float) -> float:
+    """Effective favoured probability for a class given classifier `confidence` in [0, 1].
+
+    Fact tier: linearly interpolate from `_GATE_FLOOR` (confidence 0) to the class's full strength
+    (confidence 1). All other tiers ignore confidence (already overridable/weak/flat).
+    """
+    if semantic_class not in SEMANTIC_PRIOR_SPEC:
+        raise ValueError(f"unknown semantic class {semantic_class!r}")
+    favored, r, tier = SEMANTIC_PRIOR_SPEC[semantic_class]
+    if tier != "fact":
+        return r
+    if not 0.0 <= confidence <= 1.0:
+        raise ValueError(f"confidence must be in [0, 1], got {confidence}")
+    return _GATE_FLOOR + (r - _GATE_FLOOR) * confidence
+
+
+def gated_semantic_prior_alpha(semantic_class: str, confidence: float) -> np.ndarray:
+    """Confidence-gated prior pseudo-counts [3]: fact-tier strength scaled by classifier confidence.
+
+    Identical to `semantic_prior_alpha` for non-fact tiers (confidence is ignored there).
+    """
+    favored = SEMANTIC_PRIOR_SPEC[semantic_class][0] if semantic_class in SEMANTIC_PRIOR_SPEC else None
+    if semantic_class not in SEMANTIC_PRIOR_SPEC:
+        raise ValueError(f"unknown semantic class {semantic_class!r}; "
+                         f"valid: {sorted(SEMANTIC_PRIOR_SPEC)}")
+    alpha = np.ones(N_CLASSES, dtype=float)
+    if favored is not None:
+        alpha[favored] += reliability_to_strength(gated_reliability(semantic_class, confidence))
+    return alpha
+
+
 def combine_prior_likelihood(alpha_prior: np.ndarray, alpha_like: np.ndarray) -> np.ndarray:
     """Pool the prior and likelihood Dirichlets by summing evidence: 1 + (a_prior-1) + (a_like-1).
 

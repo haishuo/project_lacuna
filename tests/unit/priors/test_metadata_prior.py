@@ -7,6 +7,7 @@ from lacuna.priors.metadata_prior import (
     MCAR, MAR, MNAR, N_CLASSES, SEMANTIC_PRIOR_SPEC,
     reliability_to_strength, semantic_prior_alpha, combine_prior_likelihood,
     prior_mean, channel_disagreement, aggregate_column_priors, semantic_tier,
+    gated_reliability, gated_semantic_prior_alpha, _GATE_FLOOR,
 )
 
 
@@ -135,6 +136,47 @@ def test_aggregate_bad_shape_raises():
 def test_aggregate_zero_total_weight_raises():
     with pytest.raises(ValueError, match="sum to > 0"):
         aggregate_column_priors(np.ones((2, N_CLASSES)), weights=np.zeros(2))
+
+
+# ---------------------------------------------------------------------------
+# Confidence gate on the fact tier (Stage-P3 lead 1)
+# ---------------------------------------------------------------------------
+
+def test_gated_fact_tier_scales_with_confidence():
+    full = SEMANTIC_PRIOR_SPEC["planned_random"][1]   # 0.85
+    assert abs(gated_reliability("planned_random", 1.0) - full) < 1e-9
+    assert abs(gated_reliability("planned_random", 0.0) - _GATE_FLOOR) < 1e-9
+    assert abs(gated_reliability("planned_random", 0.5) - (_GATE_FLOOR + (full - _GATE_FLOOR) * 0.5)) < 1e-9
+    # monotonic increasing in confidence
+    vals = [gated_reliability("lab_lod", c) for c in (0.0, 0.25, 0.5, 0.75, 1.0)]
+    assert all(b > a for a, b in zip(vals, vals[1:]))
+
+
+@pytest.mark.parametrize("cls", ["sensitive_disclosure", "demographic_core", "administrative", "indeterminate"])
+def test_gated_nonfact_ignores_confidence(cls):
+    r = SEMANTIC_PRIOR_SPEC[cls][1]
+    assert gated_reliability(cls, 0.0) == r and gated_reliability(cls, 1.0) == r
+    # and the gated alpha equals the ungated alpha regardless of confidence
+    assert np.allclose(gated_semantic_prior_alpha(cls, 0.1), semantic_prior_alpha(cls))
+
+
+def test_gated_fact_alpha_full_conf_equals_ungated():
+    assert np.allclose(gated_semantic_prior_alpha("planned_random", 1.0),
+                       semantic_prior_alpha("planned_random"))
+
+
+def test_low_confidence_fact_prior_is_more_overridable():
+    """A contrary likelihood overrides a LOW-confidence fact prior but not a HIGH-confidence one."""
+    contrary = np.array([1.0, 1.0 + 9.0, 1.0])  # data leans MAR
+    hi = combine_prior_likelihood(gated_semantic_prior_alpha("planned_random", 1.0), contrary)  # MCAR prior
+    lo = combine_prior_likelihood(gated_semantic_prior_alpha("planned_random", 0.0), contrary)
+    assert int(np.argmax(prior_mean(hi))) == MCAR    # confident fact resists the contrary data
+    assert int(np.argmax(prior_mean(lo))) == MAR     # unconfident fact is overridden by the data
+
+
+def test_gated_bad_confidence_raises():
+    with pytest.raises(ValueError, match="confidence must be in"):
+        gated_reliability("planned_random", 1.5)
 
 
 # ---------------------------------------------------------------------------
