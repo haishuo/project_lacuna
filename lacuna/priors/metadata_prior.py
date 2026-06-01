@@ -19,12 +19,19 @@ ADR-0008 channels combine by the same conjugate operation, and two properties fa
   - the OVERRIDE property (ADR-0008 commitment 1): a strong, contrary data likelihood adds more evidence
     than a modest prior, so the data can pull the posterior off the prior — the prior is a NUDGE, not a lock.
 
-The prior STRENGTH is deliberately BOUNDED so the data can override it (commitment 1): the favored
-mechanism's prior probability tops out around 0.70, not ~1.0. Strongly-grounded mechanisms (a real
-detection limit, explicit skip-logic) do not need a near-certain prior — an agreeing data signal reinforces
-them — whereas a mislabelled column must remain overridable. The strengths here are a documented,
-conservative starting point (Stage P1); they are re-fit against real likelihoods and the override test in
-Stage P2.
+The prior STRENGTH scales with the EPISTEMIC TIER of the semantic class (Stage P3 refinement):
+  - FACT tier (planned_random, skip_gated, lab_lod): the metadata STATES a design/measurement fact the
+    data channel cannot see (a rotated booklet IS MCAR-by-design; a skip-gate IS MAR; an LOD censors).
+    These get a STRONG prior (favoured prob ~0.85) — strong enough to override a likelihood that is
+    *misreading* the footprint (e.g. PISA rotation read as "structured"). This is not a spurious lookup;
+    it is reading the codebook, and there is no legitimate data evidence against a stated design fact.
+  - GUT tier (sensitive_disclosure): an honest domain HUNCH ("income is usually self-censored"). CAPPED
+    (favoured prob <= 0.70) so a wrong hunch stays overridable by the data (ADR-0008 commitment 1; cf. the
+    survey_chile income column whose nonresponse is consensus-MAR, not MNAR).
+  - MODERATE/WEAK (administrative, demographic_core, routine_measure): mild value-independence or
+    predictor leans, capped low. FLAT (indeterminate): no prior (graceful degradation).
+The override-safety cap is therefore a GUT-tier rule, not a blanket one — the Stage-P3 finding that a
+uniform 0.70 cap left the fact tier too weak to fix the documented PISA MCAR-by-design blind spot.
 
 Determinism (Coding Bible Rule 6): pure, no RNG. Fails loud (Rule 1) on an unknown semantic class or an
 out-of-range reliability/evidence.
@@ -39,20 +46,20 @@ MCAR, MAR, MNAR = 0, 1, 2
 CLASS_NAMES = ("MCAR", "MAR", "MNAR")
 _PRIOR_PROB_FLOOR = 1.0 / N_CLASSES  # a flat prior; nothing is less informative than this
 
-# semantic class -> (favored mechanism index or None for flat, target prior probability for the favoured
-# mechanism). The target reliability reflects how reliably the metadata implies the mechanism (the
-# benchmark's grounding tiers): strong structural cues (real LOD flag, explicit skip-logic, randomized
-# administration) lean most; consensus (sensitive items) less; demographic/routine only mildly; opaque
-# columns not at all. Capped at 0.70 so the data likelihood can always override (ADR-0008 commitment 1).
-SEMANTIC_PRIOR_SPEC: Dict[str, Tuple[Optional[int], float]] = {
-    "lab_lod": (MNAR, 0.70),               # detection-limit MNAR (strong: real LOD flags)
-    "skip_gated": (MAR, 0.70),             # MAR-by-design (strong: explicit skip-logic gate)
-    "planned_random": (MCAR, 0.70),        # MCAR-by-design (strong: randomized administration)
-    "sensitive_disclosure": (MNAR, 0.65),  # self-censoring MNAR (consensus, not certain)
-    "administrative": (MCAR, 0.62),        # IDs/dates: value-independent (moderate)
-    "demographic_core": (MAR, 0.52),       # near-complete predictors (weak lean)
-    "routine_measure": (MAR, 0.52),        # routine clinical measures (weak lean)
-    "indeterminate": (None, _PRIOR_PROB_FLOOR),  # opaque metadata -> flat -> pure data-driven
+# semantic class -> (favored mechanism index or None for flat, target prior probability, epistemic tier).
+# Strength scales with tier (Stage P3): FACT tier states a design/measurement fact (strong, ~0.85, may
+# override a misreading likelihood); GUT tier is an overridable hunch (capped <= 0.70); MODERATE/WEAK are
+# mild leans; FLAT is no prior. See the module docstring for the rationale.
+_FACT_R, _GUT_R = 0.85, 0.65
+SEMANTIC_PRIOR_SPEC: Dict[str, Tuple[Optional[int], float, str]] = {
+    "lab_lod": (MNAR, _FACT_R, "fact"),              # detection-limit MNAR (real LOD flag in the codebook)
+    "skip_gated": (MAR, _FACT_R, "fact"),            # MAR-by-design (explicit skip-logic gate)
+    "planned_random": (MCAR, _FACT_R, "fact"),       # MCAR-by-design (randomized/rotated administration)
+    "sensitive_disclosure": (MNAR, _GUT_R, "gut"),   # self-censoring MNAR (a domain hunch, overridable)
+    "administrative": (MCAR, 0.62, "moderate"),      # IDs/dates: value-independent
+    "demographic_core": (MAR, 0.52, "weak"),         # near-complete predictors (mild lean)
+    "routine_measure": (MAR, 0.52, "weak"),          # routine clinical measures (mild lean)
+    "indeterminate": (None, _PRIOR_PROB_FLOOR, "flat"),  # opaque metadata -> flat -> pure data-driven
 }
 
 
@@ -77,11 +84,18 @@ def semantic_prior_alpha(semantic_class: str) -> np.ndarray:
     if semantic_class not in SEMANTIC_PRIOR_SPEC:
         raise ValueError(f"unknown semantic class {semantic_class!r}; "
                          f"valid: {sorted(SEMANTIC_PRIOR_SPEC)}")
-    favored, r = SEMANTIC_PRIOR_SPEC[semantic_class]
+    favored, r, _tier = SEMANTIC_PRIOR_SPEC[semantic_class]
     alpha = np.ones(N_CLASSES, dtype=float)
     if favored is not None:
         alpha[favored] += reliability_to_strength(r)
     return alpha
+
+
+def semantic_tier(semantic_class: str) -> str:
+    """Epistemic tier of a semantic class: 'fact' / 'gut' / 'moderate' / 'weak' / 'flat'."""
+    if semantic_class not in SEMANTIC_PRIOR_SPEC:
+        raise ValueError(f"unknown semantic class {semantic_class!r}")
+    return SEMANTIC_PRIOR_SPEC[semantic_class][2]
 
 
 def combine_prior_likelihood(alpha_prior: np.ndarray, alpha_like: np.ndarray) -> np.ndarray:

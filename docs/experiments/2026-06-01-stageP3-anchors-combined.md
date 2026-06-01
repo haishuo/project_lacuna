@@ -79,6 +79,30 @@ toward consensus, the data overrides it where the data is strong, and every prio
 reported. Perfection isn't attainable (no ground truth; the non-identifiable axis is a theorem) — but the
 instrument is **honest about which channel is doing the work and where they disagree**, which was the goal.
 
+## Update — tiered strength implemented (the refinement, same day)
+
+Acting on the refinement above: the fact tier (`planned_random`, `skip_gated`, `lab_lod`) was raised to
+P(favored)=0.85 (strong enough to override a misreading data channel); the gut tier stayed capped at 0.65
+(overridable). Re-running P3:
+
+| metric | capped (uniform 0.70) | **tiered (fact 0.85 / gut 0.65)** |
+|---|--:|--:|
+| FACT-tier consensus argmax (combined) | 2/3 | **3/3** |
+| PISA mean f_MCAR (data 0.33) | 0.45 | **0.58** |
+| PISA-2018 combined argmax | MAR (not fixed) | **MCAR ✓ (flipped)** |
+| GUT-tier consensus argmax (combined) | 5/11 | 5/11 (unchanged) |
+| `survey_chile` (the overridable disagreement) | data resists ✓ | data resists ✓ (unchanged) |
+
+The tiered strength **fully fixes the PISA MCAR-by-design blind spot** (2018 flips; mean f_MCAR 0.33→0.58)
+**without touching the gut tier's overridability** — exactly the intended, epistemically-motivated change.
+
+**New honest risk it exposes:** a strong fact tier **amplifies misclassification *into* the fact tier**.
+`survey_bfi` (personality items) was mislabelled `skip_gated` by the model, and the strong MAR prior then
+drove the combined read hard to MAR (it matched consensus, but for the wrong reason). With the capped prior
+this barely moved; with the strong one it dominates. **Mitigation / next lead:** gate the fact-tier strength
+on classifier confidence or a corroborating signal, so the strong prior applies only when the fact-tier
+label is itself reliable. (The gut tier is unaffected — its cap already bounds misclassification damage.)
+
 ## Caveats
 
 - **Raw-evidence reads** (for the P2-correct combination); these differ from Stage E's *calibrated* reads,

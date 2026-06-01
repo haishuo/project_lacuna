@@ -46,11 +46,12 @@ _LLM_COND = "name+desc"
 def build_table():
     """The frozen semantic -> prior mapping (the auditable artifact)."""
     table = {}
-    for cls, (favored, r) in SEMANTIC_PRIOR_SPEC.items():
+    for cls, (favored, r, tier) in SEMANTIC_PRIOR_SPEC.items():
         a = semantic_prior_alpha(cls)
         table[cls] = {
             "alpha": [round(float(x), 4) for x in a],
             "favored": CLASS_NAMES[favored] if favored is not None else None,
+            "tier": tier,
             "target_reliability": round(float(r), 4),
             "favored_prob": round(float(prior_mean(a).max()), 4),
         }
@@ -61,7 +62,7 @@ def _argmax_mech(semantic_class):
     """Mechanism the prior favours for a semantic class, or None if it abstains (flat / unknown)."""
     if semantic_class not in SEMANTIC_PRIOR_SPEC or semantic_class == "indeterminate":
         return None
-    favored, _ = SEMANTIC_PRIOR_SPEC[semantic_class]
+    favored = SEMANTIC_PRIOR_SPEC[semantic_class][0]
     return CLASS_NAMES[favored] if favored is not None else None
 
 

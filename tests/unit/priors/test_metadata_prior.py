@@ -6,7 +6,7 @@ import pytest
 from lacuna.priors.metadata_prior import (
     MCAR, MAR, MNAR, N_CLASSES, SEMANTIC_PRIOR_SPEC,
     reliability_to_strength, semantic_prior_alpha, combine_prior_likelihood,
-    prior_mean, channel_disagreement, aggregate_column_priors,
+    prior_mean, channel_disagreement, aggregate_column_priors, semantic_tier,
 )
 
 
@@ -38,11 +38,26 @@ def test_reliability_to_strength_hits_target():
         assert abs(favored_prob - r) < 1e-9
 
 
-def test_prior_strength_bounded_for_overridability():
-    """Every favoured prior probability stays <= ~0.70 so the data likelihood can override it."""
-    for cls, (favored, _) in SEMANTIC_PRIOR_SPEC.items():
-        p = prior_mean(semantic_prior_alpha(cls))
-        assert p.max() <= 0.71, f"{cls} prior too strong ({p.max():.3f}) — not overridable"
+def test_prior_strength_scales_with_tier():
+    """Gut/moderate/weak priors stay overridable (<=0.71); fact-tier priors are strong (>gut, <0.95);
+    flat is uniform. The fact tier must be strictly stronger than the gut tier (Stage-P3 refinement)."""
+    for cls, (favored, _r, tier) in SEMANTIC_PRIOR_SPEC.items():
+        p = float(prior_mean(semantic_prior_alpha(cls)).max())
+        assert semantic_tier(cls) == tier
+        if tier in ("gut", "moderate", "weak"):
+            assert p <= 0.71, f"{cls} ({tier}) should be overridable, got {p:.3f}"
+        elif tier == "fact":
+            assert 0.71 < p < 0.95, f"{cls} (fact) should be strong but not absolute, got {p:.3f}"
+        else:  # flat
+            assert abs(p - 1.0 / N_CLASSES) < 1e-9
+    fact_p = prior_mean(semantic_prior_alpha("planned_random")).max()
+    gut_p = prior_mean(semantic_prior_alpha("sensitive_disclosure")).max()
+    assert fact_p > gut_p, "fact-tier prior must be stronger than the gut-tier prior"
+
+
+def test_unknown_class_tier_raises():
+    with pytest.raises(ValueError, match="unknown semantic class"):
+        semantic_tier("nope")
 
 
 # ---------------------------------------------------------------------------

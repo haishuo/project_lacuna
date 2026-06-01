@@ -4,31 +4,34 @@
       "alpha": [
         1.0,
         1.0,
-        4.6667
+        11.3333
       ],
       "favored": "MNAR",
-      "target_reliability": 0.7,
-      "favored_prob": 0.7
+      "tier": "fact",
+      "target_reliability": 0.85,
+      "favored_prob": 0.85
     },
     "skip_gated": {
       "alpha": [
         1.0,
-        4.6667,
+        11.3333,
         1.0
       ],
       "favored": "MAR",
-      "target_reliability": 0.7,
-      "favored_prob": 0.7
+      "tier": "fact",
+      "target_reliability": 0.85,
+      "favored_prob": 0.85
     },
     "planned_random": {
       "alpha": [
-        4.6667,
+        11.3333,
         1.0,
         1.0
       ],
       "favored": "MCAR",
-      "target_reliability": 0.7,
-      "favored_prob": 0.7
+      "tier": "fact",
+      "target_reliability": 0.85,
+      "favored_prob": 0.85
     },
     "sensitive_disclosure": {
       "alpha": [
@@ -37,6 +40,7 @@
         3.7143
       ],
       "favored": "MNAR",
+      "tier": "gut",
       "target_reliability": 0.65,
       "favored_prob": 0.65
     },
@@ -47,6 +51,7 @@
         1.0
       ],
       "favored": "MCAR",
+      "tier": "moderate",
       "target_reliability": 0.62,
       "favored_prob": 0.62
     },
@@ -57,6 +62,7 @@
         1.0
       ],
       "favored": "MAR",
+      "tier": "weak",
       "target_reliability": 0.52,
       "favored_prob": 0.52
     },
@@ -67,6 +73,7 @@
         1.0
       ],
       "favored": "MAR",
+      "tier": "weak",
       "target_reliability": 0.52,
       "favored_prob": 0.52
     },
@@ -77,6 +84,7 @@
         1.0
       ],
       "favored": null,
+      "tier": "flat",
       "target_reliability": 0.3333,
       "favored_prob": 0.3333
     }
