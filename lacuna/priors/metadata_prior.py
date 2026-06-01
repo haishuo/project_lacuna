@@ -99,6 +99,37 @@ def combine_prior_likelihood(alpha_prior: np.ndarray, alpha_like: np.ndarray) ->
     return 1.0 + (p - 1.0) + (q - 1.0)
 
 
+def aggregate_column_priors(column_alphas: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """Aggregate per-column Dirichlet priors into one DATASET prior, weighted by missing cells.
+
+    The dataset composition uses the by-cell denominator (ADR-0007), so columns are weighted by how many
+    missing cells they carry. Evidence is combined as a WEIGHTED AVERAGE (not a sum): the dataset prior
+    strength stays on the per-column scale (so all-columns-agree preserves strength rather than inflating
+    it), while the mean is the missing-cell-weighted mix of the columns' mechanisms.
+
+        alpha_dataset = 1 + sum_j (w_j / sum_w) * (alpha_col_j - 1)
+
+    Args:
+        column_alphas: [n_cols, 3] per-column prior pseudo-counts (each >= 1).
+        weights: [n_cols] non-negative per-column missing-cell counts (or fractions); must sum to > 0.
+
+    Raises:
+        ValueError: on bad shapes, sub-unit / non-finite alphas, or non-positive total weight.
+    """
+    A = np.asarray(column_alphas, dtype=float)
+    w = np.asarray(weights, dtype=float)
+    if A.ndim != 2 or A.shape[1] != N_CLASSES:
+        raise ValueError(f"column_alphas must be [n, {N_CLASSES}], got {A.shape}")
+    if w.shape != (A.shape[0],):
+        raise ValueError(f"weights must be [{A.shape[0]}], got {w.shape}")
+    if not np.isfinite(A).all() or (A < 1.0).any():
+        raise ValueError("column_alphas must be finite and >= 1")
+    if not np.isfinite(w).all() or (w < 0).any() or w.sum() <= 0:
+        raise ValueError("weights must be finite, non-negative, and sum to > 0")
+    wn = w / w.sum()
+    return 1.0 + (wn[:, None] * (A - 1.0)).sum(axis=0)
+
+
 def prior_mean(alpha: np.ndarray) -> np.ndarray:
     """Expected composition E[p] = alpha / alpha0 [3]."""
     a = np.asarray(alpha, dtype=float)

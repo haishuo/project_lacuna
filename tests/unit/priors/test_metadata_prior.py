@@ -6,7 +6,7 @@ import pytest
 from lacuna.priors.metadata_prior import (
     MCAR, MAR, MNAR, N_CLASSES, SEMANTIC_PRIOR_SPEC,
     reliability_to_strength, semantic_prior_alpha, combine_prior_likelihood,
-    prior_mean, channel_disagreement,
+    prior_mean, channel_disagreement, aggregate_column_priors,
 )
 
 
@@ -82,6 +82,44 @@ def test_channel_disagreement():
     d = channel_disagreement(semantic_prior_alpha("sensitive_disclosure"),  # MNAR
                              semantic_prior_alpha("planned_random"))         # MCAR
     assert d > 0.3
+
+
+# ---------------------------------------------------------------------------
+# By-cell aggregation of per-column priors -> dataset prior
+# ---------------------------------------------------------------------------
+
+def test_aggregate_all_same_preserves_strength():
+    """If every column carries the same prior, the dataset prior equals it (agreement keeps strength)."""
+    a = semantic_prior_alpha("sensitive_disclosure")
+    cols = np.stack([a, a, a])
+    agg = aggregate_column_priors(cols, weights=np.array([3.0, 5.0, 2.0]))
+    assert np.allclose(agg, a)
+
+
+def test_aggregate_weights_toward_heavy_column():
+    """A column with most of the missing cells dominates the dataset prior's mean."""
+    mnar = semantic_prior_alpha("sensitive_disclosure")   # leans MNAR
+    mcar = semantic_prior_alpha("planned_random")         # leans MCAR
+    heavy_mnar = aggregate_column_priors(np.stack([mnar, mcar]), weights=np.array([9.0, 1.0]))
+    assert int(np.argmax(prior_mean(heavy_mnar))) == MNAR
+    heavy_mcar = aggregate_column_priors(np.stack([mnar, mcar]), weights=np.array([1.0, 9.0]))
+    assert int(np.argmax(prior_mean(heavy_mcar))) == MCAR
+
+
+def test_aggregate_flat_columns_stay_flat():
+    flat = np.ones((4, N_CLASSES))
+    agg = aggregate_column_priors(flat, weights=np.array([1.0, 2.0, 3.0, 4.0]))
+    assert np.allclose(agg, np.ones(N_CLASSES))
+
+
+def test_aggregate_bad_shape_raises():
+    with pytest.raises(ValueError, match=r"\[n, 3\]"):
+        aggregate_column_priors(np.ones((3, 2)), weights=np.ones(3))
+
+
+def test_aggregate_zero_total_weight_raises():
+    with pytest.raises(ValueError, match="sum to > 0"):
+        aggregate_column_priors(np.ones((2, N_CLASSES)), weights=np.zeros(2))
 
 
 # ---------------------------------------------------------------------------
