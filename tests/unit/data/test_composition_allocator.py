@@ -154,3 +154,40 @@ def test_bad_frac_observed_range_raises():
     t = CompositionTarget(f_mcar=0.34, f_mar=0.33, f_mnar=0.33, miss_rate=0.3)
     with pytest.raises(ValueError, match="frac_observed_range"):
         plan_allocation(500, 10, t, RNGState(seed=0), frac_observed_range=(0.5, 0.2))
+
+
+# ---------------------------------------------------------------------------
+# mnar_block_share — per-class block override (Stage-F per-column-only MNAR)
+# ---------------------------------------------------------------------------
+
+# MNAR-heavy + wide so MNAR gets enough columns to host blocks under the default share.
+_MNAR_HEAVY = CompositionTarget(f_mcar=0.2, f_mar=0.3, f_mnar=0.5, miss_rate=0.3)
+
+
+def test_mnar_block_share_zero_forces_per_column_mnar():
+    """mnar_block_share=0.0 => every MNAR unit is a per-column 'column' unit (no joint MNAR blocks)."""
+    plan = plan_allocation(800, 40, _MNAR_HEAVY, RNGState(seed=2), mnar_block_share=0.0)
+    mnar_units = [u for u in plan.units if u.cls == MNAR]
+    assert mnar_units, "no MNAR units produced; check the heavy target"
+    assert all(u.kind == "column" for u in mnar_units), \
+        f"MNAR blocks survived: {[u.kind for u in mnar_units]}"
+
+
+def test_mnar_block_share_none_allows_blocks():
+    """Default (None) => MNAR may form blocks like MAR (bit-identical baseline)."""
+    plan = plan_allocation(800, 40, _MNAR_HEAVY, RNGState(seed=2))
+    mnar_kinds = {u.kind for u in plan.units if u.cls == MNAR}
+    assert mnar_kinds - {"column"}, f"expected some MNAR block kinds, got {mnar_kinds}"
+
+
+def test_mnar_block_share_zero_leaves_mar_blocks_intact():
+    """The override is MNAR-only: MAR still forms its skip-logic blocks."""
+    plan = plan_allocation(800, 40, _MNAR_HEAVY, RNGState(seed=2), mnar_block_share=0.0)
+    mar_kinds = {u.kind for u in plan.units if u.cls == MAR}
+    assert mar_kinds - {"column"}, f"MAR blocks were wrongly suppressed: {mar_kinds}"
+
+
+@pytest.mark.parametrize("bad", [-0.1, 1.5])
+def test_mnar_block_share_out_of_range_raises(bad):
+    with pytest.raises(ValueError, match="mnar_block_share"):
+        plan_allocation(500, 10, _MNAR_HEAVY, RNGState(seed=0), mnar_block_share=bad)

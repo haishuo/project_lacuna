@@ -203,6 +203,7 @@ def plan_allocation(
     block_rate_share: float = 0.85,
     rate_spread: float = 1.2,
     max_block_width: int = 8,
+    mnar_block_share: Optional[float] = None,
 ) -> AllocationPlan:
     """Plan units that realise `target`'s by-cell composition on an (n, d) dataset.
 
@@ -217,13 +218,18 @@ def plan_allocation(
             per-column). Higher => more co-missingness / fewer distinct patterns.
         rate_spread: Beta concentration ν for the per-column rate law (smaller => wider spread).
         max_block_width: cap on a single block's column count.
+        mnar_block_share: optional per-class override of `block_rate_share` for the MNAR class only.
+            ``None`` (default) = MNAR uses `block_rate_share` like MAR (bit-identical). Set to 0.0 to
+            force MNAR fully PER-COLUMN (no refusal/attrition/latent blocks) — the Stage-F probe sets
+            this so the loud-vs-quiet MNAR-subtype contrast is not diluted by joint MNAR blocks
+            (which have no threshold/detection variant). MAR/MCAR are unaffected.
 
     Returns:
         AllocationPlan with `expected_composition` (by-cell, from the drawn rates) and
         `expected_miss_rate`.
 
     Raises:
-        ValueError: on d < 4 or n < 1.
+        ValueError: on d < 4, n < 1, or mnar_block_share outside [0, 1].
     """
     if n < 1:
         raise ValueError(f"n must be >= 1, got {n}")
@@ -234,6 +240,8 @@ def plan_allocation(
     lo, hi = frac_observed_range
     if not 0.0 <= lo <= hi <= 1.0:
         raise ValueError(f"frac_observed_range must satisfy 0 <= lo <= hi <= 1, got {frac_observed_range}")
+    if mnar_block_share is not None and not 0.0 <= mnar_block_share <= 1.0:
+        raise ValueError(f"mnar_block_share must be in [0, 1] or None, got {mnar_block_share}")
 
     perm = [int(c) for c in rng.shuffle_indices(d)]
     n_obs = min(max(1, round(float(rng.numpy_rng.uniform(lo, hi)) * d)), d - 3)
@@ -258,8 +266,11 @@ def plan_allocation(
             # Class by-cell budget as rate-cells (cells_c / n): f_c · miss_rate · d. Hitting this
             # pins both the composition (to target) and the overall miss rate (to miss_rate).
             target_rate_cells = target.as_fractions()[cls] * target.miss_rate * d
+            # MNAR may override the block share (Stage-F sets 0.0 for per-column-only MNAR).
+            share = mnar_block_share if (cls == MNAR and mnar_block_share is not None) \
+                else block_rate_share
             units.extend(_emit_units(cls_cols, cls, block_kinds, pred, mu, rate_spread,
-                                     target_rate_cells, block_rate_share, max_block_width, rng))
+                                     target_rate_cells, share, max_block_width, rng))
 
     # Expected by-cell composition from the drawn rates: cells_c = n * sum(rate over class c's columns).
     cells = [0.0, 0.0, 0.0]

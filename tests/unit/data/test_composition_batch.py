@@ -87,6 +87,54 @@ def test_realized_label_matches_sampler():
 
 
 # ---------------------------------------------------------------------------
+# fixed_composition + mnar_subtypes (Stage-F: hold the composition fixed, vary only the MNAR family)
+# ---------------------------------------------------------------------------
+
+_LOUD = ("threshold_left", "threshold_right", "threshold_two_sided", "soft_threshold",
+         "col_specific_thresh", "detection_lower", "detection_upper", "detection_both")
+_QUIET = ("self_censoring", "selfcensor_high", "selfcensor_low", "selfcensor_extreme",
+          "selfcensor_weak", "selfcensor_strong")
+
+
+def test_fixed_composition_realises_near_target():
+    """fixed_composition forces every item toward the same by-cell mix (vs a fresh simplex draw);
+    the realised composition (the supervised label) lands near it on average."""
+    comp = (0.2, 0.3, 0.5)
+    mb = build_composition_batch(_raws(), RNGState(seed=3), max_rows=MAX_ROWS, max_cols=MAX_COLS,
+                                 batch_size=24, fixed_composition=comp, mnar_block_share=0.0)
+    mean = mb.composition.mean(0)
+    assert torch.allclose(mean, torch.tensor(comp), atol=0.08), f"mean realised {mean.tolist()}"
+
+
+def test_fixed_composition_corpora_matched_across_subtypes():
+    """THE Stage-F batch invariant: same rng + fixed composition, varying ONLY mnar_subtypes, gives
+    identical realised miss rates (matched data/plan) while the realised composition stays ~fixed —
+    so a downstream loud-vs-quiet model read differs only by the MNAR mechanism family."""
+    kw = dict(max_rows=MAX_ROWS, max_cols=MAX_COLS, batch_size=16,
+              fixed_composition=(0.2, 0.3, 0.5), mnar_block_share=0.0, with_footprints=True)
+    loud = build_composition_batch(_raws(), RNGState(seed=5), mnar_subtypes=_LOUD, **kw)
+    quiet = build_composition_batch(_raws(), RNGState(seed=5), mnar_subtypes=_QUIET, **kw)
+    assert loud.source_names == quiet.source_names                       # same datasets, same order
+    assert torch.allclose(loud.miss_rate, quiet.miss_rate, atol=0.05)    # matched overall miss level
+    # The MNAR-shape footprint features (obs skew/kurt) should differ between families…
+    assert not torch.allclose(loud.footprints, quiet.footprints)
+    # …while the composition stays the held-fixed target for both.
+    assert torch.allclose(loud.composition.mean(0), quiet.composition.mean(0), atol=0.06)
+
+
+def test_fixed_composition_bad_length_raises():
+    with pytest.raises(ValueError, match="3 entries"):
+        build_composition_batch(_raws(), RNGState(seed=0), max_rows=MAX_ROWS, max_cols=MAX_COLS,
+                                batch_size=4, fixed_composition=(0.5, 0.5))
+
+
+def test_fixed_composition_bad_sum_raises():
+    with pytest.raises(ValueError, match="sum to 1"):
+        build_composition_batch(_raws(), RNGState(seed=0), max_rows=MAX_ROWS, max_cols=MAX_COLS,
+                                batch_size=4, fixed_composition=(0.5, 0.3, 0.5))
+
+
+# ---------------------------------------------------------------------------
 # Failure cases
 # ---------------------------------------------------------------------------
 

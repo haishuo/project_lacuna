@@ -30,7 +30,7 @@ Determinism (Coding Bible Rule 6): all randomness flows through the injected RNG
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Sequence, Tuple
 
 import torch
 
@@ -81,12 +81,14 @@ class CompositionResult:
 
 
 def _per_column_unit_mask(cls: int, col: int, predictor, rate: float, z_full: torch.Tensor,
-                          rng: RNGState, strength: float) -> torch.Tensor:
+                          rng: RNGState, strength: float,
+                          mnar_subtypes: Optional[Sequence[str]] = None) -> torch.Tensor:
     """Apply a single per-column mechanism to the full predictor view; return the target column mask.
 
     MAR/MNAR use the diverse column pools (Band-3 fingerprints); MCAR is per-column Bernoulli (the
     random anchor). The pools target a column in the FULL matrix (MAR needs its clean predictor,
-    which lives in another column), exactly as `compose_mixed_missingness` does.
+    which lives in another column), exactly as `compose_mixed_missingness` does. `mnar_subtypes`, if
+    given, restricts the MNAR draw to a named subset (Stage-F loud-vs-quiet probe).
     """
     if cls == MCAR:
         gen = MCARBernoulli(0, "comp_mcar", GeneratorParams(miss_rate=rate))
@@ -95,7 +97,8 @@ def _per_column_unit_mask(cls: int, col: int, predictor, rate: float, z_full: to
                                              target_miss_rate=rate, strength=strength)
     else:  # MNAR
         _, gen = sample_mnar_column_generator(col, rng.spawn(),
-                                              target_miss_rate=rate, strength=strength)
+                                              target_miss_rate=rate, strength=strength,
+                                              subtypes=mnar_subtypes)
     return gen.apply_to(z_full, rng.spawn())[:, col]
 
 
@@ -109,6 +112,8 @@ def compose_composition_missingness(
     block_rate_share: float = 0.85,
     rate_spread: float = 1.2,
     max_block_width: int = 8,
+    mnar_subtypes: Optional[Sequence[str]] = None,
+    mnar_block_share: Optional[float] = None,
 ) -> CompositionResult:
     """Compose `raw` to `target`'s by-cell composition; return the masked data + per-cell tags.
 
@@ -119,6 +124,12 @@ def compose_composition_missingness(
         strength: value→missingness coupling strength forwarded to the column pools and blocks.
         frac_observed_range, block_rate_share, rate_spread, max_block_width: allocator knobs (see
             `composition_allocator.plan_allocation`).
+        mnar_subtypes: optional restriction of the per-column MNAR draw to a named subset of
+            `mnar_column_pool.MNAR_SUBTYPES` (default ``None`` = full pool, bit-identical). The
+            Stage-F probe uses this to force MNAR columns to the loud (threshold/detection) or quiet
+            (self-censoring) family while everything else is held fixed.
+        mnar_block_share: optional per-class block-share override for MNAR only (forwarded to the
+            allocator; default ``None`` = same as `block_rate_share`). Set 0.0 for per-column-only MNAR.
 
     Returns:
         CompositionResult (the realised composition is the ground truth, not the target).
@@ -136,6 +147,7 @@ def compose_composition_missingness(
         n, d, target, rng.spawn(),
         frac_observed_range=frac_observed_range, block_rate_share=block_rate_share,
         rate_spread=rate_spread, max_block_width=max_block_width,
+        mnar_block_share=mnar_block_share,
     )
 
     R = torch.ones(n, d, dtype=torch.bool)
@@ -145,7 +157,7 @@ def compose_composition_missingness(
         if unit.kind == "column":
             col = unit.cols[0]
             r_col = _per_column_unit_mask(unit.cls, col, unit.predictor, unit.rate, Z,
-                                          rng.spawn(), strength)
+                                          rng.spawn(), strength, mnar_subtypes=mnar_subtypes)
             R[:, col] = r_col
             tags[~r_col, col] = unit.cls
         else:

@@ -134,3 +134,49 @@ def test_bool_target_raises():
 def test_bad_miss_rate_raises(bad_rate):
     with pytest.raises(ValueError, match="target_miss_rate"):
         sample_mnar_column_generator(2, RNGState(seed=0), target_miss_rate=bad_rate)
+
+
+# ---------------------------------------------------------------------------
+# `subtypes` restriction (Stage-F loud-vs-quiet probe)
+# ---------------------------------------------------------------------------
+
+_LOUD = ("threshold_left", "threshold_right", "threshold_two_sided", "soft_threshold",
+         "col_specific_thresh", "detection_lower", "detection_upper", "detection_both")
+_QUIET = ("self_censoring", "selfcensor_high", "selfcensor_low", "selfcensor_extreme",
+          "selfcensor_weak", "selfcensor_strong")
+
+
+@pytest.mark.parametrize("subset", [_LOUD, _QUIET])
+def test_subtypes_restricts_draws_to_subset(subset):
+    """Over many draws, a `subtypes` restriction yields ONLY the named subtypes — and exercises the
+    whole subset (no dead branch). This is the knob the Stage-F loud-vs-quiet contrast rests on."""
+    rng = RNGState(seed=1)
+    seen = Counter(sample_mnar_column_generator(1, rng.spawn(), subtypes=subset)[0]
+                   for _ in range(1500))
+    assert set(seen) <= set(subset), f"drew outside the subset: {set(seen) - set(subset)}"
+    assert set(seen) == set(subset), f"never drew: {set(subset) - set(seen)}"
+
+
+def test_subtypes_single_is_deterministic_choice():
+    """A singleton subset always returns that subtype (the monoculture limit)."""
+    for _ in range(20):
+        name, gen = sample_mnar_column_generator(2, RNGState(seed=0), subtypes=("self_censoring",))
+        assert name == "self_censoring"
+        assert gen.class_id == MNAR
+
+
+def test_subtypes_none_matches_full_pool_default():
+    """`subtypes=None` is bit-identical to the default full-pool draw (no behaviour change)."""
+    a = sample_mnar_column_generator(3, RNGState(seed=42))[0]
+    b = sample_mnar_column_generator(3, RNGState(seed=42), subtypes=None)[0]
+    assert a == b
+
+
+def test_unknown_subtype_raises():
+    with pytest.raises(ValueError, match="unknown MNAR subtype"):
+        sample_mnar_column_generator(2, RNGState(seed=0), subtypes=("not_a_real_subtype",))
+
+
+def test_empty_subtypes_raises():
+    with pytest.raises(ValueError, match="non-empty"):
+        sample_mnar_column_generator(2, RNGState(seed=0), subtypes=())

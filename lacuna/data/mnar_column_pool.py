@@ -46,7 +46,7 @@ The returned generator's `class_id` is always MNAR; `apply_to(Z, rng)` censors o
 `target_col_idx`. `target_col_idx` must be a non-negative int; failures are loud (Rule 1).
 """
 
-from typing import List, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from lacuna.core.rng import RNGState
 from lacuna.data._column_pool_math import logit as _logit, comp_beta0 as _comp_beta0, norm_ppf as _norm_ppf
@@ -226,6 +226,7 @@ def sample_mnar_column_generator(
     *,
     target_miss_rate: float = 0.25,
     strength: float = 1.5,
+    subtypes: Optional[Sequence[str]] = None,
 ) -> Tuple[str, Generator]:
     """Pick a diverse MNAR subtype and return (subtype_name, generator) targeting the column.
 
@@ -234,9 +235,15 @@ def sample_mnar_column_generator(
         rng: Explicit RNG (subtype choice + generator draws flow through it).
         target_miss_rate: Approximate marginal missing fraction for the column (confound control).
         strength: Logistic slope for the sigmoid-on-own-value subtypes (self-censoring etc.).
+        subtypes: optional restriction of the draw to a named subset of `MNAR_SUBTYPES`. ``None``
+            (default) = draw uniformly from the FULL pool (bit-identical to before). When given, the
+            draw is uniform over only the named subtypes — the knob the Stage-F loud-vs-quiet probe
+            uses to force MNAR columns to a chosen mechanism family (e.g. threshold/detection vs
+            self-censoring) while everything else is held fixed (ADR-0007 Pillar 1).
 
     Raises:
-        ValueError: if target_col_idx is negative/non-int or target_miss_rate not in (0, 1).
+        ValueError: if target_col_idx is negative/non-int, target_miss_rate not in (0, 1), or
+            `subtypes` names an unknown subtype / is empty.
     """
     if not isinstance(target_col_idx, int) or isinstance(target_col_idx, bool):
         raise ValueError(f"target_col_idx must be an int, got {target_col_idx!r}")
@@ -246,6 +253,15 @@ def sample_mnar_column_generator(
         raise ValueError(f"target_miss_rate must be in (0, 1), got {target_miss_rate}")
 
     builders = _builders(target_col_idx, target_miss_rate, strength)
+    if subtypes is not None:
+        wanted = list(subtypes)
+        if not wanted:
+            raise ValueError("subtypes, if given, must be a non-empty subset of MNAR_SUBTYPES")
+        unknown = set(wanted) - set(MNAR_SUBTYPES)
+        if unknown:
+            raise ValueError(f"unknown MNAR subtype(s) {sorted(unknown)}; valid: {MNAR_SUBTYPES}")
+        allowed = set(wanted)
+        builders = [(name, gen) for name, gen in builders if name in allowed]
     pick = rng.randint(0, len(builders), (1,)).item()
     name, gen = builders[pick]
     return name, gen

@@ -157,3 +157,60 @@ def test_incomplete_input_raises():
     with pytest.raises(ValueError, match="non-finite"):
         compose_composition_missingness(raw, CompositionTarget(0.34, 0.33, 0.33, miss_rate=0.3),
                                         RNGState(seed=0))
+
+
+# ---------------------------------------------------------------------------
+# Stage-F loud-vs-quiet probe — mnar_subtypes restriction + the MATCHED-CORPUS invariant
+# ---------------------------------------------------------------------------
+
+_LOUD = ("threshold_left", "threshold_right", "threshold_two_sided", "soft_threshold",
+         "col_specific_thresh", "detection_lower", "detection_upper", "detection_both")
+_QUIET = ("self_censoring", "selfcensor_high", "selfcensor_low", "selfcensor_extreme",
+          "selfcensor_weak", "selfcensor_strong")
+
+
+def test_matched_corpora_differ_only_in_mnar():
+    """THE Stage-F invariant: the SAME rng + SAME target, varying ONLY mnar_subtypes (MNAR per-
+    column-only), gives byte-identical MCAR and MAR cell masks and a DIFFERENT MNAR mask. This is
+    what makes the loud-vs-quiet contrast a clean single-variable comparison."""
+    raw = _complete(1500, 20, 200)
+    t = CompositionTarget(0.2, 0.3, 0.5, miss_rate=0.3)
+    resL = compose_composition_missingness(raw, t, RNGState(seed=7),
+                                           mnar_subtypes=_LOUD, mnar_block_share=0.0)
+    resQ = compose_composition_missingness(raw, t, RNGState(seed=7),
+                                           mnar_subtypes=_QUIET, mnar_block_share=0.0)
+    # MCAR and MAR tags are identical (the plan + their masks are subtype-independent).
+    assert torch.equal(resL.cell_tags == MCAR, resQ.cell_tags == MCAR)
+    assert torch.equal(resL.cell_tags == MAR, resQ.cell_tags == MAR)
+    # MNAR tags differ (loud threshold/detection vs quiet self-censoring leave different masks).
+    assert not torch.equal(resL.cell_tags == MNAR, resQ.cell_tags == MNAR)
+
+
+def test_mnar_block_share_zero_makes_all_mnar_per_column():
+    """With mnar_block_share=0 every MNAR cell is tagged by a per-column unit (no joint blocks)."""
+    raw = _complete(1200, 30, 201)
+    t = CompositionTarget(0.2, 0.3, 0.5, miss_rate=0.3)
+    res = compose_composition_missingness(raw, t, RNGState(seed=8), mnar_block_share=0.0)
+    assert all(u.kind == "column" for u in res.plan.units if u.cls == MNAR)
+    assert (res.cell_tags == MNAR).sum() > 0
+
+
+def test_mnar_subtypes_restriction_realises_composition():
+    """Restricting the MNAR family still hits the by-cell composition (the budget is rate-driven,
+    not subtype-driven), for both loud and quiet — so the contrast holds the fraction fixed."""
+    t = CompositionTarget(0.2, 0.3, 0.5, miss_rate=0.3)
+    for subset in (_LOUD, _QUIET):
+        l1s = []
+        rng = RNGState(seed=0)
+        for s in range(5):
+            res = compose_composition_missingness(_complete(1500, 20, 300 + s), t, rng.spawn(),
+                                                  mnar_subtypes=subset, mnar_block_share=0.0)
+            l1s.append(_l1(res.realized_composition, (0.2, 0.3, 0.5)))
+        assert np.mean(l1s) < 0.12, f"{subset[0]}…: realised composition L1 {np.mean(l1s):.3f}"
+
+
+def test_unknown_mnar_subtype_raises():
+    t = CompositionTarget(0.2, 0.3, 0.5, miss_rate=0.3)
+    with pytest.raises(ValueError, match="unknown MNAR subtype"):
+        compose_composition_missingness(_complete(500, 14, 1), t, RNGState(seed=0),
+                                        mnar_subtypes=("bogus",))
