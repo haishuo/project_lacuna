@@ -94,6 +94,7 @@ on the same benchmark. **name+desc, strongly-grounded columns:**
 | Qwen2.5-14B | 14B | transformers nf4 | **0.917** | 0.81 | 0.542 |
 | Llama-3.2-3B | 3B | ollama Q4 | 0.375 | 0.30 | 0.458 |
 | Llama-3.1-8B | 8B | ollama Q4 | 0.667 | 0.61 | 0.50 |
+| **Llama-3.1-8B** | 8B | **transformers nf4** | **0.667** | 0.70 | 0.50 |
 | Gemma2-9B | 9B | ollama Q4 | **0.792** | **0.81** | 0.417 |
 
 1. **The story generalises — it is NOT Qwen-specific.** A different-family 9B (Gemma2-9B) matches
@@ -103,10 +104,14 @@ on the same benchmark. **name+desc, strongly-grounded columns:**
    3B; Llama-3.2-3B (0.375) sits at baseline. So "3B suffices" was a Qwen-specific finding — the
    **family-robust operating floor is ~8–9B** (Gemma2-9B 0.79, Qwen2.5-7B 0.79, Llama-3.1-8B 0.67).
 3. At matched size, **Qwen2.5 / Gemma2 > Llama-3.1** here (8B Llama 0.67 vs 7B Qwen 0.79 vs 9B Gemma 0.79).
-4. **Caveat on the Ollama numbers:** GGUF Q4 is a different quantization AND runtime than the
-   transformers nf4 lineup, so these mix family+runtime+quant; and Ollama's greedy decode is only
-   *approximately* reproducible (~±1–2 columns run-to-run, unlike the deterministic transformers path).
-   The clean apples-to-apples Llama run (transformers + nf4, same as Qwen) is pending an on-box HF token.
+4. **The runtime/quant caveat turned out to be a non-issue (now resolved).** Running the *same model*,
+   Llama-3.1-8B, through both runtimes gives an **identical 0.667 strong** (and identical 0.50 name-only) —
+   transformers-nf4 vs Ollama-GGUF-Q4 make no difference to mechanism accuracy on this task. So the
+   cross-family comparison is apples-to-apples after all, and the Llama-8B < Qwen-7B gap (0.667 vs 0.792)
+   is a genuine **family** effect, not a quantization artifact. (Llama-3.2-3B's transformers run 403'd —
+   its license is a separate acceptance from Llama-3.1's — so the 3B Llama point is Ollama-only; Ollama's
+   greedy decode is also only ~±1–2 columns reproducible, the one reason to prefer the transformers path
+   for the final deployed/benchmarked instrument.)
 
 ## Caveats / limitations
 

@@ -52,6 +52,10 @@ LINEUP = [
     ("Phi-3.5-mini", "microsoft/Phi-3.5-mini-instruct", "bf16"),
     ("Qwen2.5-7B", "Qwen/Qwen2.5-7B-Instruct", "4bit"),
     ("Qwen2.5-14B", "Qwen/Qwen2.5-14B-Instruct", "4bit"),
+    # Cross-family via the SAME transformers path (gated — need an on-box HF token). Precision matched
+    # to the Qwen size points (3B bf16, 8B nf4) for an apples-to-apples comparison.
+    ("Llama-3.2-3B", "meta-llama/Llama-3.2-3B-Instruct", "bf16"),
+    ("Llama-3.1-8B", "meta-llama/Llama-3.1-8B-Instruct", "4bit"),
 ]
 
 # Cross-family check via Ollama (GGUF Q4, served locally — no HF gate/token). A different runtime +
