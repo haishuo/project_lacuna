@@ -82,6 +82,32 @@ Mechanism accuracy (mean over clear columns; **strong** = the 24 structurally-gr
 as random) while **MNAR is near-perfect (18/19)** and MCAR strong (9/10). 7B carries an **MCAR-lean**
 (over-calls MCAR for several MAR/MNAR) yet nails all 10 MCAR. The errors are interpretable, not random.
 
+## Cross-family check (Ollama, GGUF Q4 — a different runtime than the Qwen lineup)
+
+To test whether the result is Qwen-specific, three non-Qwen models were run via Ollama (no HF gate)
+on the same benchmark. **name+desc, strongly-grounded columns:**
+
+| model | params | runtime | strong acc | semantic | name-only strong |
+|---|--:|---|--:|--:|--:|
+| Qwen2.5-3B | 3B | transformers bf16 | **0.875** | 0.44 | 0.125 |
+| Qwen2.5-7B | 7B | transformers nf4 | 0.792 | 0.72 | 0.333 |
+| Qwen2.5-14B | 14B | transformers nf4 | **0.917** | 0.81 | 0.542 |
+| Llama-3.2-3B | 3B | ollama Q4 | 0.375 | 0.30 | 0.458 |
+| Llama-3.1-8B | 8B | ollama Q4 | 0.667 | 0.61 | 0.50 |
+| Gemma2-9B | 9B | ollama Q4 | **0.792** | **0.81** | 0.417 |
+
+1. **The story generalises — it is NOT Qwen-specific.** A different-family 9B (Gemma2-9B) matches
+   Qwen2.5-7B (0.792 strong, 0.814 semantic) and collapses name-only just the same; codebook
+   descriptions are load-bearing across every family.
+2. **But the *small-model floor* is family-dependent.** Qwen2.5-3B (0.875) is exceptionally strong for
+   3B; Llama-3.2-3B (0.375) sits at baseline. So "3B suffices" was a Qwen-specific finding — the
+   **family-robust operating floor is ~8–9B** (Gemma2-9B 0.79, Qwen2.5-7B 0.79, Llama-3.1-8B 0.67).
+3. At matched size, **Qwen2.5 / Gemma2 > Llama-3.1** here (8B Llama 0.67 vs 7B Qwen 0.79 vs 9B Gemma 0.79).
+4. **Caveat on the Ollama numbers:** GGUF Q4 is a different quantization AND runtime than the
+   transformers nf4 lineup, so these mix family+runtime+quant; and Ollama's greedy decode is only
+   *approximately* reproducible (~±1–2 columns run-to-run, unlike the deterministic transformers path).
+   The clean apples-to-apples Llama run (transformers + nf4, same as Qwen) is pending an on-box HF token.
+
 ## Caveats / limitations
 
 - **Abstention is real but uncalibrated out-of-the-box.** 3B *over*-abstains (abstain-recall 1.0 but
@@ -100,12 +126,14 @@ as random) while **MNAR is near-perfect (18/19)** and MCAR strong (9/10). 7B car
 
 ## Verdict
 
-A **local 3–14B model authors the missingness-mechanism prior well** (14B: 0.92 on grounded columns, every
-signature case right, including the PISA blind spot the data channel cannot fix) — **no frontier model
-required, and none wanted** in a HIPAA-shaped, reproducibility-bound loop. Recommended operating point on a
-16 GB card: **Qwen2.5-14B in 4-bit** for best accuracy + semantic precision; 3–7B as a lighter floor. The
-endpoint is plausibly a small fine-tuned classifier distilled from this, with a *fitted* abstention
-threshold. This clears the feasibility bar for an ADR on the prior×likelihood instrument.
+A **local model authors the missingness-mechanism prior well** (Qwen2.5-14B: 0.92 on grounded columns,
+every signature case right, including the PISA blind spot the data channel cannot fix) — **no frontier
+model required, and none wanted** in a HIPAA-shaped, reproducibility-bound loop. The result is **not
+Qwen-specific** (Gemma2-9B matches Qwen2.5-7B), but the usable floor is **family-dependent**: ~8–9B is the
+robust operating point, while a *3B* model only suffices for the unusually-strong Qwen2.5-3B. Recommended
+on a 16 GB card: **Qwen2.5-14B in 4-bit** for best accuracy + semantic precision (Gemma2-9B a strong
+cross-family second). The endpoint is plausibly a small fine-tuned classifier distilled from this, with a
+*fitted* abstention threshold. This clears the feasibility bar for an ADR on the prior×likelihood instrument.
 
 ## Reproduce
 

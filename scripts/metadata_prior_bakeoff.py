@@ -33,6 +33,7 @@ import gc
 import json
 import re
 import sys
+import urllib.request
 from pathlib import Path
 
 import torch
@@ -52,6 +53,16 @@ LINEUP = [
     ("Qwen2.5-7B", "Qwen/Qwen2.5-7B-Instruct", "4bit"),
     ("Qwen2.5-14B", "Qwen/Qwen2.5-14B-Instruct", "4bit"),
 ]
+
+# Cross-family check via Ollama (GGUF Q4, served locally — no HF gate/token). A different runtime +
+# quantization than the transformers lineup above, so it is a mixed-runtime sanity check on whether the
+# size/codebook findings are Qwen-specific, not a bit-identical comparison. (display name, ollama tag.)
+OLLAMA_LINEUP = [
+    ("Llama-3.2-3B", "llama3.2:3b"),
+    ("Llama-3.1-8B", "llama3.1:8b"),
+    ("Gemma2-9B", "gemma2:9b"),
+]
+OLLAMA_HOST = "http://127.0.0.1:11434"
 
 MECHS = ("MCAR", "MAR", "MNAR", "INDETERMINATE")
 SEMANTICS = ("lab_lod", "sensitive_disclosure", "skip_gated", "planned_random",
@@ -132,24 +143,47 @@ def generate(tok, model, messages, device, max_new_tokens):
     return tok.decode(out[0, inputs.shape[1]:], skip_special_tokens=True)
 
 
-def run_model(name, repo, quant, columns, conditions, device, max_new_tokens):
-    print(f"\n=== {name} ({repo}, {quant}) ===", flush=True)
-    tok, model = load_model(repo, quant, device)
+def _assess(gen_text, columns, conditions):
+    """Backend-agnostic loop: `gen_text(messages) -> str` is called per (condition, column)."""
     results = []
     for cond in conditions:
         for col in columns:
             messages = [{"role": "system", "content": SYSTEM},
                         {"role": "user", "content": make_user(col, cond)}]
-            text = generate(tok, model, messages, device, max_new_tokens)
+            text = gen_text(messages)
             mech, sem, conf = parse_answer(text)
             results.append({"id": col["id"], "condition": cond, "gold_mechanism": col["gold_mechanism"],
                             "gold_semantic": col["gold_semantic"], "grounding": col["grounding"],
                             "pred_mechanism": mech, "pred_semantic": sem, "pred_confidence": conf,
                             "raw_tail": text[-200:]})
+    return results
+
+
+def run_model(name, repo, quant, columns, conditions, device, max_new_tokens):
+    print(f"\n=== {name} ({repo}, {quant}) ===", flush=True)
+    tok, model = load_model(repo, quant, device)
+    results = _assess(lambda msgs: generate(tok, model, msgs, device, max_new_tokens),
+                      columns, conditions)
     del model, tok
     gc.collect()
     torch.cuda.empty_cache()
     return results
+
+
+def ollama_generate(tag, messages, max_new_tokens, seed):
+    """Greedy, seeded generation via the local Ollama chat API (deterministic; fully on-prem)."""
+    payload = {"model": tag, "messages": messages, "stream": False,
+               "options": {"temperature": 0.0, "seed": seed, "num_predict": max_new_tokens}}
+    req = urllib.request.Request(OLLAMA_HOST + "/api/chat",
+                                 data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        return json.loads(r.read())["message"]["content"]
+
+
+def run_model_ollama(name, tag, columns, conditions, max_new_tokens, seed):
+    print(f"\n=== {name} ({tag}, ollama-gguf) ===", flush=True)
+    return _assess(lambda msgs: ollama_generate(tag, msgs, max_new_tokens, seed), columns, conditions)
 
 
 def score(results, columns):
@@ -193,15 +227,24 @@ def score(results, columns):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--models", nargs="+", default=[n for n, _, _ in LINEUP],
-                    help="subset of model display names to run")
+    ap.add_argument("--backend", default="transformers", choices=["transformers", "ollama"],
+                    help="transformers (HF, the Qwen lineup) or ollama (local GGUF cross-family check)")
+    ap.add_argument("--models", nargs="+", default=None,
+                    help="subset of model display names (default: all in the chosen backend's lineup)")
     ap.add_argument("--conditions", nargs="+", default=["name+desc", "name-only"],
                     choices=["name+desc", "name-only"])
     ap.add_argument("--max-new-tokens", type=int, default=200)
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    ap.add_argument("--output", type=Path, default=OUT)
+    ap.add_argument("--output", type=Path, default=None)
     ap.add_argument("--seed", type=int, default=20260601)
     args = ap.parse_args()
+    if args.output is None:
+        args.output = OUT.with_name("bakeoff_results_ollama.json") if args.backend == "ollama" else OUT
+    if args.backend == "ollama":
+        available = {n: t for (n, t) in OLLAMA_LINEUP}
+    else:
+        available = {n: (r, q) for (n, r, q) in LINEUP}
+    names = [n for n in (args.models or list(available)) if n in available]
 
     torch.manual_seed(args.seed)
     bench = json.loads(BENCH.read_text())
@@ -210,15 +253,20 @@ def main():
                    key=lambda m: sum(1 for c in columns if c["gold_mechanism"] == m))
     maj_clear = [c for c in columns if c["gold_mechanism"] != "INDETERMINATE"]
     maj_acc = sum(1 for c in maj_clear if c["gold_mechanism"] == majority) / len(maj_clear)
-    print(f"Benchmark: {len(columns)} columns | majority class '{majority}' = {maj_acc:.3f} on clear cols "
-          f"| conditions {args.conditions}")
+    print(f"Benchmark: {len(columns)} columns | backend {args.backend} | majority class '{majority}' = "
+          f"{maj_acc:.3f} on clear cols | conditions {args.conditions}")
 
-    report = {"benchmark_n": len(columns), "majority_class": majority, "majority_acc_clear": round(maj_acc, 4),
-              "conditions": args.conditions, "models": {}}
-    todo = [(n, r, q) for (n, r, q) in LINEUP if n in args.models]
-    for name, repo, quant in todo:
+    report = {"benchmark_n": len(columns), "backend": args.backend, "majority_class": majority,
+              "majority_acc_clear": round(maj_acc, 4), "conditions": args.conditions, "models": {}}
+    for name in names:
         try:
-            res = run_model(name, repo, quant, columns, args.conditions, args.device, args.max_new_tokens)
+            if args.backend == "ollama":
+                tag = available[name]
+                res = run_model_ollama(name, tag, columns, args.conditions, args.max_new_tokens, args.seed)
+                quant = tag
+            else:
+                repo, quant = available[name]
+                res = run_model(name, repo, quant, columns, args.conditions, args.device, args.max_new_tokens)
         except Exception as e:  # noqa: BLE001
             print(f"  !! {name} failed: {e}", flush=True)
             report["models"][name] = {"error": str(e)}
@@ -244,7 +292,7 @@ def main():
     for cond in args.conditions:
         hdr += f" | {cond:>10s} clear/strong/abst"
     print(hdr)
-    for name, _, _ in todo:
+    for name in names:
         info = report["models"].get(name, {})
         if "error" in info:
             print(f"  {name:14s}  ERROR: {info['error'][:60]}")
