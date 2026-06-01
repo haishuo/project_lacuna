@@ -149,6 +149,41 @@ subtypes at high recall or to strongly override a wrong prior. The honest output
 absent — fully consistent with Stage 5 (the matched-rate non-identifiability wall) and the P-arc
 (the prior's value is real, reliability-contingent, and uncheckable on the non-identifiable subtypes).
 
+## Follow-up — richer per-column features do NOT lift the deployable ceiling (NULL)
+
+The open lead was that richer per-column distributional features might lift the ~0.82 detector
+ceiling. `scripts/stageQ_richer_features_probe.py` tests this directly (one variable = the feature set;
+RF loud-vs-reject ceiling; 5 seeds, matched rate), adding three theory-motivated families to the
+base-5, each targeting a different way LOUD differs from REJECT:
+
+| feature set | loud-vs-reject AUC | AP |
+|---|---|---|
+| base5 (current deployable) | **0.819 ± 0.020** | 0.421 |
+| + shape9 (own-value: quantile-edge ratios + L-moments) | 0.789 ± 0.032 | 0.380 |
+| + mar4 (richer MAR-axis: max / top-3 / frac-coupled / sd of per-other-column SMD) | 0.819 ± 0.034 | 0.429 |
+| + disc1 (max adjacent-bin density jump — a discontinuity signature) | 0.825 ± 0.015 | 0.428 |
+| + all | 0.822 ± 0.031 | 0.434 |
+
+**Clean NULL.** No richer family lifts the ceiling. Specifically:
+- **Own-value shape features (the sharp-cutoff/pileup signature) HURT** (−0.03 AUC, −0.04 AP): on real
+  catalog columns the arbitrary base-distribution shape swamps the censoring edge, so quantile-edge /
+  L-moment features add noise the RF splits on. The base-5 `robust_skew`/`excess_kurtosis` already
+  extract the available own-value signal.
+- **Richer MAR-axis coupling is flat** (0.819 → 0.819, *higher* variance). A 3-seed pilot showed a
+  spurious +0.016; at 5 seeds the mean is identical and the per-seed lift is seed-dependent
+  (+0.07 on one seed, −0.03 on others) — noise, not signal. The single `smd_to_others` already
+  captures the loud-vs-MAR separation; more coupling statistics do not help.
+- **The density-discontinuity feature is within noise** (+0.006 AUC, AP flat) — a density jump is not
+  cleanly recoverable from a 20-bin histogram of ~75%-observed real-catalog values.
+
+So **~0.82 AUC is the deployable-feature ceiling for per-column loud-vs-reject at matched rate.** The
+binding constraint is loud-vs-self-censoring (a *sharp* vs *graded* truncation distinction, RF AUC
+~0.73), which none of own-value shape, MAR-axis coupling, or density-discontinuity features crack on
+real catalog data — consistent with Stage 5's matched-rate non-identifiability bound. The data channel
+stays weak, and the Stage-Q verdict is unchanged: the subtype layer is prior-led with calibrated
+abstention. (The production detector keeps the 5 deployable features; no richer family justified the
+added surface.)
+
 ## Caveats
 
 - **Semi-synthetic; simulated prior reliability** (ρ injected, as P5/P6) — the real prior's subtype
@@ -158,14 +193,16 @@ absent — fully consistent with Stage 5 (the matched-rate non-identifiability w
   split and the 5-seed sd, but the dataset *diversity* is limited.
 - **`kappa_like` is a fixed operating point** (20). It sets the prior:data evidence ratio; calibration
   absorbs the scale, but the override rate is sensitive to it (reported at the honest, non-inflated value).
-- **Detector AUC ~0.82** is the RF ceiling on the *current* 5 deployable features; richer per-column
-  distributional / MNAR-axis features (the Stage-5 "future" lead) could lift it — untested here.
+- **Detector AUC ~0.82** is the RF ceiling on the 5 deployable features; richer per-column
+  distributional / MAR-axis / discontinuity features were tested (see the follow-up section) and do
+  **not** lift it — ~0.82 is the deployable ceiling at matched rate.
 
 ## Reproduce
 
 ```
 python scripts/stageQ_subtype_layer.py --seeds 5            # the layer (likelihood + fusion + abstention)
 python scripts/stageQ_feature_attribution.py --seeds 3      # the encoder-dilution attribution
+python scripts/stageQ_richer_features_probe.py --seeds 5    # richer-feature ceiling probe (NULL)
 ```
 
 ## Files
@@ -173,5 +210,5 @@ python scripts/stageQ_feature_attribution.py --seeds 3      # the encoder-diluti
 - Ontology + generic ops: `lacuna/priors/{subtype_ontology,dirichlet_evidence}.py`.
 - Prior + targets + detector: `lacuna/priors/subtype_prior.py`, `lacuna/data/subtype_targets.py`,
   `lacuna/models/subtype_likelihood.py` (+ tests under `tests/unit/{priors,data,models}/`).
-- Scripts + reports: `scripts/stageQ_{subtype_layer,feature_attribution}.py`;
-  `runs/stage0_general_baseline/stageQ_{subtype_layer,feature_attribution}.json`.
+- Scripts + reports: `scripts/stageQ_{subtype_layer,feature_attribution,richer_features_probe}.py`;
+  `runs/stage0_general_baseline/stageQ_{subtype_layer,feature_attribution,richer_features_probe}.json`.
