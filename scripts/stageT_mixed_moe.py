@@ -140,50 +140,73 @@ def build_model(cfg, mnar_variants):
         evidence_attenuation_init=cfg.model.evidence_attenuation_init)
 
 
-def evaluate_mixed(model, loader, device, n_batches=None):
-    """Confusion matrix + per-class + ECE on held-out MIXED val data (the regime we train on)."""
+def collect_probs(model, loader, device, n_batches=None):
+    """Run the model over a MIXED loader; return class probabilities [N,3] and true labels [N]."""
     model.eval()
-    conf = np.zeros((3, 3), dtype=int)
-    confs, corrects = [], []
-    mnar_p, mnar_y, struct = [], [], []
+    P, Y = [], []
     with torch.no_grad():
         for bi, batch in enumerate(loader):
             if n_batches is not None and bi >= n_batches:
                 break
             out = model(batch.to(device))
-            p = out.posterior.p_class.detach().cpu().numpy()       # [B, 3]
-            y = batch.class_ids.cpu().numpy()
-            pred = p.argmax(1)
-            for t, pr in zip(y, pred):
-                conf[t, pr] += 1
-            confs.append(p.max(1)); corrects.append((pred == y).astype(float))
-            mnar_p.append(p[:, MNAR] / (p[:, MAR] + p[:, MNAR] + 1e-9)); mnar_y.append(y); struct.append(y)
-    confs = np.concatenate(confs); corrects = np.concatenate(corrects)
+            P.append(out.posterior.p_class.detach().cpu().numpy())
+            Y.append(batch.class_ids.cpu().numpy())
+    return np.concatenate(P), np.concatenate(Y)
+
+
+def _apply_temperature(p, tau):
+    """Categorical temperature scaling on probabilities: softmax(log(p)/tau). argmax-INVARIANT."""
+    if tau == 1.0:
+        return p
+    logp = np.log(np.clip(p, 1e-8, 1.0)) / tau
+    logp -= logp.max(1, keepdims=True)
+    e = np.exp(logp)
+    return e / e.sum(1, keepdims=True)
+
+
+def fit_temperature(cal_p, cal_y):
+    """Fit the calibration temperature minimising NLL on a held-out cal split (grid; like v1.0)."""
+    best_t, best_nll = 1.0, float("inf")
+    for t in np.geomspace(0.3, 6.0, 60):
+        p = _apply_temperature(cal_p, float(t))
+        nll = float(-np.log(p[np.arange(len(cal_y)), cal_y] + 1e-12).mean())
+        if nll < best_nll:
+            best_nll, best_t = nll, float(t)
+    return round(best_t, 4)
+
+
+def metrics_from_probs(p, y, tau=1.0):
+    """Confusion / per-class / ECE / MAR-vs-MNAR AUC from probabilities, at temperature `tau`.
+    Temperature affects ONLY ECE (confidence); accuracy/confusion/AUC are argmax/rank-invariant."""
+    p = _apply_temperature(p, tau)
+    pred = p.argmax(1)
+    conf = np.zeros((3, 3), dtype=int)
+    for t, pr in zip(y, pred):
+        conf[t, pr] += 1
     total = int(conf.sum()); acc = conf.trace() / total if total else 0.0
-    names = ("MCAR", "MAR", "MNAR")
     per_class = {}
-    for k, nm in enumerate(names):
+    for k, nm in enumerate(("MCAR", "MAR", "MNAR")):
         rec = conf[k, k] / conf[k].sum() if conf[k].sum() else None
         prec = conf[k, k] / conf[:, k].sum() if conf[:, k].sum() else None
         per_class[nm] = {"recall": round(float(rec), 4) if rec is not None else None,
                          "precision": round(float(prec), 4) if prec is not None else None}
+    confs, corrects = p.max(1), (pred == y).astype(float)
     ece = 0.0
     for b in range(10):
         lo, hi = b / 10, (b + 1) / 10
         m = (confs >= lo) & (confs < hi if b < 9 else confs <= hi)
         if m.any():
             ece += m.mean() * abs(corrects[m].mean() - confs[m].mean())
-    # MAR-vs-MNAR among structured (true MAR/MNAR) — the decisive axis
-    mp = np.concatenate(mnar_p); yy = np.concatenate(mnar_y)
-    st = (yy == MAR) | (yy == MNAR)
+    st = (y == MAR) | (y == MNAR)
+    rel = p[:, MNAR] / (p[:, MAR] + p[:, MNAR] + 1e-9)
     try:
         from sklearn.metrics import roc_auc_score
-        ybin = (yy[st] == MNAR).astype(int)
-        mar_mnar_auc = round(float(roc_auc_score(ybin, mp[st])), 4) if 0 < ybin.mean() < 1 else None
+        ybin = (y[st] == MNAR).astype(int)
+        auc = round(float(roc_auc_score(ybin, rel[st])), 4) if 0 < ybin.mean() < 1 else None
     except Exception:  # noqa: BLE001
-        mar_mnar_auc = None
+        auc = None
     return {"accuracy": round(float(acc), 4), "confusion_true_by_pred": conf.tolist(),
-            "per_class": per_class, "ece": round(float(ece), 4), "mar_vs_mnar_auc": mar_mnar_auc, "n": total}
+            "per_class": per_class, "ece": round(float(ece), 4), "mar_vs_mnar_auc": auc, "n": total, "tau": tau}
 
 
 def load_raws(cfg, names):
@@ -205,6 +228,9 @@ def main():
     ap.add_argument("--collapse-rule", choices=["dominant", "primary", "thresholded"], default="dominant")
     ap.add_argument("--mnar-threshold", type=float, default=0.5)
     ap.add_argument("--smoke", action="store_true", help="run a few real train steps then stop (no full train)")
+    ap.add_argument("--load-run", default=None,
+                    help="calibrate an EXISTING trained run by name (load checkpoint, fit temperature, "
+                         "report uncalibrated+calibrated eval) — no retraining")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--seed", type=int, default=20260601)
     ap.add_argument("--name", default="stageT_mixed_moe")
@@ -226,6 +252,31 @@ def main():
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Stage T | MIXED generators -> collapsed '{args.collapse_rule}' label -> full MoE "
           f"({n_params:,} params) | train {len(train_raws)} / val {len(val_raws)} sources | {args.device}")
+
+    if args.load_run:
+        run_dir = Path(f"/mnt/artifacts/project_lacuna/runs/{args.load_run}")
+        ckpt = torch.load(run_dir / "checkpoints" / "best_model.pt", map_location="cpu", weights_only=False)
+        model.load_state_dict(ckpt["model_state"]); model.to(args.device)
+        print(f"\n=== CALIBRATING existing run '{args.load_run}' (no retrain) ===")
+        cal_loader = MixedMoEDataLoader(val_raws, batches_per_epoch=max(20, cfg.training.val_batches // 2),
+                                        seed=args.seed + 55, **mixarg)
+        test_loader = MixedMoEDataLoader(val_raws, batches_per_epoch=max(40, cfg.training.val_batches),
+                                         seed=args.seed + 99, **mixarg)
+        cal_p, cal_y = collect_probs(model, cal_loader, args.device)
+        tau = fit_temperature(cal_p, cal_y)
+        test_p, test_y = collect_probs(model, test_loader, args.device)
+        ev = metrics_from_probs(test_p, test_y, 1.0); ev_cal = metrics_from_probs(test_p, test_y, tau)
+        man_path = run_dir / "manifest.json"
+        man = json.loads(man_path.read_text()) if man_path.exists() else {}
+        man.update({"calibration_temperature": tau, "heldout_eval_uncalibrated": ev,
+                    "heldout_eval_calibrated": ev_cal})
+        man_path.write_text(json.dumps(man, indent=2))
+        print(f"  acc {ev['accuracy']} | per-class {ev['per_class']}")
+        print(f"  confusion[true x pred] {ev['confusion_true_by_pred']} | MAR-vs-MNAR AUC {ev['mar_vs_mnar_auc']}")
+        print(f"  CALIBRATION (tau={tau}): ECE {ev['ece']} -> {ev_cal['ece']} | accuracy unchanged "
+              f"{ev['accuracy']}=={ev_cal['accuracy']} (argmax-invariant)")
+        print(f"  updated manifest -> {man_path}")
+        return
 
     out_dir = Path(f"/mnt/artifacts/project_lacuna/runs/{args.name}")
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -262,9 +313,12 @@ def main():
             assert batch.original_values is not None and batch.reconstruction_mask is not None
             print(f"  step {s+1}: loss={loss:.4f} | class_ids(sample)={batch.class_ids[:8].tolist()} "
                   f"| tokens{tuple(batch.tokens.shape)} | finite={np.isfinite(loss)}")
-        # verify the eval path (confusion/per-class/ECE) runs on the MIXED val data
-        ev = evaluate_mixed(model, val_loader, args.device, n_batches=2)
-        print(f"  eval-path OK (untrained model): confusion={ev['confusion_true_by_pred']} ece={ev['ece']}")
+        # verify the eval + calibration path runs on the MIXED val data
+        cp, cy = collect_probs(model, val_loader, args.device, n_batches=2)
+        ev = metrics_from_probs(cp, cy); tau = fit_temperature(cp, cy)
+        ev_cal = metrics_from_probs(cp, cy, tau=tau)
+        print(f"  eval+calib path OK (untrained): ece {ev['ece']} -> {ev_cal['ece']} (tau={tau}); "
+              f"acc unchanged {ev['accuracy']}=={ev_cal['accuracy']}")
         comp = np.array(train_loader.compositions)
         manifest["full_moe_trained_end_to_end"] = False
         manifest["mode"] = "smoke"
@@ -288,10 +342,16 @@ def main():
     start = time.time()
     result = trainer.fit(train_loader, val_loader)
     wall = time.time() - start
-    # held-out eval on a FRESH mixed val set: confusion / per-class / ECE / MAR-vs-MNAR
+    # held-out eval + calibration on FRESH mixed sets: fit temperature on a cal split, report uncal+cal
+    cal_loader = MixedMoEDataLoader(val_raws, batches_per_epoch=max(20, cfg.training.val_batches // 2),
+                                    seed=args.seed + 55, **mixarg)
     test_loader = MixedMoEDataLoader(val_raws, batches_per_epoch=max(40, cfg.training.val_batches),
                                      seed=args.seed + 99, **mixarg)
-    ev = evaluate_mixed(model, test_loader, args.device)
+    cal_p, cal_y = collect_probs(model, cal_loader, args.device)
+    tau = fit_temperature(cal_p, cal_y)
+    test_p, test_y = collect_probs(model, test_loader, args.device)
+    ev = metrics_from_probs(test_p, test_y, tau=1.0)
+    ev_cal = metrics_from_probs(test_p, test_y, tau=tau)
     comp = np.array(train_loader.compositions)
     np.savez(out_dir / "compositions.npz", compositions=comp,
              labels=np.array(train_loader.labels))                       # full composition vectors + labels
@@ -302,12 +362,15 @@ def main():
                      "composition_sd_over_generated": [round(float(x), 4) for x in comp.std(0)],
                      "n_generated_datasets": int(len(comp)),
                      "collapsed_label_counts_MCAR_MAR_MNAR": train_loader.label_counts,
-                     "heldout_eval": ev})
+                     "calibration_temperature": tau,
+                     "heldout_eval_uncalibrated": ev, "heldout_eval_calibrated": ev_cal})
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
     print(f"\nDONE [{args.collapse_rule}] | wall-clock {wall:.1f}s ({wall/60:.1f}m) | "
           f"best val acc {result['best_val_acc']*100:.1f}% @ epoch {result['best_epoch']}")
     print(f"  held-out MIXED eval: acc {ev['accuracy']} | per-class {ev['per_class']}")
-    print(f"  confusion[true x pred]: {ev['confusion_true_by_pred']} | ECE {ev['ece']} | MAR-vs-MNAR AUC {ev['mar_vs_mnar_auc']}")
+    print(f"  confusion[true x pred]: {ev['confusion_true_by_pred']} | MAR-vs-MNAR AUC {ev['mar_vs_mnar_auc']}")
+    print(f"  CALIBRATION (tau={tau}): ECE {ev['ece']} -> {ev_cal['ece']} (accuracy unchanged: "
+          f"{ev['accuracy']}=={ev_cal['accuracy']}, argmax-invariant)")
     print(f"  composition mean [MCAR/MAR/MNAR]: {manifest['composition_mean_over_generated']} | labels {train_loader.label_counts}")
     print(f"  manifest -> {out_dir / 'manifest.json'} | checkpoint -> {out_dir / 'checkpoints'}")
 
