@@ -39,35 +39,48 @@ column, aggregated to a dataset subtype-composition by missing cell, with a cali
   consistency against the grounded benchmark.
 
 Regime: matched miss rate, full diversity (`mnar_diverse + mar_diverse`; diverse pools ⇒
-`compensate_rate` is a no-op — the Stage-5 cue-free regime; MNAR even realises *lower* miss rate, so no
-rate cue favours it). 5 seeds, mean ± sd.
+`compensate_rate` is a no-op). 5 seeds, mean ± sd. **Rate caveat (a correction — see Result 1):**
+the loud (threshold/detection) columns realise a *lower* miss rate (~0.197) than the reject region
+(~0.248) even here — a residual generator under-compensation, NOT a real-world fact. A *lower* rate is
+just as exploitable a cue as a higher one; the production subtype detector therefore EXCLUDES
+`missing_rate` (the rate-free, transferable readout), and the rate-included number is reported only as
+a contaminated upper bound.
 
-## Result 1 — the data channel: stable detection, but WEAK, with honest abstain (5 seeds)
+## Result 1 — the data channel: stable but WEAK detection (rate-confound CORRECTED), honest abstain (5 seeds)
 
-| likelihood metric | mean ± sd |
-|---|---|
-| loud-vs-reject ROC-AUC | **0.819 ± 0.018** |
-| loud-vs-reject AP (base rate 0.112) | 0.421 ± 0.043 |
-| loud recall @ precision 0.6 | 0.214 ± 0.082 |
-| loud recall @ precision 0.8 | 0.091 ± 0.054 |
-| reject-correct on the silent region | **0.989 ± 0.006** |
-| threshold↔detection argmax confusion | 0.075 / 0.071 |
+The headline detector is **rate-free** (excludes `missing_rate`); the rate-included readout is shown
+only as a contaminated upper bound, with the audit that motivates excluding it:
 
-- **The Stage-5 instability is gone — the reframe works.** The per-column 3-way MCAR/MAR/MNAR
-  classifier was seed-unstable at matched rate (winner-take-all; Stage-5 per-class recall sd
-  **0.30–0.43**). The loud-vs-reject detector is **seed-stable: AUC sd 0.018** (per-seed 0.80–0.85).
-  Folding the non-identifiable region into one reject class — and reading it out with a stable model
-  (random forest) on the deployable features — removes the collapse. This is the methodological point:
-  ask the data only the *identifiable* question.
-- **Honest abstain holds.** The data correctly rejects **99%** of the silent/MAR/MCAR region — it does
-  not fabricate loud subtypes where there is no cliff.
-- **But the detector is WEAK.** AUC 0.82 / AP 0.42 is real signal (~3.8× the base rate), yet usable
-  recall is low: it confidently flags only ~21% of loud columns at 60% precision (~9% at 80%). **The
-  Stage-4 single-mechanism "threshold/detection detectable at 0.9–1.0" does NOT transfer** to the
-  loud-vs-reject detector on matched-rate mixtures — self-censoring MNAR's truncation footprint
-  overlaps the loud cliff (the loud-vs-self-censoring RF AUC is only ~0.73), so most loud columns are
-  not separable from the quiet region by the 5 deployable features. The data confidently identifies a
-  *minority* of loud columns and abstains on the rest.
+| likelihood metric (5 seeds) | rate-FREE (honest) | rate-INCLUDED (contaminated bound) |
+|---|---|---|
+| loud-vs-reject ROC-AUC | **0.773 ± 0.040** | 0.819 ± 0.018 |
+| loud-vs-reject AP (base rate 0.112) | 0.333 ± 0.032 | 0.421 ± 0.043 |
+| loud recall @ precision 0.6 | 0.108 ± 0.040 | 0.214 ± 0.082 |
+| reject-correct on the silent region | **0.979 ± 0.003** | 0.989 ± 0.006 |
+| realised miss rate (loud / reject) | 0.197 / 0.248 | — |
+
+- **The rate audit (a correction to the first Stage-Q headline).** Even at "matched" rate the loud
+  columns realise **0.197** vs the reject region's **0.248** — a residual generator under-compensation
+  (the threshold/detection pools undershoot the 0.25 target). `missing_rate` is a deployable feature, so
+  the detector exploited it: a feature ablation gives **AUC 0.819 with rate → 0.771 without**, and
+  **miss-rate ALONE scores 0.759** — i.e. *most* of the original 0.82 was a NON-TRANSFERABLE rate cue.
+  On real data a threshold/detection column has no characteristic miss rate (it is just where the cutoff
+  sits), so a learned "lower rate → loud" rule would not transfer. This is the **Stage-5 confound
+  recapitulated** (and the first Stage-Q write-up mis-reasoned that "MNAR misses *less* ⇒ no cue" — a
+  systematic gap in *either* direction is exploitable). The honest, transferable detector excludes rate:
+  **AUC 0.773 ± 0.040**.
+- **The Stage-5 collapse is still solved by the reframe.** The per-column 3-way MCAR/MAR/MNAR
+  classifier was winner-take-all unstable at matched rate (Stage-5 per-class recall sd **0.30–0.43**,
+  acc ~0.33). The loud-vs-reject detector is **not** that: AUC 0.773 ± 0.040 — an order of magnitude
+  more stable, even rate-free. Folding the non-identifiable region into one reject class and asking the
+  data only the *identifiable* question is what removes the collapse (the rate cue was a separate,
+  now-removed inflation).
+- **Honest abstain holds.** The data correctly rejects **98%** of the silent/MAR/MCAR region.
+- **But the detector is WEAK — weaker than first reported.** Rate-free AUC 0.77 / AP 0.33; usable recall
+  is only ~11% of loud columns at 60% precision. **The Stage-4 single-mechanism "threshold/detection
+  detectable at 0.9–1.0" does NOT transfer** to matched-rate mixtures — self-censoring MNAR's truncation
+  footprint overlaps the loud cliff (loud-vs-self-censoring RF AUC ~0.73). The data confidently flags a
+  small minority of loud columns and abstains on the rest.
 
 ## Result 2 — attribution: the signal is in the features; the encoder DILUTES it (3 seeds)
 
@@ -85,6 +98,9 @@ canonical `ColumnReadoutHead` (encoder reps + features) collapsed to all-reject 
 the Q likelihood is a deployable-feature detector with **no encoder, no oracle**. It echoes Stage C's
 "the encoder is the bottleneck / under-represents the footprint", now at subtype granularity. (Among
 feature models: RF/GBM ~0.85–0.86 ≫ histogram-GBM ~0.79 ≫ a small MLP ~0.78 — the RF is the lens.)
+(These absolute AUCs *include* `missing_rate`, so they carry the same rate inflation Result 1 corrects;
+the *relative* conclusion — encoder reps dilute, features carry the signal — is unaffected, and the
+rate-free features-only ceiling is ~0.77.)
 
 ## Result 3 — fusion: prior-led, calibrated, safe; the override is weak (5 seeds)
 
@@ -92,35 +108,30 @@ Per-column posterior → dataset subtype-composition (by missing cell) + per-col
 conditions: data-only, a *reliable* simulated prior (ρ=0.85), a *near-chance* one (ρ=0.45); favoured
 prob 0.70 (the commitment-1 overridable cap).
 
+(Fusion uses the rate-FREE detector — the honest one.)
+
 | condition | comp L1 | query-ECE | Brier (prior-only 0.119) | coverage @acc.8 | committed-acc | abstain mass |
 |---|---|---|---|---|---|---|
-| data-only | 0.905 | 0.086 | 0.116 | **~0.00** | (1.0 on the few) | **~1.00** |
-| reliable prior | **0.644** | **0.042** | **0.079** | **0.999** | 0.832 | 0.001 |
-| near-chance prior | 0.854 | 0.039 | 0.109 | ~0.005 | — | 0.996 |
+| data-only | 0.916 | 0.090 | 0.118 | **~0.00** | **0.0** (never commits) | **1.00** |
+| reliable prior | **0.700** | **0.040** | **0.085** | **0.997** | 0.822 | 0.003 |
+| near-chance prior | 0.858 | 0.037 | 0.110 | ~0.00 | 0.0 | 1.00 |
 
-committed subtype-accuracy split (at the target): reliable → loud 0.812 / silent 0.834; near-chance →
-**loud 0.948** / silent 0.0.
+committed subtype-accuracy split (at the target, reliable prior): loud 0.824 / silent 0.822.
 
-- **Data-only abstains on essentially everything at subtype granularity** ("unable to determine" is the
-  honest default): at an 80%-committed-accuracy target the data alone commits on ~0% of columns,
-  because it cannot reliably name *which* subtype (threshold↔detection unresolved, most loud columns
-  not confidently flagged). Its subtype-composition barely beats the prior-only base-rate predictor
-  (Brier 0.116 vs 0.119) — the composition is dominated by the silent classes the data cannot resolve.
+- **Data-only abstains on EVERYTHING at subtype granularity** ("unable to determine" is the honest
+  default): rate-free, the data commits on ~0% of columns at an 80%-accuracy target and *never* reaches
+  the target on its confident set — it cannot reliably name *which* subtype (threshold↔detection
+  unresolved). Its subtype-composition equals the prior-only base-rate predictor (Brier 0.118 vs 0.119).
 - **A reliable prior supplies exactly the resolution the data lacks** — coverage@80% lifts ~0 → 1.0,
-  committed-accuracy 0.83, the combined composition is calibrated (ECE 0.042) and beats prior-only on
-  the proper score (Brier 0.079 vs 0.119). This is the prior × likelihood payoff at subtype
-  granularity (the P5/P6 result transfers).
-- **A near-chance prior manufactures no false confidence** (coverage stays ~0), and **the data still
-  protects the loud axis**: where the data commits to a loud subtype even under a bad prior, it is
-  **0.948** correct — the P6 safety property at subtype granularity.
-- **But the override (commitment 1) is WEAK here.** Across all loud columns where the prior is wrong,
-  the data overrides it only **~0.10** of the time (vs the strong override at mechanism granularity).
-  The reason is Result 1: the per-column data evidence is weak, so it can drag the posterior off a
-  wrong subtype prior only on the confident minority (where it does — committed-loud 0.95). **The
-  subtype layer is therefore PRIOR-DOMINATED**, with the data's override-safety limited to its
-  confident minority. (Override rises with the data-evidence concentration `kappa_like`, but inflating
-  it would manufacture confidence the weak detector does not have — so the honest operating point keeps
-  the override weak.)
+  committed-accuracy 0.82, calibrated (ECE 0.040), beats prior-only on the proper score (Brier 0.085 vs
+  0.119). The prior × likelihood payoff at subtype granularity (the P5/P6 result transfers).
+- **A near-chance prior manufactures no false confidence** (coverage stays ~0) — the calibration +
+  abstention prevent a bad prior from inventing commitment.
+- **The override (commitment 1) is very weak (~0.06).** With the rate confound removed the data is
+  weaker still, so it rarely drags the posterior off a wrong subtype prior. **The subtype layer is
+  PRIOR-DOMINATED**: rate-free, the data essentially only sharpens the prior, it does not override it.
+  (The earlier "data protects the loud axis at 0.95 under a bad prior" was itself partly the rate cue;
+  rate-free, the data does not commit confidently enough to protect that axis — an honest downgrade.)
 - The real frozen subtype-prior spec is **1.0 consistent** with the benchmark's `gold_subtype` (n=43) —
   a P1-style consistency check (the spec faithfully encodes the grounded semantic→subtype map), not an
   independent accuracy claim.
@@ -130,24 +141,26 @@ committed subtype-accuracy split (at the target): reliable → loud 0.812 / sile
 **PARTIAL — an honest seam at subtype granularity.** Against the pre-registered bar:
 
 - *Detect the loud subtypes at HIGH recall with honest abstain on the quiet ones* — **partial.**
-  Detection is **stable** (the Stage-5 collapse is solved by the detector-with-reject reframe) and the
-  abstain is **honest** (99% reject on the silent region), but recall is **low** (~21% @60% precision):
-  the single-mechanism detectability does not survive matched-rate mixtures.
+  Detection is **stable** (no Stage-5 collapse; rate-free AUC 0.773 ± 0.040 vs the 3-way's recall sd
+  0.30–0.43) and the abstain is **honest** (98% reject on the silent region), but recall is **low**
+  (~11% @60% precision, rate-free): the single-mechanism detectability does not survive matched-rate
+  mixtures, and the first headline (0.82) was partly a now-removed miss-rate artifact.
 - *The prior adds calibrated resolution where the data is silent, and the data overrides where
-  informative* — **yes on resolution + calibration** (reliable prior: coverage 0→1.0, Brier beats
-  prior-only, ECE 0.042; data protects the loud axis under a bad prior), **weak on override** (~0.10
-  aggregate; only the confident minority overrides).
+  informative* — **yes on resolution + calibration** (reliable prior: coverage 0→1.0, Brier 0.085 beats
+  prior-only 0.119, ECE 0.040), **no on override** (~0.06 rate-free): the data is too weak to override
+  a wrong subtype prior — the layer is prior-dominated.
 - *The dataset subtype-composition + abstain mass is calibrated* — **yes** (combined ECE ~0.04; the
   abstain mass is the property-3 "unable to determine" fraction, ~1.0 data-only and ~0 with a reliable
   prior).
 
 So the layer is **buildable, calibrated, and stable**, and the P-arc machinery (tiered/gated prior,
 raw-evidence combine, calibration, selective abstention, by-cell aggregation) transfers cleanly to
-subtype granularity — but the per-column DATA channel is too weak at matched rate to detect the loud
-subtypes at high recall or to strongly override a wrong prior. The honest output is therefore a
+subtype granularity — but the per-column DATA channel is too weak at matched rate (rate-free AUC ~0.77)
+to detect the loud subtypes at high recall or to override a wrong prior. The honest output is a
 **prior-led** subtype-composition with a large, calibrated "unable to determine" mass when the prior is
-absent — fully consistent with Stage 5 (the matched-rate non-identifiability wall) and the P-arc
-(the prior's value is real, reliability-contingent, and uncheckable on the non-identifiable subtypes).
+absent — fully consistent with Stage 5 (the matched-rate non-identifiability wall, whose miss-rate
+confound we re-encountered and removed here) and the P-arc (the prior's value is real,
+reliability-contingent, and uncheckable on the non-identifiable subtypes).
 
 ## Follow-up — richer per-column features do NOT lift the deployable ceiling (NULL)
 
@@ -176,13 +189,32 @@ base-5, each targeting a different way LOUD differs from REJECT:
 - **The density-discontinuity feature is within noise** (+0.006 AUC, AP flat) — a density jump is not
   cleanly recoverable from a 20-bin histogram of ~75%-observed real-catalog values.
 
-So **~0.82 AUC is the deployable-feature ceiling for per-column loud-vs-reject at matched rate.** The
-binding constraint is loud-vs-self-censoring (a *sharp* vs *graded* truncation distinction, RF AUC
-~0.73), which none of own-value shape, MAR-axis coupling, or density-discontinuity features crack on
-real catalog data — consistent with Stage 5's matched-rate non-identifiability bound. The data channel
-stays weak, and the Stage-Q verdict is unchanged: the subtype layer is prior-led with calibrated
-abstention. (The production detector keeps the 5 deployable features; no richer family justified the
-added surface.)
+So no richer family lifts the ceiling. **Note:** this probe's `base5` baseline still *includes*
+`missing_rate`, so its ~0.82 is the rate-contaminated upper bound (Result 1); the honest rate-free
+ceiling is ~0.77, and since every richer family is flat-or-worse vs the contaminated baseline, none
+lifts the rate-free one either — the conclusion is robust to the rate correction. The binding
+constraint is loud-vs-self-censoring (a *sharp* vs *graded* truncation distinction, RF AUC ~0.73),
+which none of own-value shape, MAR-axis coupling, or density-discontinuity features crack on real
+catalog data — consistent with Stage 5's matched-rate non-identifiability bound. The data channel stays
+weak, and the Stage-Q verdict is unchanged: the subtype layer is prior-led with calibrated abstention.
+(The production detector uses the 4 rate-free deployable features — `missing_rate` excluded as a
+non-transferable confound, Result 1; no richer family justified additional surface.)
+
+## On using miss-rate as an *open* signal (the question that prompted the correction)
+
+Would using per-column miss-rate as a signal — rather than excluding it — be statistically justifiable?
+**Not for subtype detection.** It is justifiable only where the rate→subtype relationship is *real and
+transferable*; for the loud subtypes it is neither, because a threshold/detection column's miss rate is
+simply *where its cutoff sits* (a threshold at p5 misses 5%, at p50 misses 50% — same subtype). Any
+rate-based detection therefore encodes the generator's (arbitrary) cutoff-placement distribution, not a
+fact that transfers — precisely the Stage-5 confound, which the audit shows had already crept back in
+(loud realises 0.197 vs reject 0.248; rate-only AUC 0.759). ADR-0007's "use rate openly, report when a
+conclusion rests on it" is honoured by *reporting* the rate-included bound and excluding it from the
+honest detector. If a specific deployment genuinely knows a rate→mechanism relationship, that belongs
+in the **auditable prior channel** (like the metadata prior — separate, overridable, documented), not
+baked into the data channel as a general capability. Real per-column rate variation that is
+*independent* of mechanism (the realistic case) carries no subtype information by construction, so it
+cannot lift the detector either.
 
 ## Caveats
 

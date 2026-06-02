@@ -54,6 +54,25 @@ def test_absent_class_column_is_zero():
 
 # --- failure cases -----------------------------------------------------------------------------
 
+def test_custom_n_features_subset():
+    """The detector can take a feature SUBSET (the subtype layer drops missing_rate -> 4 features)."""
+    rng = np.random.default_rng(5)
+    Xtr, ytr = _synthetic(200, rng)
+    Xte, yte = _synthetic(100, rng)
+    det = SubtypeLikelihoodDetector(seed=0, n_features=N_DEPLOYABLE_FEATURES - 1).fit(Xtr[:, 1:], ytr)
+    proba = det.predict_proba(Xte[:, 1:])
+    assert proba.shape == (len(yte), N_LIKELIHOOD_LABELS)
+    with pytest.raises(ValueError, match=r"\[N, 4\]"):   # full 5-wide input is now the wrong shape
+        det.predict_proba(Xte)
+
+
+def test_bad_n_features_raises():
+    with pytest.raises(ValueError, match="n_features must be in"):
+        SubtypeLikelihoodDetector(seed=0, n_features=1)
+    with pytest.raises(ValueError, match="n_features must be in"):
+        SubtypeLikelihoodDetector(seed=0, n_features=N_DEPLOYABLE_FEATURES + 1)
+
+
 def test_predict_before_fit_raises():
     with pytest.raises(ValueError, match="before fit"):
         SubtypeLikelihoodDetector(seed=0).predict_proba(np.zeros((3, N_DEPLOYABLE_FEATURES)))

@@ -5,7 +5,8 @@ The DATA (likelihood) channel of the per-column subtype layer (ADR-0008 commitme
 
 A per-column readout over L = {threshold, detection, reject} (`subtype_ontology.LIKELIHOOD_LABELS`)
 from the DEPLOYABLE distributional features only (`column_deployable_features` — observed-value
-skew/kurtosis/SMD, no oracle). It detects the LOUD MNAR fingerprints (sharp value-threshold and
+skew/kurtosis/SMD, no oracle), EXCLUDING `missing_rate` (see `n_features` / the __init__ note: a
+per-subtype rate is a non-transferable confound). It detects the LOUD MNAR fingerprints (value-threshold and
 detection-limit censoring) and REJECTS the non-identifiable region (quiet self-censoring MNAR, MAR,
 MCAR), folding the latter into one class — NOT the Stage-5 forced 3-way that collapses.
 
@@ -42,19 +43,26 @@ from lacuna.priors.subtype_ontology import N_LIKELIHOOD_LABELS
 class SubtypeLikelihoodDetector:
     """Deployable-feature per-column subtype detector -> probabilities over L (threshold/detection/reject)."""
 
-    def __init__(self, *, seed: int, n_estimators: int = 400, max_depth: Optional[int] = None,
-                 min_samples_leaf: int = 2, n_jobs: int = 1):
+    def __init__(self, *, seed: int, n_features: int = N_DEPLOYABLE_FEATURES, n_estimators: int = 400,
+                 max_depth: Optional[int] = None, min_samples_leaf: int = 2, n_jobs: int = 1):
+        # n_features lets a caller pass a SUBSET of the deployable features. The subtype layer drops
+        # `missing_rate` (index 0): the loud subtypes have no characteristic real-world miss rate (a
+        # threshold's rate is just where its cutoff sits), so an in-generator loud-vs-reject rate gap is
+        # a NON-TRANSFERABLE artifact (Stage-Q rate audit: loud realises ~0.197 vs reject ~0.248 even at
+        # "matched" rate) — the Stage-5 confound. Excluding it gives the honest, transferable detector.
+        if not 2 <= n_features <= N_DEPLOYABLE_FEATURES:
+            raise ValueError(f"n_features must be in [2, {N_DEPLOYABLE_FEATURES}], got {n_features}")
+        self.n_features = n_features
         self._clf = RandomForestClassifier(
             n_estimators=n_estimators, max_depth=max_depth, min_samples_leaf=min_samples_leaf,
             class_weight="balanced", random_state=seed, n_jobs=n_jobs,
         )
         self._fitted = False
 
-    @staticmethod
-    def _check_features(features: np.ndarray) -> np.ndarray:
+    def _check_features(self, features: np.ndarray) -> np.ndarray:
         f = np.asarray(features, dtype=float)
-        if f.ndim != 2 or f.shape[1] != N_DEPLOYABLE_FEATURES:
-            raise ValueError(f"features must be [N, {N_DEPLOYABLE_FEATURES}], got shape {f.shape}")
+        if f.ndim != 2 or f.shape[1] != self.n_features:
+            raise ValueError(f"features must be [N, {self.n_features}], got shape {f.shape}")
         if not np.isfinite(f).all():
             raise ValueError("features must be finite")
         return f

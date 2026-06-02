@@ -296,10 +296,21 @@ def main():
                      max_rows=max_rows, max_cols=max_cols)
         ev = collect(val_raws, seed=seed + 7, n_batches=args.eval_batches, batch_size=args.batch_size,
                      max_rows=max_rows, max_cols=max_cols)
-        det = SubtypeLikelihoodDetector(seed=seed).fit(tr["feat"], tr["like"])
-        p_like = det.predict_proba(ev["feat"])
+        # HONEST detector: drop missing_rate (feature 0) — a per-subtype rate is a non-transferable
+        # confound (rate audit below: loud realises a LOWER rate than reject even at "matched" rate,
+        # a generator residual the detector would otherwise exploit; the Stage-5 confound). Fusion uses
+        # this. A rate-INCLUDED detector is fit alongside ONLY to quantify the artifact.
+        nf = ev["feat"].shape[1]
+        det = SubtypeLikelihoodDetector(seed=seed, n_features=nf - 1).fit(tr["feat"][:, 1:], tr["like"])
+        p_like = det.predict_proba(ev["feat"][:, 1:])
+        det_wr = SubtypeLikelihoodDetector(seed=seed, n_features=nf).fit(tr["feat"], tr["like"])
+        p_like_wr = det_wr.predict_proba(ev["feat"])
 
         lik = likelihood_metrics(p_like, ev["like"])
+        lik["loud_auc_WITH_rate"] = likelihood_metrics(p_like_wr, ev["like"])["loud_vs_reject_auc"]
+        yl = ev["like"] != LIKE_INDETERMINATE
+        lik["realized_rate_loud"] = round(float(ev["feat"][yl, 0].mean()), 4)
+        lik["realized_rate_reject"] = round(float(ev["feat"][~yl, 0].mean()), 4)
         ids = np.array(sorted(set(int(d) for d in ev["dset"])))
         cut = len(ids) // 2
         cal_ds, test_ds = ids[:cut], ids[cut:]
@@ -323,7 +334,8 @@ def main():
         print(f"    loud AUC={lik['loud_vs_reject_auc']} AP={lik['loud_vs_reject_ap']} "
               f"R@P60={lik['loud_recall_at_prec60']} reject_ok={lik['reject_correct_on_silent']}", flush=True)
 
-    lik_keys = ["loud_vs_reject_auc", "loud_vs_reject_ap", "loud_base_rate", "loud_recall_at_prec60",
+    lik_keys = ["loud_vs_reject_auc", "loud_auc_WITH_rate", "realized_rate_loud", "realized_rate_reject",
+                "loud_vs_reject_ap", "loud_base_rate", "loud_recall_at_prec60",
                 "loud_recall_at_prec80", "argmax_recall_threshold", "argmax_recall_detection",
                 "reject_correct_on_silent", "threshold_to_detection", "detection_to_threshold"]
     lik_agg = {k: _agg([p["likelihood"] for p in per_seed], k) for k in lik_keys}
@@ -349,7 +361,9 @@ def main():
     print("\n" + "=" * 80)
     print(f"STAGE Q — per-column subtype layer ({args.seeds} seeds, mean+/-sd)")
     print("=" * 80)
-    print("LIKELIHOOD (deployable-feature detector, data channel):")
+    print("LIKELIHOOD (deployable-feature detector, data channel; miss-rate EXCLUDED = honest):")
+    print("  [rate audit] loud_vs_reject_auc is rate-FREE; loud_auc_WITH_rate is the rate-contaminated")
+    print("  upper bound; realized_rate_loud<reject shows the non-transferable generator residual.")
     for k in lik_keys:
         print(f"  {k:26s}: {lik_agg[k]}")
     print("FUSION (subtype-composition calibration + per-column abstention):")
