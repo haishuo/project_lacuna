@@ -6,8 +6,14 @@ confirm v1.0 still works, and **start fresh** from there. Nothing is deleted —
 branches; we simply stop patching it.
 
 ## Repo state (what to revert to / what is preserved)
-- **v1.0 = git tag `v1.0-canonical` = commit `e3f85472`** (Experiment-10 dissertation model, RUN-054).
-  `main` is pristine at v1.0. **Start here.**
+- **v1.0 = git tag `v1.0-canonical` = commit `2935cc8`** (re-pointed 2026-06-02, PI-confirmed): the
+  **Lacuna-Survey FINAL dissertation model** = `lacuna_survey_v11` (val 0.9175; `demo/model.json` points
+  to it; v12 was strictly worse and reverted). Carries the survey-specialized code +
+  `configs/training/survey.yaml` (**10 train / 2 val SURVEY datasets** — survey_bfi/psid/cps/hmda/yrbss/…;
+  the 2-val pool is ORIGINAL to v1.0-Survey, NOT a regression) + the `lacuna_survey` generator registry.
+  **Checkout the TAG (`git checkout v1.0-canonical`); do NOT assume `main`.** (Old tag `e3f85472` was
+  March / pre-survey = WRONG — fixed.) Commit inferred from v11's train timestamp; **VERIFY by reproducing
+  ~0.9175** before fully trusting it (if it can't reproduce, the train state had uncommitted changes).
 - The abandoned arc is on **branch `experiment/subtype-layer`** and its ancestors
   (`experiment/metadata-prior` ← `experiment/composition-stageb` ← `experiment/composition-estimand`
   ← `experiment/column-level-*`), all pushed to origin. Preserved for reference; **do not extend.**
