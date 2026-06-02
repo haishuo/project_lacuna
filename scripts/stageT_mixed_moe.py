@@ -82,20 +82,24 @@ class MixedMoEDataLoader:
         self.mnar_diverse, self.mar_diverse, self.compensate_rate = mnar_diverse, mar_diverse, compensate_rate
         self.primary_frac = primary_frac
         self._epoch = 0
-        self.compositions = []   # manifest: [p_mcar, p_mar, p_mnar] per generated dataset
+        self.compositions = []   # [p_mcar, p_mar, p_mnar] per generated dataset (saved to disk)
+        self.labels = []         # collapsed dataset-level label per generated dataset
         self.label_counts = [0, 0, 0]
 
     def __len__(self):
         return self.batches_per_epoch
 
     def _make_item(self, rng):
+        # Draw the primary ONCE per item so retries don't bias the label distribution toward MCAR
+        # (MCAR generation never fails; re-drawing on each retry would over-sample it). For 'primary'
+        # the label IS this draw, so fixing it keeps the label distribution uniform over MCAR/MAR/MNAR.
+        primary = _MECHS[rng.randint(0, 3, (1,)).item()]
         for _ in range(20):
             it = rng.spawn()
             raw = self.raws[it.randint(0, len(self.raws), (1,)).item()]
             sub = subsample_raw(raw, max_rows=self.max_rows, rng=it.spawn())
             if sub.d < 4:
                 continue
-            primary = _MECHS[it.randint(0, 3, (1,)).item()]
             classes = (_sample_primary_classes(sub.d, primary, it.spawn(), self.p_observed, self.primary_frac)
                        if self.rule == "primary"
                        else sample_column_classes(sub.d, it.spawn(), p_observed=self.p_observed))
@@ -120,7 +124,8 @@ class MixedMoEDataLoader:
             for _ in range(self.batch_size):
                 obs, label, comp = self._make_item(brng)
                 datasets.append(obs); labels.append(label)
-                self.compositions.append([round(float(x), 4) for x in comp]); self.label_counts[label] += 1
+                self.compositions.append([round(float(x), 4) for x in comp])
+                self.labels.append(int(label)); self.label_counts[label] += 1
             batch = tokenize_and_batch(datasets=datasets, max_rows=self.max_rows, max_cols=self.max_cols)
             batch = dataclasses.replace(batch, class_ids=torch.tensor(labels, dtype=torch.long))
             yield batch
@@ -133,6 +138,52 @@ def build_model(cfg, mnar_variants):
         dropout=cfg.model.dropout, mnar_variants=mnar_variants,
         learn_evidence_attenuation=cfg.model.learn_evidence_attenuation,
         evidence_attenuation_init=cfg.model.evidence_attenuation_init)
+
+
+def evaluate_mixed(model, loader, device, n_batches=None):
+    """Confusion matrix + per-class + ECE on held-out MIXED val data (the regime we train on)."""
+    model.eval()
+    conf = np.zeros((3, 3), dtype=int)
+    confs, corrects = [], []
+    mnar_p, mnar_y, struct = [], [], []
+    with torch.no_grad():
+        for bi, batch in enumerate(loader):
+            if n_batches is not None and bi >= n_batches:
+                break
+            out = model(batch.to(device))
+            p = out.posterior.p_class.detach().cpu().numpy()       # [B, 3]
+            y = batch.class_ids.cpu().numpy()
+            pred = p.argmax(1)
+            for t, pr in zip(y, pred):
+                conf[t, pr] += 1
+            confs.append(p.max(1)); corrects.append((pred == y).astype(float))
+            mnar_p.append(p[:, MNAR] / (p[:, MAR] + p[:, MNAR] + 1e-9)); mnar_y.append(y); struct.append(y)
+    confs = np.concatenate(confs); corrects = np.concatenate(corrects)
+    total = int(conf.sum()); acc = conf.trace() / total if total else 0.0
+    names = ("MCAR", "MAR", "MNAR")
+    per_class = {}
+    for k, nm in enumerate(names):
+        rec = conf[k, k] / conf[k].sum() if conf[k].sum() else None
+        prec = conf[k, k] / conf[:, k].sum() if conf[:, k].sum() else None
+        per_class[nm] = {"recall": round(float(rec), 4) if rec is not None else None,
+                         "precision": round(float(prec), 4) if prec is not None else None}
+    ece = 0.0
+    for b in range(10):
+        lo, hi = b / 10, (b + 1) / 10
+        m = (confs >= lo) & (confs < hi if b < 9 else confs <= hi)
+        if m.any():
+            ece += m.mean() * abs(corrects[m].mean() - confs[m].mean())
+    # MAR-vs-MNAR among structured (true MAR/MNAR) — the decisive axis
+    mp = np.concatenate(mnar_p); yy = np.concatenate(mnar_y)
+    st = (yy == MAR) | (yy == MNAR)
+    try:
+        from sklearn.metrics import roc_auc_score
+        ybin = (yy[st] == MNAR).astype(int)
+        mar_mnar_auc = round(float(roc_auc_score(ybin, mp[st])), 4) if 0 < ybin.mean() < 1 else None
+    except Exception:  # noqa: BLE001
+        mar_mnar_auc = None
+    return {"accuracy": round(float(acc), 4), "confusion_true_by_pred": conf.tolist(),
+            "per_class": per_class, "ece": round(float(ece), 4), "mar_vs_mnar_auc": mar_mnar_auc, "n": total}
 
 
 def load_raws(cfg, names):
@@ -211,10 +262,14 @@ def main():
             assert batch.original_values is not None and batch.reconstruction_mask is not None
             print(f"  step {s+1}: loss={loss:.4f} | class_ids(sample)={batch.class_ids[:8].tolist()} "
                   f"| tokens{tuple(batch.tokens.shape)} | finite={np.isfinite(loss)}")
+        # verify the eval path (confusion/per-class/ECE) runs on the MIXED val data
+        ev = evaluate_mixed(model, val_loader, args.device, n_batches=2)
+        print(f"  eval-path OK (untrained model): confusion={ev['confusion_true_by_pred']} ece={ev['ece']}")
         comp = np.array(train_loader.compositions)
         manifest["full_moe_trained_end_to_end"] = False
         manifest["mode"] = "smoke"
         manifest["smoke_steps"] = n_steps
+        manifest["eval_path_check"] = ev
         manifest["composition_mean_over_generated"] = [round(float(x), 4) for x in comp.mean(0)]
         manifest["collapsed_label_counts_MCAR_MAR_MNAR"] = train_loader.label_counts
         manifest["composition_examples"] = train_loader.compositions[:10]
@@ -228,18 +283,33 @@ def main():
         return
 
     # full training (only when NOT --smoke)
+    import shutil
+    shutil.copy(args.config, out_dir / "config_snapshot.yaml")            # config snapshot
     start = time.time()
     result = trainer.fit(train_loader, val_loader)
     wall = time.time() - start
+    # held-out eval on a FRESH mixed val set: confusion / per-class / ECE / MAR-vs-MNAR
+    test_loader = MixedMoEDataLoader(val_raws, batches_per_epoch=max(40, cfg.training.val_batches),
+                                     seed=args.seed + 99, **mixarg)
+    ev = evaluate_mixed(model, test_loader, args.device)
+    comp = np.array(train_loader.compositions)
+    np.savez(out_dir / "compositions.npz", compositions=comp,
+             labels=np.array(train_loader.labels))                       # full composition vectors + labels
     manifest.update({"full_moe_trained_end_to_end": True, "mode": "full", "wall_clock_seconds": round(wall, 1),
                      "best_val_acc": result["best_val_acc"], "best_val_loss": result["best_val_loss"],
                      "best_epoch": result["best_epoch"], "epochs_completed": result["final_epoch"] + 1,
-                     "composition_mean_over_generated": [round(float(x), 4)
-                                                         for x in np.array(train_loader.compositions).mean(0)],
-                     "collapsed_label_counts_MCAR_MAR_MNAR": train_loader.label_counts})
+                     "composition_mean_over_generated": [round(float(x), 4) for x in comp.mean(0)],
+                     "composition_sd_over_generated": [round(float(x), 4) for x in comp.std(0)],
+                     "n_generated_datasets": int(len(comp)),
+                     "collapsed_label_counts_MCAR_MAR_MNAR": train_loader.label_counts,
+                     "heldout_eval": ev})
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
-    print(f"\nDONE | wall-clock {wall:.1f}s ({wall/60:.1f}m) | best val acc {result['best_val_acc']*100:.1f}% "
-          f"@ epoch {result['best_epoch']} | manifest -> {out_dir / 'manifest.json'}")
+    print(f"\nDONE [{args.collapse_rule}] | wall-clock {wall:.1f}s ({wall/60:.1f}m) | "
+          f"best val acc {result['best_val_acc']*100:.1f}% @ epoch {result['best_epoch']}")
+    print(f"  held-out MIXED eval: acc {ev['accuracy']} | per-class {ev['per_class']}")
+    print(f"  confusion[true x pred]: {ev['confusion_true_by_pred']} | ECE {ev['ece']} | MAR-vs-MNAR AUC {ev['mar_vs_mnar_auc']}")
+    print(f"  composition mean [MCAR/MAR/MNAR]: {manifest['composition_mean_over_generated']} | labels {train_loader.label_counts}")
+    print(f"  manifest -> {out_dir / 'manifest.json'} | checkpoint -> {out_dir / 'checkpoints'}")
 
 
 if __name__ == "__main__":
