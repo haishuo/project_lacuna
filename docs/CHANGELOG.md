@@ -37,7 +37,13 @@ clause it serves.
   to abstention, with a documented **revision trigger**: if the self-censoring δ-prior passes the
   feasibility gate + out-of-family calibration, revise to a per-idiom multi-axis manifold covering
   them; if it fails where δ is exact, stop. (PROPOSAL §5.1 DECISION, §6 P0/P1.)
-- Sequencing: oracle distinguishability (no network) is the kill-gate that precedes any build.
+- Sequencing: a feasibility gate precedes any build — but it must be DECISIVE, not merely cheap.
+  **Methodological invariant added (North Star §4.9):** no proxy weaker than the deployment model may
+  license a negative/kill conclusion (a weak-proxy negative is confounded — the arc's exact error).
+  Corrected P1 accordingly: the gate brackets the truth with (a) an information-ceiling Bayes oracle
+  computed from the known generative model and (b) the real model RETRAINED FROM SCRATCH
+  (frozen-encoder + stapled-head BANNED). A prior framing that sold "zero model training" as a virtue
+  was wrong and is retracted.
 
 ### Known debt surfaced by the audit (pre-existing, independent of re-scope)
 - `lacuna/training/loss.py` (956 LOC) and `lacuna/training/checkpoint.py` (649 LOC) breach the

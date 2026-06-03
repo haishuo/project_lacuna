@@ -172,6 +172,15 @@ where it matters.
    estimand at the reporting layer (§3¾). Withholding context the human always has, then asking the
    network to recover it from raw numbers, is a self-inflicted harder problem and a violation of
    this charter.
+9. **No proxy weaker than the deployment model may license a negative/kill conclusion.** A
+   feasibility test, ablation, or "is there signal?" check run with a hand-statistic classifier, a
+   frozen-encoder probe, an RF/MLP-on-features, or any estimator weaker than the model we would
+   actually deploy can support a POSITIVE finding only (signal exists). A NEGATIVE from such a proxy
+   is confounded — "no signal" is indistinguishable from "the proxy was too weak" — and is the exact
+   error that broke the abandoned arc. Kills come only from (a) a genuine information-theoretic
+   ceiling (Bayes-optimal on observed data, computed from the known generative model) or (b) the real
+   model retrained from scratch (never frozen + stapled head). Cheapness is never a reason to accept
+   a weaker instrument; correctness is the only criterion.
 
 ---
 
