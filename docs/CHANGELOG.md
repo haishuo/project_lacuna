@@ -45,6 +45,20 @@ clause it serves.
   (frozen-encoder + stapled-head BANNED). A prior framing that sold "zero model training" as a virtue
   was wrong and is retracted.
 
+### Added (P1 spec)
+- `docs/PROPOSAL-P1-implementation-audit.md` — implementation audit for the P1 self-censoring
+  feasibility probe (SPEC ONLY; no code, nothing run). Covers all 11 required items: generator path,
+  δ formula (δ≡β₂), β₀ rate-matching solver, β₁/δ/rate/ρ/n sweep grid, pluggable X-model interface,
+  analytic Bayes-oracle calculation (LLR + KL/Chernoff + n-sample error), model target/loss (current
+  LacunaModel re-objectived to a binary δ head), **all layers trainable: YES**, **checkpoint loaded:
+  NO**, expected runtime (oracle <10 min CPU; model arm ~1.5–4 h GPU), and saved artifacts/manifest.
+- Decisions recorded: δ-axis approved (controlled scalar mechanism-family probe); oracle X-model
+  hierarchy (exact synthetic ceiling + fitted-X-model real, pluggable, assumption never hidden);
+  model arm = current architecture retrained from scratch (no frozen encoder / no stapled head / no
+  checkpoint), final gate to be rerun on the final δ/composition head.
+- Vocabulary locked: ceiling = analytic Bayes oracle (under stated X-model) ONLY; RF/MLP/handcrafted
+  = baselines; frozen-head = transfer ablations; weak-proxy negatives are never impossibility evidence.
+
 ### Known debt surfaced by the audit (pre-existing, independent of re-scope)
 - `lacuna/training/loss.py` (956 LOC) and `lacuna/training/checkpoint.py` (649 LOC) breach the
   500-LOC hard limit (CLAUDE.md Rule 4). Any rework must split, not extend.
