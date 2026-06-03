@@ -21,6 +21,20 @@ If a sentence we write about Lacuna contradicts that one, the sentence is wrong,
 
 ---
 
+## Scope — Lacuna-Survey
+
+This instance governs **survey missingness only** (self- or interviewer-administered
+questionnaires). The validity claim is explicit and bounded: *Lacuna-Survey's outputs are valid for
+survey-collected tabular data and are not claimed to transfer to instrument, administrative-record,
+or longitudinal data.* This is not a limitation to apologize for — it is the human-parity principle
+(§4.8) applied: a human analyst is **told** what kind of data she has, so we tell the network too,
+by restricting its regime. The same architecture re-trained on another regime's manifold yields
+sibling instruments — Lacuna-Instrument, -Records, -Longitudinal — each honest within its own
+manifold, none claiming to govern another's. Narrowing the regime also shrinks the manifold (§3½),
+which is a feature, not a cost.
+
+---
+
 ## 1. The problem we are actually solving
 
 There are three ways people justify an imputation:
@@ -83,6 +97,53 @@ MAR and MNAR are genuinely indistinguishable, the correct output is a wide, high
 
 ---
 
+## 3½. The manifold hypothesis (the geometric form of the prior)
+
+The bet the whole project rests on: **the set of missingness mechanisms nature actually produces is
+a small, structured, recurring subset of the set of mathematically possible mechanisms** — and
+restricting to *survey* missingness shrinks it further. This is the spirit of AlphaFold (vast
+conceivable space; a few thousand fold topologies nature reuses), with one load-bearing disanalogy:
+**we have no PDB.** Mechanisms are unobservable, so the manifold can never be validated the way
+folding was. Stated precisely, as three claims of decreasing checkability:
+
+- **M1 — the mechanism manifold is small.** A short vocabulary of survey idioms (item nonresponse,
+  skip logic, LOD/top-coding, social-desirability censoring, attrition, unit nonresponse).
+  Supportable by domain literature; **not directly confirmable** (mechanisms unobservable).
+- **M2 — the footprint manifold is small.** Real survey masks occupy a low-dimensional, structured
+  region of footprint-space. **Empirically testable on real masks, no labels needed.** The
+  foundation.
+- **M3 — the footprint→mechanism map is near-injective *on the real manifold*.** The load-bearing
+  claim, and the one that does real work against Molenberghs: his pathological MAR-twin of a real
+  MNAR mechanism is bet to lie *off* the manifold — nature doesn't build it. So **the manifold
+  hypothesis *is* the prior that places zero mass on the adversarial twins.** Only *indirectly*
+  supportable (on semi-synthetic data: do real idioms separate in footprint-space better than
+  arbitrary mechanisms?).
+
+Lacuna's task is therefore the **degenerate inverse** (many mechanisms → one footprint → which?),
+structurally like protein *design*, not folding; the manifold prior is the regularizer on that
+degeneracy. The optimization is **constrained, not global** — MAP estimation with a
+manifold-supported prior, where the Lagrange multiplier λ is the strength of the prior in the
+non-identified direction. **Sweeping λ *is* the sensitivity analysis.** The manifold, the δ-prior,
+and the sensitivity sweep are one object seen from three sides.
+
+**Operationalization: HYBRID** (decided). Enumerate survey idioms top-down → build generators →
+*validate* via M2 that their footprints cover the real-survey-footprint manifold. The manifold also
+*is* the coverage boundary of §6: distance-from-manifold is the OOD signal; off-manifold ⇒ abstain.
+
+## 3¾. Estimand enters at the reporting layer, not inside the network *(proposed; confirm)*
+
+Robustness is always robustness *of a specific quantity* — a mean, a quantile, a regression
+coefficient — and the same δ propagates to each differently, so a robustness number with no estimand
+is meaningless. But the object the **network learns** — a calibrated prior over the mechanism /
+sensitivity parameter on the survey manifold — is **estimand-free**: it is a property of the
+missingness, not of what you compute downstream. Therefore the estimand enters at a **thin,
+deterministic propagation/reporting layer** (δ-prior × stated estimand → tipping-point curve), *not*
+inside the network. This keeps the hard learned part focused and reusable across all estimands
+(UNIX rule), and satisfies §4.8: a human is told her estimand, so the tool is too — at the layer
+where it matters.
+
+---
+
 ## 4. Non-negotiable commitments (the guardrails)
 
 1. **Never claim to beat non-identifiability.** §2 is a theorem.
@@ -104,6 +165,13 @@ MAR and MNAR are genuinely indistinguishable, the correct output is a wide, high
    result that took seconds/minutes instead of ~15–35 min is a proxy. (Carried-over scar tissue.)
 7. **Control the rate confound** before any MAR/MNAR comparison. Natural-rate separation has been
    substantially a miss-rate cue; match the rate or the comparison is void.
+8. **Never ask Lacuna a question strictly harder than a human's.** A human doing sensitivity
+   analysis already knows the data is a survey — not an instrument log or a longitudinal panel —
+   and knows what quantity she is estimating. That context is *given*, not inferred. So we *give*
+   Lacuna the same context: restrict it to one data regime (see Scope), and supply the downstream
+   estimand at the reporting layer (§3¾). Withholding context the human always has, then asking the
+   network to recover it from raw numbers, is a self-inflicted harder problem and a violation of
+   this charter.
 
 ---
 
