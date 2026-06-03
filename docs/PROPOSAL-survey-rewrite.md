@@ -222,6 +222,16 @@ delta grows from REPARAM toward REPLACE. **Resolve §5.1 on paper before committ
    (a small set of named departure axes) or accept B2's validity envelope excludes those idioms and
    route them to abstention/B1. **This is risk #1 and it directly bounds B2's "approximate for others."
    Decide the manifold's coordinate system here.**
+
+   **DECISION (2026-06-02, least-invasive-first):** the **first increment is scoped to the own-value
+   self-censoring axis ONLY**, where scalar δ is *exact* (δ ≡ β₂ on the z-scored target; MAR = δ=0;
+   rate matched via a β₀ intercept solve; the MAR-predictor strength β₁ is a controlled nuisance).
+   Attrition, unit-nonresponse, and selection idioms are **explicitly deferred** and routed to
+   abstention for now. **Revision trigger (a documented next-step, not a maybe):** *if the
+   self-censoring-axis δ-prior demonstrably works (passes the §6 feasibility gate and out-of-family
+   calibration), we revise the manifold to a per-idiom / multi-axis coordinate system that covers
+   attrition + unit-nonresponse — i.e., we then move from allopurinol toward full coverage.* If it
+   does **not** work on the axis where δ is exact, we stop: no point generalizing a broken core.
 2. **Encoder geometry for OOD.** The encoder was trained discriminatively for class separation; its
    latent may place true OOD inputs inside the decision manifold, making distance-from-manifold
    unreliable. Reuse weights as init only; the abstention model likely needs the footprint-statistic
@@ -239,13 +249,24 @@ delta grows from REPARAM toward REPLACE. **Resolve §5.1 on paper before committ
 ## §6. Phased plan (DRAFT — for discussion, not yet committed)
 
 Sequenced to put the cheap, decisive experiments first (charter says: learn whether the project is
-buildable before building it).
+buildable before building it). **Least-invasive-first (medical rule):** the cheapest decisive test
+precedes any build; we do not reparameterize generators or build the δ-network until the oracle says
+the signal exists. Allopurinol before dialysis.
 
-- **P0 — paper resolutions (no code):** settle §5.1 (δ coordinate system) and the B2 validity
-  envelope; define the footprint vector and the survey-idiom list.
-- **P1 — decisive feasibility (small code, mostly reuse):** (a) **oracle distinguishability** at matched
-  rate per idiom (reuse generators + footprint stats; no network); (b) **leave-one-form-out** within an
-  axis. Gate: if oracle says no signal exists, stop and report — honestly and early.
+- **P0 — paper resolutions (no code):** DONE for the first increment — the axis is own-value
+  self-censoring; δ ≡ β₂ on z-scored target, MAR=δ=0, rate matched via β₀ solve, β₁ a controlled
+  nuisance (see §5.1 DECISION). Remaining P0: pin the **footprint vector** (reuse
+  `data/missingness_features.py` components, incl. observed-value shape/skew/kurtosis — the truncation
+  signature) and the matched-rate / form set for P1.
+- **P1 — decisive feasibility (small code, mostly reuse), in least-invasive order:**
+  (a) **oracle distinguishability** — *no network*: on the self-censoring axis, at matched marginal
+  rate, generate semi-synthetic masks at δ=0 (MAR) vs δ>0 (MNAR) on real survey X, and measure how
+  separable their **observable footprints** are, as a function of δ and rate. This is the true
+  allopurinol. **Kill gate:** if even a flexible estimator cannot separate footprints at matched rate
+  across the realistic δ range, stop and report — the axis carries no transportable signal.
+  (b) **leave-one-form-out** — only if (a) passes: train on some link forms (logistic/probit/threshold)
+  of the axis, test on a held-out form (e.g. spline) at matched rate, to check the *form-invariant* is
+  learnable (Level-1 generalization, charter §6).
 - **P2 — generator reparameterization:** (rate, δ) + intercept-calibration + idiom curation + real-X;
   promote `apply_to` to abstract. Keep the contract.
 - **P3 — manifold/OOD model:** footprint cache (reuse `littles_cache` machinery, swap payload) →

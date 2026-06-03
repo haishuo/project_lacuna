@@ -32,6 +32,12 @@ clause it serves.
 - Scope: survey-only (Lacuna-Survey); sibling regimes are future instruments.
 - δ richness: B2 (canonical scalar δ) first, B1 (rich mechanism posterior) as documented escalation.
 - Rewrite scope: gated by the codebase audit (this entry's PROPOSAL), not assumed up front.
+- **First increment scoped to the own-value self-censoring axis only** (δ ≡ β₂, where scalar δ is
+  exact), least-invasive-first. Attrition / unit-nonresponse / selection idioms explicitly deferred
+  to abstention, with a documented **revision trigger**: if the self-censoring δ-prior passes the
+  feasibility gate + out-of-family calibration, revise to a per-idiom multi-axis manifold covering
+  them; if it fails where δ is exact, stop. (PROPOSAL §5.1 DECISION, §6 P0/P1.)
+- Sequencing: oracle distinguishability (no network) is the kill-gate that precedes any build.
 
 ### Known debt surfaced by the audit (pre-existing, independent of re-scope)
 - `lacuna/training/loss.py` (956 LOC) and `lacuna/training/checkpoint.py` (649 LOC) breach the
