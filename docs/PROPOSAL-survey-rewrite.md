@@ -265,8 +265,12 @@ rewriting it is the economy that matters; skipping training is not an economy �
   δ=0 and δ=δ\* at matched rate (target *observed* → `p(z_t|z_p)·(1−σ(β₀+β₁z_p+β₂z_t))`; target
   *missing* → `∫ p(z_t|z_p)·σ(β₀+β₁z_p+β₂z_t) dz_t`). Exact on synthetic X (p(X) known — a legitimate
   math property of the mechanism family, NOT an accuracy-on-synthetic-X claim); checked on real X via
-  a fitted X-model (the only assumption, reported). Yields the `(δ, rate) → Bayes-error` surface. **A
-  NEGATIVE here is an unconfounded, theorem-like kill.**
+  a fitted X-model (the only assumption, reported). Yields the `(δ, rate) → Bayes-error` surface. The
+  LLR test is Bayes-optimal (built from the known model); the *reported* finite-sample Bayes error is a
+  **Monte-Carlo estimate** of that test's theoretical error, reported with a standard error / 95% CI /
+  n_mc — not a learned estimate, but an MC estimate, never quoted as exact. Computed in float64. **A
+  NEGATIVE here (Bayes error ≈ 0.5 within CI across the realistic δ range) is an unconfounded,
+  assumption-stated kill.**
   (b) **The real model, RETRAINED FROM SCRATCH** on the matched-rate self-censoring task (δ=0 vs δ>0 /
   regress δ), held-out / out-of-family eval. **Frozen-encoder + stapled-head is BANNED** (§4.9, §5.2) —
   full retrain or it does not count.

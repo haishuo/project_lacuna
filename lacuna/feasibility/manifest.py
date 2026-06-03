@@ -37,7 +37,9 @@ REQUIRED_FIELDS: List[str] = [
     "trainable_param_count",  # int | None (None for oracle arm)
     "wall_clock_seconds",  # float
     "split_scheme",  # description of train/val / held-out-family split (or "n/a" for oracle)
-    "metrics",  # dict (oracle: bayes-error summary; model: auc/logloss/gap)
+    "metrics",  # dict. Oracle: the bayes_error is a Monte-Carlo ESTIMATE of the theoretical
+    # Bayes error of the optimal LLR test — report it WITH bayes_error_se / 95% CI / n_mc, never
+    # as an exact value. Model arm: auc / logloss / gap-to-ceiling.
     "calibration",  # dict | None (model arm; None for oracle)
 ]
 

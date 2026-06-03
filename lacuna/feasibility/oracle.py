@@ -20,9 +20,15 @@ rows, p(z_t|z_p) cancel between the hypotheses):
   target missing:              log m1(z_p) - log m0(z_p),
         m_h(z_p) = E_{z_t|z_p}[ σ(β0_h + β1 z_p + β2_h z_t) ]   (Gauss–Hermite quadrature)
 
-The n-sample Bayes error of the optimal LLR test is computed by drawing observed data
-from the X-model under each hypothesis and evaluating the KNOWN LLR — numerical
-integration of a known integral, not estimation.
+The optimal test is the (Bayes-optimal) likelihood-ratio test built from the KNOWN
+generative model. Its n-sample Bayes error is a THEORETICAL quantity; we report a
+Monte-Carlo ESTIMATE of it (with a standard error and 95% CI), obtained by drawing
+observed data from the X-model under each hypothesis and evaluating the known LLR. This
+is NOT a *learned* estimate — no instrument is fitted, the LLR is the exact known one —
+but it is still a numerical MC estimate, not a closed form. The Gauss–Hermite term and
+the LLR/error arithmetic are done in float64 for numerical headroom (the censoring
+logits and KL/Chernoff terms are sensitive); the upstream data-generation sampling is
+float32 and is irrelevant to this precision since the likelihood is re-evaluated exactly.
 """
 
 import math
@@ -47,8 +53,8 @@ def gauss_hermite(n_nodes: int = 64) -> Tuple[torch.Tensor, torch.Tensor]:
         raise ValueError(f"n_nodes must be >= 2, got {n_nodes}")
     nodes, weights = np.polynomial.hermite.hermgauss(n_nodes)
     return (
-        torch.tensor(nodes, dtype=torch.float32),
-        torch.tensor(weights, dtype=torch.float32),
+        torch.tensor(nodes, dtype=torch.float64),
+        torch.tensor(weights, dtype=torch.float64),
     )
 
 
@@ -63,7 +69,11 @@ def missing_prob(
 
     Exact (to quadrature order) for a Gaussian conditional; with β2==0 it reduces to
     σ(β0 + β1 z_p) regardless of the X-model (no integral needed) — a tight unit test.
+    Computed in float64 (inputs are upcast) for numerical headroom.
     """
+    z_p = z_p.to(torch.float64)
+    nodes = nodes.to(torch.float64)
+    weights = weights.to(torch.float64)
     mean, var = xmodel.conditional_mean_var(z_p)  # mean: [n], var: scalar
     scale = math.sqrt(2.0 * var)
     z_t_grid = mean.unsqueeze(1) + scale * nodes.unsqueeze(0)  # [n, K]
@@ -85,6 +95,8 @@ def llr_rows(
     """Per-row observed-data log-likelihood-ratio (H1 over H0). `observed` is the bool mask."""
     if params_h0.beta1 != params_h1.beta1:
         raise ValueError("beta1 (nuisance) must be shared between the two hypotheses")
+    z_p = z_p.to(torch.float64)
+    z_t = z_t.to(torch.float64)
     eta0 = params_h0.beta0 + params_h0.beta1 * z_p + params_h0.beta2 * z_t
     eta1 = params_h1.beta0 + params_h1.beta1 * z_p + params_h1.beta2 * z_t
     # log(1 - σ(η)) = -softplus(η)
@@ -177,23 +189,49 @@ def bayes_error_nsample(
     nodes: torch.Tensor,
     weights: torch.Tensor,
     n_mc: int = 4000,
+    max_rows_per_chunk: int = 250_000,
 ) -> Dict[str, float]:
-    """n-sample Bayes error of the optimal LLR test (equal priors).
+    """Monte-Carlo estimate of the n-sample Bayes error of the optimal LLR test (equal priors).
 
-    Decide H1 iff Σ_i LLR_i > 0. Error under each truth estimated by Monte-Carlo over
-    `n_mc` datasets of `n` rows. This MC evaluates the KNOWN LLR — it is the ceiling,
-    not a learned estimate.
+    Decide H1 iff Σ_i LLR_i > 0. The error under each truth is a THEORETICAL quantity; here
+    it is ESTIMATED by Monte-Carlo over `n_mc` datasets of `n` rows, evaluating the KNOWN LLR
+    (no learned instrument). The returned dict reports the point estimate plus a standard error
+    and 95% CI so the MC noise is explicit. Ties (Σ=0) contribute 0.5.
+
+    Memory is bounded: replicates are processed in chunks of <= `max_rows_per_chunk` rows, so
+    the estimate is valid for arbitrarily large n_mc*n without allocating it all at once.
     """
-    llr0 = _simulate_llr(params_h0, params_h0, params_h1, xmodel, n_mc * n, rng.spawn(), nodes, weights)
-    llr1 = _simulate_llr(params_h1, params_h0, params_h1, xmodel, n_mc * n, rng.spawn(), nodes, weights)
-    s0 = llr0.reshape(n_mc, n).sum(dim=1)
-    s1 = llr1.reshape(n_mc, n).sum(dim=1)
-    err_h0 = float((s0 > 0).float().mean().item() + 0.5 * (s0 == 0).float().mean().item())
-    err_h1 = float((s1 < 0).float().mean().item() + 0.5 * (s1 == 0).float().mean().item())
+    reps_per_chunk = max(1, max_rows_per_chunk // n)
+    e0_parts, e1_parts = [], []
+    done = 0
+    while done < n_mc:
+        r = min(reps_per_chunk, n_mc - done)
+        llr0 = _simulate_llr(params_h0, params_h0, params_h1, xmodel, r * n, rng.spawn(), nodes, weights)
+        llr1 = _simulate_llr(params_h1, params_h0, params_h1, xmodel, r * n, rng.spawn(), nodes, weights)
+        s0 = llr0.reshape(r, n).sum(dim=1)
+        s1 = llr1.reshape(r, n).sum(dim=1)
+        e0_parts.append((s0 > 0).double() + 0.5 * (s0 == 0).double())
+        e1_parts.append((s1 < 0).double() + 0.5 * (s1 == 0).double())
+        done += r
+    e0 = torch.cat(e0_parts)
+    e1 = torch.cat(e1_parts)
+    n_mc = int(e0.numel())
+    err_h0 = float(e0.mean().item())
+    err_h1 = float(e1.mean().item())
+    bayes_error = 0.5 * (err_h0 + err_h1)
+    # SE of the mean of (err_h0+err_h1)/2 over independent H0/H1 MC draws
+    var0 = float(e0.var(unbiased=True).item()) / n_mc
+    var1 = float(e1.var(unbiased=True).item()) / n_mc
+    se = 0.5 * math.sqrt(var0 + var1)
     return {
-        "bayes_error": 0.5 * (err_h0 + err_h1),
+        "bayes_error": bayes_error,
+        "bayes_error_se": se,
+        "ci_low": bayes_error - 1.96 * se,
+        "ci_high": bayes_error + 1.96 * se,
         "err_h0": err_h0,
         "err_h1": err_h1,
+        "n_mc": n_mc,
+        "n": n,
     }
 
 
@@ -208,7 +246,11 @@ class OracleCell:
     rho: Optional[float]  # synthetic-X only; None for fitted real-X
     beta0_h0: float
     beta0_h1: float
-    bayes_error: float
+    bayes_error: float  # Monte-Carlo estimate of the theoretical Bayes error
+    bayes_error_se: float  # MC standard error of the estimate
+    ci_low: float  # 95% CI lower
+    ci_high: float  # 95% CI upper
+    n_mc: int  # MC replicates used
     err_h0: float
     err_h1: float
     kl_10: float
@@ -225,6 +267,10 @@ class OracleCell:
             "beta0_h0": self.beta0_h0,
             "beta0_h1": self.beta0_h1,
             "bayes_error": self.bayes_error,
+            "bayes_error_se": self.bayes_error_se,
+            "ci_low": self.ci_low,
+            "ci_high": self.ci_high,
+            "n_mc": self.n_mc,
             "err_h0": self.err_h0,
             "err_h1": self.err_h1,
             "kl_10": self.kl_10,

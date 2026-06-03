@@ -27,6 +27,10 @@ def test_compute_cell_strong_delta_has_signal():
     )
     assert cell.bayes_error < 0.47
     assert cell.kl_10 > 0 and cell.kl_01 > 0
+    # MC estimate carries a standard error / CI / n_mc (amendment 4)
+    assert cell.bayes_error_se >= 0.0
+    assert cell.ci_low <= cell.bayes_error <= cell.ci_high
+    assert cell.n_mc == 600
 
 
 def test_coarse_surface_cardinality():
@@ -39,7 +43,8 @@ def test_coarse_surface_cardinality():
 
 def _cell(delta, be, rho=0.0):
     return OracleCell(delta=delta, beta1=0.0, target_rate=0.3, n=128, rho=rho,
-                      beta0_h0=0.0, beta0_h1=0.0, bayes_error=be, err_h0=be, err_h1=be,
+                      beta0_h0=0.0, beta0_h1=0.0, bayes_error=be, bayes_error_se=0.0,
+                      ci_low=be, ci_high=be, n_mc=1, err_h0=be, err_h1=be,
                       kl_10=0.0, kl_01=0.0, xmodel={})
 
 
