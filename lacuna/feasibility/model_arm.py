@@ -168,6 +168,18 @@ def _ece(q: torch.Tensor, y: torch.Tensor, n_bins: int = 10) -> float:
     return ece
 
 
+def lr_at(step: int, base_lr: float, warmup_steps: int, total_steps: int, lr_min: float) -> float:
+    """Linear warmup (0→base_lr over warmup_steps) then cosine decay base_lr→lr_min.
+
+    With warmup_steps=0 and lr_min==base_lr this is a constant LR (the legacy behavior).
+    """
+    if warmup_steps > 0 and step < warmup_steps:
+        return base_lr * (step + 1) / warmup_steps
+    denom = max(1, total_steps - warmup_steps)
+    prog = min(max((step - warmup_steps) / denom, 0.0), 1.0)
+    return lr_min + 0.5 * (base_lr - lr_min) * (1.0 + math.cos(math.pi * prog))
+
+
 def assert_fresh_and_trainable(model) -> int:
     n_param = sum(p.numel() for p in model.parameters())
     n_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -194,18 +206,33 @@ def train_regime(
     n_test: int = 4000,
     batch_size: int = 32,
     lr: float = 3e-4,
+    warmup_steps: int = 0,
+    lr_min: Optional[float] = None,
     max_epochs: int = 40,
     patience: int = 10,
     grad_clip: float = 1.0,
+    test_pool: Optional[Tuple] = None,
 ) -> Dict:
-    """Train one fresh full LacunaModel on a regime and report gap-to-ceiling + leakage stats."""
+    """Train one fresh full LacunaModel on a regime and report gap-to-ceiling + leakage stats.
+
+    `test_pool=(datasets, labels, stats)` shares ONE held-out test set across restarts (reporting
+    only; never used for selection). LR follows warmup→cosine via `lr_at` (constant if defaults).
+    """
     train_ds, train_y, st_tr = regime_pool(rho, h1, h0, n, n_train, rng.spawn())
     val_ds, val_y, _ = regime_pool(rho, h1, h0, n, n_val, rng.spawn())
-    test_ds, test_y, st_te = regime_pool(rho, h1, h0, n, n_test, rng.spawn())
+    if test_pool is not None:
+        test_ds, test_y, st_te = test_pool
+    else:
+        test_ds, test_y, st_te = regime_pool(rho, h1, h0, n, n_test, rng.spawn())
 
     model = model_factory().to(device)
     n_param = assert_fresh_and_trainable(model)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
+    base_lr = lr
+    lr_floor = base_lr if lr_min is None else lr_min
+    steps_per_epoch = math.ceil(len(train_ds) / batch_size)
+    total_steps = max_epochs * steps_per_epoch
+    global_step = 0
 
     best_val, best_state, since = math.inf, None, 0
     epochs_run = 0
@@ -214,6 +241,8 @@ def train_regime(
         model.train()
         perm = rng.shuffle_indices(len(train_ds))
         for s in range(0, len(train_ds), batch_size):
+            for g in opt.param_groups:
+                g["lr"] = lr_at(global_step, base_lr, warmup_steps, total_steps, lr_floor)
             idx = [int(j) for j in perm[s:s + batch_size]]
             batch = _tokenize(train_ds, train_y, idx, n)
             out = model(batch, compute_reconstruction=True, compute_decision=False)
@@ -223,6 +252,7 @@ def train_regime(
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             opt.step()
+            global_step += 1
         val_err, _, _ = evaluate(model, val_ds, val_y, n, batch_size, device)
         if val_err < best_val - 1e-4:
             best_val, since = val_err, 0

@@ -10,11 +10,24 @@ from lacuna.feasibility.model_arm import (
     binary_pred,
     binary_q,
     evaluate,
+    lr_at,
     regime_pool,
     sample_observed_fixed,
     train_regime,
     _ece,
 )
+
+
+def test_lr_schedule_warmup_then_cosine():
+    base, lr_min, warm, total = 1e-4, 1e-5, 300, 3000
+    assert lr_at(0, base, warm, total, lr_min) < base            # warmup starts low
+    assert abs(lr_at(warm - 1, base, warm, total, lr_min) - base) < 1e-9  # peaks at base end of warmup
+    # cosine: monotone non-increasing after warmup, ending near lr_min
+    after = [lr_at(s, base, warm, total, lr_min) for s in range(warm, total + 1, 100)]
+    assert all(b <= a + 1e-12 for a, b in zip(after, after[1:]))
+    assert abs(after[-1] - lr_min) < 1e-6
+    # legacy constant: warmup 0, lr_min==base
+    assert lr_at(500, base, 0, total, base) == base
 
 
 # ---------- constraint #4: MCAR must not affect the binary objective ----------
