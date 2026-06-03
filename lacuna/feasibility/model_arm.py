@@ -54,26 +54,53 @@ def sample_observed_fixed(
     return X * r.float(), r, float(missing.float().mean().item())
 
 
+def _batch_sample(
+    rho: float, params: SelfCensorParams, count: int, n: int, rng: RNGState
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Vectorized: draw `count` synthetic n-row datasets, censor col1 with FIXED params.
+
+    Returns (x [count,n,2] missing-zeroed, r [count,n,2] bool, per-dataset realized rate [count]).
+    Equivalent in distribution to `count` independent `sample_observed_fixed` calls.
+    """
+    sd = math.sqrt(1.0 - rho * rho)
+    z_p = rng.randn(count, n)
+    z_t = rho * z_p + sd * rng.randn(count, n)
+    eta = params.beta0 + params.beta1 * z_p + params.beta2 * z_t
+    missing = rng.rand(count, n) < torch.sigmoid(eta)  # [count, n]
+    r = torch.ones(count, n, 2, dtype=torch.bool)
+    r[:, :, 1] = ~missing
+    X = torch.stack([z_p, z_t], dim=2)  # [count, n, 2]
+    x = X * r.float()
+    rates = missing.float().mean(dim=1)  # [count]
+    return x, r, rates
+
+
 def regime_pool(
     rho: float, h1: SelfCensorParams, h0: SelfCensorParams, n: int, n_datasets: int, rng: RNGState
 ) -> Tuple[List[ObservedDataset], List[int], Dict[str, float]]:
-    """Build a balanced pool of datasets labelled 0=MAR(H0) / 1=MNAR(H1)."""
+    """Build a balanced pool of datasets labelled 0=MAR(H0) / 1=MNAR(H1). Vectorized generation."""
+    n1 = n_datasets // 2
+    n0 = n_datasets - n1
+    x0, r0, rate0 = _batch_sample(rho, h0, n0, n, rng.spawn())
+    x1, r1, rate1 = _batch_sample(rho, h1, n1, n, rng.spawn())
+
     datasets: List[ObservedDataset] = []
     labels: List[int] = []
-    rates = {0: [], 1: []}
-    for i in range(n_datasets):
-        label = i % 2  # balanced, deterministic
-        params = h1 if label == 1 else h0
-        x, r, rate = sample_observed_fixed(rho, params, n, rng.spawn())
-        datasets.append(ObservedDataset(x=x, r=r, n=n, d=2,
+    for k in range(n0):
+        datasets.append(ObservedDataset(x=x0[k], r=r0[k], n=n, d=2,
                                         feature_names=("predictor", "target"),
-                                        dataset_id=f"{label}_{i}", meta={}))
-        labels.append(label)
-        rates[label].append(rate)
+                                        dataset_id=f"0_{k}", meta={}))
+        labels.append(0)
+    for k in range(n1):
+        datasets.append(ObservedDataset(x=x1[k], r=r1[k], n=n, d=2,
+                                        feature_names=("predictor", "target"),
+                                        dataset_id=f"1_{k}", meta={}))
+        labels.append(1)
+    # (order is H0-block then H1-block; the training loop shuffles indices each epoch)
     stats = {
-        "rate_h0_mean": float(sum(rates[0]) / max(1, len(rates[0]))),
-        "rate_h1_mean": float(sum(rates[1]) / max(1, len(rates[1]))),
-        "n_h0": len(rates[0]), "n_h1": len(rates[1]),
+        "rate_h0_mean": float(rate0.mean().item()),
+        "rate_h1_mean": float(rate1.mean().item()),
+        "n_h0": n0, "n_h1": n1,
     }
     return datasets, labels, stats
 
