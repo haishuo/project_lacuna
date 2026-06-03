@@ -59,6 +59,27 @@ clause it serves.
 - Vocabulary locked: ceiling = analytic Bayes oracle (under stated X-model) ONLY; RF/MLP/handcrafted
   = baselines; frozen-head = transfer ablations; weak-proxy negatives are never impossibility evidence.
 
+### Added (P1 implementation — package + tests only; NOTHING run)
+- `lacuna/feasibility/` — isolated, tested probe package (production generators/model untouched):
+  - `delta_generator.py` — δ≡β₂ single-column self-censoring generator + deterministic β₀
+    rate-matching solver (bisection on monotone mean-σ); positive δ only (directional), negative δ
+    documented as excluded. Reuses only `_zscore_columns`.
+  - `xmodel.py` — `XModel` ABC + `ConditionalGaussian` (exact `.synthetic(rho)` ceiling / `.fit` real-X);
+    pluggable for copula/nonparametric later. Assumption surfaced in `descriptor`.
+  - `oracle.py` — analytic Bayes ceiling: Gauss–Hermite `missing_prob`, observed-data `llr_rows`,
+    population-rate β₀ solve, `bayes_error_nsample` (n-sample Bayes error of the optimal LLR test by
+    numerical integration of the KNOWN integral — not estimation), `per_row_kl`.
+  - `manifest.py` — required-field validator; fails loud; forbids kind=main+checkpoint and
+    main-model without all_layers_trainable (charter §4.9).
+  - `sweep.py` — two-stage oracle orchestration (coarse → boundary refinement); trains nothing,
+    loads nothing, does no I/O on import.
+- `tests/unit/feasibility/` — 36 tests (normal/edge/failure): rate-matching hits target; δ=0 mask is
+  own-value-independent / δ>0 correlated; δ=0 ⟹ Bayes error exactly 0.5; strong δ at ρ=0 ⟹ signal;
+  `missing_prob` reduces to σ at β₂=0 and matches brute-force integration; manifest validity gates.
+- Full suite green: **1116 passed, 1 skipped**. All feasibility files ≤ 233 LOC.
+- STOPPED before running the oracle arm, per the approved gate ("implementation + tests only; do not
+  run model training until the oracle surface is presented and approved").
+
 ### Known debt surfaced by the audit (pre-existing, independent of re-scope)
 - `lacuna/training/loss.py` (956 LOC) and `lacuna/training/checkpoint.py` (649 LOC) breach the
   500-LOC hard limit (CLAUDE.md Rule 4). Any rework must split, not extend.
