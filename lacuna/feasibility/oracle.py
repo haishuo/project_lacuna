@@ -92,9 +92,12 @@ def llr_rows(
     nodes: torch.Tensor,
     weights: torch.Tensor,
 ) -> torch.Tensor:
-    """Per-row observed-data log-likelihood-ratio (H1 over H0). `observed` is the bool mask."""
-    if params_h0.beta1 != params_h1.beta1:
-        raise ValueError("beta1 (nuisance) must be shared between the two hypotheses")
+    """Per-row observed-data log-likelihood-ratio (H1 over H0). `observed` is the bool mask.
+
+    β1 MAY differ between the hypotheses: the X-model terms p(z_p) and p(z_t|z_p) are identical
+    under H0 and H1 (only the missingness mechanism differs), so they cancel in the ratio for any
+    β1. Equal-β1 is the point-null special case; the β1′-profiled MAR null uses differing β1.
+    """
     z_p = z_p.to(torch.float64)
     z_t = z_t.to(torch.float64)
     eta0 = params_h0.beta0 + params_h0.beta1 * z_p + params_h0.beta2 * z_t

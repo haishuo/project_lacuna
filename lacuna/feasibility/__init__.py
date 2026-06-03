@@ -34,6 +34,12 @@ from .oracle import (
     per_row_kl,
     OracleCell,
 )
+from .profiled_oracle import (
+    profile_beta1,
+    mar_params,
+    bayes_error_vs_mar,
+    compute_profiled_cell,
+)
 from .manifest import build_manifest, validate_manifest, write_manifest, REQUIRED_FIELDS
 
 __all__ = [
@@ -51,6 +57,10 @@ __all__ = [
     "bayes_error_nsample",
     "per_row_kl",
     "OracleCell",
+    "profile_beta1",
+    "mar_params",
+    "bayes_error_vs_mar",
+    "compute_profiled_cell",
     "build_manifest",
     "validate_manifest",
     "write_manifest",
