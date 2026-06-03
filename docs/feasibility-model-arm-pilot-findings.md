@@ -60,16 +60,16 @@ Seeds {42, 43, 44} on boundary / moderate / strong:
 | moderate | 0.104 | 0.109 / 0.137 / 0.106 | 0.118 ± 0.014 | +0.014 |
 | strong | 0.004 | 0.007 / 0.013 / 0.009 | 0.010 ± 0.002 | +0.007 |
 
-**Conclusion — the boundary failure is OPTIMIZATION/SEED SENSITIVITY, not a capacity or
-identifiability wall.**
+**Conclusion (scoped, carefully phrased):**
 - **Moderate and strong are stable and near-ceiling** across seeds (std 0.014 / 0.002; gaps +0.014 /
   +0.007). The full LacunaModel robustly recovers the non-absorbable MNAR signal there.
-- **Boundary (high ρ=0.9) is LEARNABLE but UNSTABLE:** one seed nearly reaches the ceiling
-  (0.309 → gap **+0.058**), two fall into the chance basin (0.48/0.46 → gap ~+0.21). High variance
-  (±0.076). So the pilot's +0.222 was a bad-seed artifact; the signal IS reachable by this
-  architecture, but training at high ρ traps in a chance basin on most seeds.
-- The fix is an OPTIMIZATION one (more restarts / better init / warmup / schedule at high ρ), not a
-  re-architecture and not a contradiction of the ceiling.
+- **The boundary regime is learnable by the current architecture, but optimization is unstable: one
+  seed approaches the profiled ceiling (0.309 → gap +0.058), while two seeds fall into a chance basin
+  (0.48 / 0.46 → gap ~+0.21).** High variance (±0.076). This is a training-stability problem at high ρ
+  — NOT a capacity or identifiability wall (the signal is demonstrably reachable on a good seed and
+  the oracle proves it exists), and NOT merely "a bad seed" (two of three restarts genuinely failed).
+- The indicated fix is in the training PROCEDURE (restarts / warmup / schedule / init), not the
+  architecture, the data regime, or the ceiling.
 
 ## Overall feasibility verdict (model arm)
 The deployment-strength `LacunaModel`, trained from scratch, **learns the signal that survives the
