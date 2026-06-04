@@ -141,9 +141,15 @@ identifiability or architecture wall.
 
 ## 8. Next planned robustness stages (deferred; not started)
 
-1. **Richer MAR null** — profile over the MAR predictor choice / link family, or a per-replicate GLRT —
-   to see how much of the gap survives a stronger null. The main thing that could still move the
-   headline; would tighten (lower) the ceiling.
+1. **Richer MAR null — DONE (2026-06-04, branch `experiment/p1r-richer-mar-null`).** P1R-A
+   (predictor-choice) did not absorb at all (single column can't capture both the driver and the
+   own-value residual; Δ≡0). P1R-C (multi-predictor MAR, σ(β₀′+β₁′z_p+β₂′z_a)) DID absorb, graded by
+   **Var(z_t | observed predictors)** — but the signal collapses toward chance only as ρ_a→1
+   (Var→0); the substantive regimes survive a strong proxy up to ρ_a≈0.9. **P1 survives; not a
+   foundational revision.** Outcome: proceed to P2 with **proxy-aware abstention keyed on
+   Var(z_t|observed)** as a now-justified core feature. See `docs/feasibility-p1ra-findings.md`,
+   `docs/feasibility-p1rc-findings.md`. (Link-family / per-replicate-GLRT NOT run — judged
+   non-decision-relevant after P1R-A/C; oracle expansion stopped here per plan.)
 2. **Real-survey-X** — profiled oracle + model arm on fitted-X survey columns (with the fitted-X-model
    assumption stated), to check transfer off synthetic X.
 3. **Multi-axis / per-idiom δ** — extend beyond own-value self-censoring to attrition & unit-nonresponse
