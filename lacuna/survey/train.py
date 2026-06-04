@@ -105,6 +105,7 @@ def _metrics_block(logits, labels, deltas, temperature: float) -> Dict:
         "bin_accuracy": M.bin_accuracy(probs, labels),
         "adjacent_accuracy": M.adjacent_accuracy(probs, labels),
         "p_delta0": M.p_delta_zero(probs),
+        "entropy_bits": M.mean_predictive_entropy(probs),
         "ece": M.ece(probs, labels)["ece"],
         "coverage": M.coverage_table(probs, labels),
     }

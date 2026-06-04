@@ -28,9 +28,11 @@ from .delta_head import (
 from .loss import fit_temperature, log_score, rps_loss, uniform_rps
 from .example_source import (
     ExampleSource,
+    StratifiedRealXSource,
     SurveyExampleSource,
     SyntheticTwoColSource,
 )
+from .proxy_score import column_r2, proxy_score, r2_distribution, target_r2_table
 from .conditioned_head import (
     CONDITIONING_METHOD,
     TargetConditionedDeltaModel,
@@ -62,6 +64,11 @@ __all__ = [
     "ExampleSource",
     "SurveyExampleSource",
     "SyntheticTwoColSource",
+    "StratifiedRealXSource",
+    "column_r2",
+    "proxy_score",
+    "target_r2_table",
+    "r2_distribution",
     "TargetConditionedDeltaModel",
     "create_target_conditioned_model",
     "CONDITIONING_METHOD",

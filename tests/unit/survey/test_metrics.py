@@ -54,6 +54,24 @@ def test_p_delta_zero():
     assert M.p_delta_zero(probs) == pytest.approx(0.5)
 
 
+# ---------- predictive entropy ----------
+
+def test_entropy_uniform_is_log2_k():
+    import math
+    probs = torch.full((4, K), 1.0 / K)
+    assert M.mean_predictive_entropy(probs) == pytest.approx(math.log2(K), abs=1e-5)
+
+
+def test_entropy_onehot_is_zero():
+    probs = _onehot([0, 3, 6])
+    assert M.mean_predictive_entropy(probs) == pytest.approx(0.0, abs=1e-5)
+
+
+def test_entropy_rejects_non_2d():
+    with pytest.raises(ValueError):
+        M.mean_predictive_entropy(torch.rand(K))
+
+
 # ---------- coverage ----------
 
 def test_coverage_full_interval_is_one():

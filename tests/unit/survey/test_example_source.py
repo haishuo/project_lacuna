@@ -7,7 +7,11 @@ from lacuna.core.rng import RNGState
 from lacuna.data.catalog import create_default_catalog
 from lacuna.survey.answer_sheet import GENERATOR_FAMILY
 from lacuna.survey.delta_bins import NUM_BINS, assign_delta_bin
-from lacuna.survey.example_source import SurveyExampleSource, SyntheticTwoColSource
+from lacuna.survey.example_source import (
+    StratifiedRealXSource,
+    SurveyExampleSource,
+    SyntheticTwoColSource,
+)
 from lacuna.survey.leakage import assess_leakage, leakage_pass
 
 
@@ -95,6 +99,39 @@ def test_survey_source_make_one():
 def test_survey_describe():
     raw = create_default_catalog().load("survey_bfi")
     assert SurveyExampleSource([raw]).describe()["x_source"] == "real_survey"
+
+
+# ---------- stratified real-X source (Part B) ----------
+
+def test_stratified_pins_target_and_balances():
+    raw = create_default_catalog().load("survey_bfi")
+    dbn = {"survey_bfi": raw}
+    strata = [[("survey_bfi", 0), ("survey_bfi", 1)], [("survey_bfi", 5)]]
+    src = StratifiedRealXSource(dbn, strata)
+
+    class C:
+        target_rate = 0.25
+        max_rows = 128
+
+    seen = set()
+    rng = RNGState(seed=3)
+    for _ in range(20):
+        ex = src.make_one(C(), rng.spawn(), delta=1.0, beta1=1.0)
+        seen.add(ex.answer_sheet.target_col_idx)
+    assert seen.issubset({0, 1, 5})  # only pinned targets used
+    assert src.describe()["x_source"] == "real_survey_r2_stratified"
+
+
+def test_stratified_rejects_empty():
+    raw = create_default_catalog().load("survey_bfi")
+    with pytest.raises(ValueError):
+        StratifiedRealXSource({"survey_bfi": raw}, [[]])
+
+
+def test_stratified_rejects_unknown_dataset():
+    raw = create_default_catalog().load("survey_bfi")
+    with pytest.raises(ValueError):
+        StratifiedRealXSource({"survey_bfi": raw}, [[("nope", 0)]])
 
 
 # ---------- failure cases ----------

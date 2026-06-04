@@ -80,6 +80,20 @@ def p_delta_zero(probs: torch.Tensor) -> float:
     return float(probs[:, 0].mean().item())
 
 
+def mean_predictive_entropy(probs: torch.Tensor, eps: float = 1e-12) -> float:
+    """Mean Shannon entropy of the per-example bin distribution, in BITS (max = log2(K)).
+
+    The calibration-first uncertainty signal: when δ becomes unidentifiable, a correct prior's
+    entropy should RISE toward log2(K). Reported alongside discrimination so a confidence collapse
+    (accuracy down, entropy flat) is distinguishable from correct abstention (accuracy down,
+    entropy up).
+    """
+    if probs.dim() != 2:
+        raise ValueError(f"probs must be [B, K], got {tuple(probs.shape)}")
+    h = -(probs * torch.log2(probs.clamp_min(eps))).sum(dim=-1)
+    return float(h.mean().item())
+
+
 def interval_coverage(probs: torch.Tensor, labels: torch.Tensor, nominal: float) -> float:
     """Empirical coverage of the central credible interval at `nominal` mass.
 

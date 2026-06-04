@@ -69,6 +69,43 @@ class SurveyExampleSource(ExampleSource):
         return {"x_source": "real_survey", "datasets": [r.name for r in self.pool]}
 
 
+class StratifiedRealXSource(ExampleSource):
+    """Real survey X, sampling (dataset, target column) PAIRS balanced across R² strata.
+
+    Each stratum is a list of (dataset_name, target_idx) pairs whose full-data R²(target|others)
+    falls in that stratum's band. `make_one` picks a stratum UNIFORMLY (so low-R² is represented
+    even if rare — the falsifiability requirement) then a pair within it, and pins that target.
+    Pass a single-stratum list to build a per-stratum EVAL source.
+    """
+
+    def __init__(self, datasets_by_name: dict, strata: list, num_bins: int = NUM_BINS):
+        if len(strata) == 0 or all(len(s) == 0 for s in strata):
+            raise ValueError("StratifiedRealXSource requires at least one non-empty stratum")
+        for s in strata:
+            for (name, _t) in s:
+                if name not in datasets_by_name:
+                    raise ValueError(f"stratum references unknown dataset {name!r}")
+        self.datasets_by_name = datasets_by_name
+        self.strata = [s for s in strata if len(s) > 0]
+        self.num_bins = num_bins
+
+    def make_one(self, cfg, rng: RNGState, *, delta: float, beta1: float) -> DeltaExample:
+        s = self.strata[rng.randint(0, len(self.strata), (1,)).item()]
+        name, target_idx = s[rng.randint(0, len(s), (1,)).item()]
+        raw = self.datasets_by_name[name]
+        return make_example(
+            raw, beta1=beta1, delta=delta, target_rate=cfg.target_rate,
+            rng=rng.spawn(), max_rows=cfg.max_rows, target_idx=int(target_idx),
+        )
+
+    def describe(self) -> dict:
+        return {
+            "x_source": "real_survey_r2_stratified",
+            "n_strata": len(self.strata),
+            "pairs_per_stratum": [len(s) for s in self.strata],
+        }
+
+
 class SyntheticTwoColSource(ExampleSource):
     """Rung 1: 2-column standard bivariate-normal X (corr rho) + own-value self-censoring.
 

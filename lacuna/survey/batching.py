@@ -56,11 +56,17 @@ def make_example(
     target_rate: float,
     rng: RNGState,
     max_rows: int,
+    target_idx: int = None,
 ) -> DeltaExample:
-    """Subsample rows, apply own-value self-censoring, wrap as a tokenizable ObservedDataset."""
+    """Subsample rows, apply own-value self-censoring, wrap as a tokenizable ObservedDataset.
+
+    `target_idx` optionally pins the censored column (e.g. for R²-stratified sampling); otherwise
+    it is sampled (non-constant only) by the generator.
+    """
     raw_sub = subsample_raw(raw, max_rows=max_rows, rng=rng.spawn())
     res = generate_self_censor_example(
-        raw_sub, beta1=beta1, delta=delta, target_rate=target_rate, rng=rng.spawn()
+        raw_sub, beta1=beta1, delta=delta, target_rate=target_rate, rng=rng.spawn(),
+        target_idx=target_idx,
     )
     n, d = res.mask.shape
     observed = ObservedDataset(
