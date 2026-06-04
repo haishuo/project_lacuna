@@ -7,6 +7,26 @@ clause it serves.
 
 ---
 
+## 2026-06-03 — P1 FEASIBILITY GATE PASSED (milestone; tag `p1-feasibility-passed`)
+
+Consolidated in `docs/P1-FEASIBILITY-RESULT.md`. Five runs, all manifests validated, leakage controls
+clean throughout (null=0.500, rates matched ~0.10, no negative gaps, no checkpoint/frozen layers):
+- Point-null oracle (`oracle_20260603_084703`): ρ "helps" — flagged as the wrong (fixed-MAR) question.
+- β₁′-profiled oracle (`profiled_20260603_100549`): the ρ-help is largely refittable MAR slope
+  (absorbed; β₁′ 0.83→1.94). Molenberghs restored (higher ρ harder); signal SURVIVES (142/144 cells).
+- Model-arm pilot (`modelarm_pilot_...190551`): moderate +0.023 / strong +0.006 reach ceiling; boundary
+  +0.222 failed; null control 0.500 (no leakage).
+- Multi-seed (`...200653`): boundary learnable but optimization-unstable (escape 1/3, 0.416±0.076).
+- Boundary stabilization (`boundary_stab_...230213`): training-procedure changes ONLY (lr 1e-4, warmup,
+  cosine, patience 20) → escape 10/10, 0.276±0.0024, gap +0.025. stabilization_success=True.
+
+Scoped conclusion (PASSED): the existing LacunaModel backbone, trained from scratch, recovers the
+surviving MNAR signal near the β₁′-profiled Bayes ceiling across representative regimes incl. the
+high-ρ boundary after stabilization — establishing the feasibility precondition for the re-architected
+δ-prior system. NOT real-data accuracy; NOT the final δ-prior/abstention/semantics/OOD product;
+conditional on the minimum-viable β₁′-profiled null. Robustness stages (richer MAR null, real-X,
+multi-axis δ, the re-architecture) deferred until this consolidation is reviewed.
+
 ## 2026-06-02 — Re-scope groundwork (docs only; no code changed)
 
 ### Added
