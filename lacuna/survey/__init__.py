@@ -31,6 +31,11 @@ from .example_source import (
     SurveyExampleSource,
     SyntheticTwoColSource,
 )
+from .conditioned_head import (
+    CONDITIONING_METHOD,
+    TargetConditionedDeltaModel,
+    create_target_conditioned_model,
+)
 
 __all__ = [
     "AnswerSheet",
@@ -57,4 +62,7 @@ __all__ = [
     "ExampleSource",
     "SurveyExampleSource",
     "SyntheticTwoColSource",
+    "TargetConditionedDeltaModel",
+    "create_target_conditioned_model",
+    "CONDITIONING_METHOD",
 ]

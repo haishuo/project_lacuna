@@ -98,8 +98,12 @@ class DeltaPriorModel(nn.Module):
         # Calibration temperature (post-hoc); NOT a trained parameter — a buffer.
         self.register_buffer("temperature", torch.tensor(1.0, dtype=torch.float32))
 
-    def forward(self, batch) -> torch.Tensor:
-        """TokenBatch -> [B, num_bins] raw logits (temperature NOT applied)."""
+    def forward(self, batch, target_idx=None) -> torch.Tensor:
+        """TokenBatch -> [B, num_bins] raw logits (temperature NOT applied).
+
+        `target_idx` is accepted for a uniform interface with the target-conditioned model and is
+        IGNORED here — the global-evidence head conditions on the whole dataset, not a column.
+        """
         device = next(self.parameters()).device
         batch = batch.to(device)
         evidence = self.encoder(
@@ -107,9 +111,9 @@ class DeltaPriorModel(nn.Module):
         )
         return self.head(evidence)
 
-    def predict_proba(self, batch) -> torch.Tensor:
+    def predict_proba(self, batch, target_idx=None) -> torch.Tensor:
         """Calibrated probabilities: softmax(logits / temperature)."""
-        logits = self.forward(batch)
+        logits = self.forward(batch, target_idx)
         t = self.temperature.clamp(min=1e-6)
         return torch.softmax(logits / t, dim=-1)
 

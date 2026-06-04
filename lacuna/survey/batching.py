@@ -39,11 +39,12 @@ class DeltaExample:
 
 @dataclass(frozen=True)
 class DeltaBatch:
-    """A model-ready batch: tokens + the out-of-band δ supervision and provenance."""
+    """A model-ready batch: tokens + the out-of-band δ supervision, target index, and provenance."""
 
     tokens: TokenBatch
     delta_bin: torch.Tensor  # [B] long — the supervised ordered-bin label
     delta: torch.Tensor  # [B] float — the continuous answer-sheet δ (for E[δ] error)
+    target_idx: torch.Tensor  # [B] long — the SUPPLIED candidate target column (head conditioning)
     sheets: List[AnswerSheet]  # per-example audit records (provenance; not fed to the model)
 
 
@@ -89,5 +90,8 @@ def collate(examples: List[DeltaExample], *, max_rows: int, max_cols: int) -> De
     batch = tokenize_and_batch(datasets, max_rows=max_rows, max_cols=max_cols)
     delta_bin = torch.tensor([e.answer_sheet.delta_bin for e in examples], dtype=torch.long)
     delta = torch.tensor([e.answer_sheet.delta for e in examples], dtype=torch.float32)
+    target_idx = torch.tensor([e.answer_sheet.target_col_idx for e in examples], dtype=torch.long)
     sheets = [e.answer_sheet for e in examples]
-    return DeltaBatch(tokens=batch, delta_bin=delta_bin, delta=delta, sheets=sheets)
+    return DeltaBatch(
+        tokens=batch, delta_bin=delta_bin, delta=delta, target_idx=target_idx, sheets=sheets
+    )
