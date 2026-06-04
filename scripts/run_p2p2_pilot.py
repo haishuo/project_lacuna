@@ -16,6 +16,7 @@ from pathlib import Path
 
 from lacuna.core.rng import RNGState
 from lacuna.data.catalog import create_default_catalog
+from lacuna.survey.example_source import SurveyExampleSource
 from lacuna.survey.run_manifest import write_manifest
 from lacuna.survey.train import TrainConfig, train_delta_prior
 
@@ -46,7 +47,8 @@ def main() -> None:
 
     t0 = time.time()
     out = train_delta_prior(
-        train, val, test, cfg, RNGState(seed=2026),
+        SurveyExampleSource(train), SurveyExampleSource(val), SurveyExampleSource(test),
+        cfg, RNGState(seed=2026),
         kind="main", run_id="p2p2-pilot-001", git_commit=git,
         timestamp="2026-06-04T12:00:00Z",
     )

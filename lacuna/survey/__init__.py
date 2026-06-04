@@ -26,6 +26,11 @@ from .delta_head import (
     init_parameters_,
 )
 from .loss import fit_temperature, log_score, rps_loss, uniform_rps
+from .example_source import (
+    ExampleSource,
+    SurveyExampleSource,
+    SyntheticTwoColSource,
+)
 
 __all__ = [
     "AnswerSheet",
@@ -49,4 +54,7 @@ __all__ = [
     "log_score",
     "uniform_rps",
     "fit_temperature",
+    "ExampleSource",
+    "SurveyExampleSource",
+    "SyntheticTwoColSource",
 ]

@@ -21,11 +21,11 @@ from typing import Dict, List, Optional
 import torch
 
 from lacuna.core.rng import RNGState
-from lacuna.data.ingestion import RawDataset
 
 from . import metrics as M
-from .batching import DeltaExample, collate, make_example
+from .batching import DeltaExample, collate
 from .delta_head import assert_fresh_and_trainable, create_delta_prior_model
+from .example_source import ExampleSource
 from .leakage import assess_leakage, leakage_pass
 from .loss import fit_temperature, log_score, rps_loss, uniform_rps
 from . import run_manifest
@@ -63,28 +63,17 @@ class TrainConfig:
             raise ValueError(f"beta1_range must satisfy 0 <= lo <= hi, got {self.beta1_range}")
 
 
-def _sample_spec(pool: List[RawDataset], cfg: TrainConfig, rng: RNGState):
-    raw = pool[rng.randint(0, len(pool), (1,)).item()]
-    delta = float(cfg.delta_grid[rng.randint(0, len(cfg.delta_grid), (1,)).item()])
-    lo, hi = cfg.beta1_range
-    beta1 = float(lo + (hi - lo) * rng.rand(1).item())
-    return raw, beta1, delta
-
-
-def _make_examples(pool, cfg, n, rng, *, stratify=False) -> List[DeltaExample]:
-    """Draw n examples. If stratify, cycle deterministically through the δ-grid for bin balance."""
+def _make_examples(source: ExampleSource, cfg, n, rng, *, stratify=False) -> List[DeltaExample]:
+    """Draw n examples from a source. If stratify, cycle the δ-grid deterministically for balance."""
     out = []
     for i in range(n):
         if stratify:
-            raw = pool[rng.randint(0, len(pool), (1,)).item()]
             delta = float(cfg.delta_grid[i % len(cfg.delta_grid)])
-            lo, hi = cfg.beta1_range
-            beta1 = float(lo + (hi - lo) * rng.rand(1).item())
         else:
-            raw, beta1, delta = _sample_spec(pool, cfg, rng)
-        out.append(make_example(raw, beta1=beta1, delta=delta,
-                                target_rate=cfg.target_rate, rng=rng.spawn(),
-                                max_rows=cfg.max_rows))
+            delta = float(cfg.delta_grid[rng.randint(0, len(cfg.delta_grid), (1,)).item()])
+        lo, hi = cfg.beta1_range
+        beta1 = float(lo + (hi - lo) * rng.rand(1).item())
+        out.append(source.make_one(cfg, rng.spawn(), delta=delta, beta1=beta1))
     return out
 
 
@@ -120,9 +109,9 @@ def _metrics_block(logits, labels, deltas, temperature: float) -> Dict:
 
 
 def train_delta_prior(
-    train_pool: List[RawDataset],
-    val_pool: List[RawDataset],
-    test_pool: List[RawDataset],
+    train_source: ExampleSource,
+    val_source: ExampleSource,
+    test_source: ExampleSource,
     cfg: TrainConfig,
     rng: RNGState,
     *,
@@ -133,22 +122,27 @@ def train_delta_prior(
     device: str = "cpu",
     wall_clock_seconds: float = 0.0,
 ) -> Dict:
-    """Train + evaluate a δ-prior; return {model, results, manifest}. Manifest is validated."""
-    for name, pool in (("train", train_pool), ("val", val_pool), ("test", test_pool)):
-        if len(pool) == 0:
-            raise ValueError(f"{name}_pool must be non-empty")
+    """Train + evaluate a δ-prior from injected example sources; return {model, results, manifest}.
+
+    The data source is pluggable (real survey X or synthetic 2-col — see `example_source`); the
+    head / loss / metrics / leakage / manifest harness is identical across sources, which is what
+    makes a ladder rung-to-rung difference attributable. Manifest is validated before return.
+    """
+    num_bins = train_source.num_bins
+    if not (val_source.num_bins == test_source.num_bins == num_bins):
+        raise ValueError("train/val/test sources must agree on num_bins")
 
     model = create_delta_prior_model(
         hidden_dim=cfg.hidden_dim, evidence_dim=cfg.evidence_dim, n_layers=cfg.n_layers,
         n_heads=cfg.n_heads, max_cols=cfg.max_cols, dropout=cfg.dropout,
-        head_hidden_dim=cfg.head_hidden_dim, rng=rng.spawn(),
+        head_hidden_dim=cfg.head_hidden_dim, num_bins=num_bins, rng=rng.spawn(),
     ).to(device)
     n_param = assert_fresh_and_trainable(model)
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
 
     # Fixed, seeded val/test sets (val also fits temperature; never regenerated).
-    val_ex = _make_examples(val_pool, cfg, cfg.val_size, rng.spawn(), stratify=True)
-    test_ex = _make_examples(test_pool, cfg, cfg.test_size, rng.spawn(), stratify=True)
+    val_ex = _make_examples(val_source, cfg, cfg.val_size, rng.spawn(), stratify=True)
+    test_ex = _make_examples(test_source, cfg, cfg.test_size, rng.spawn(), stratify=True)
 
     best_val, best_state, since, epochs_run = math.inf, None, 0, 0
     train_rng = rng.spawn()
@@ -164,7 +158,7 @@ def train_delta_prior(
         # fully bit-reproducible training run the caller sets dropout=0 AND the global determinism
         # flag; the library does not toggle global torch state itself (Rule 6 / Rule 5).
         for _ in range(cfg.train_batches_per_epoch):
-            ex = _make_examples(train_pool, cfg, cfg.batch_size, train_rng.spawn())
+            ex = _make_examples(train_source, cfg, cfg.batch_size, train_rng.spawn())
             db = collate(ex, max_rows=cfg.max_rows, max_cols=cfg.max_cols)
             logits = model(db.tokens)
             loss = rps_loss(logits, db.delta_bin.to(logits.device))
@@ -206,10 +200,9 @@ def train_delta_prior(
         "head": "MLP(evidence->hidden->num_bins)",
     }
     split_scheme = {
-        "scheme": "leave-datasets-out (out-of-family PROXY; single mechanism family in P2.2)",
-        "train": [r.name for r in train_pool],
-        "val": [r.name for r in val_pool],
-        "test": [r.name for r in test_pool],
+        "train": train_source.describe(),
+        "val": val_source.describe(),
+        "test": test_source.describe(),
         "val_size": cfg.val_size, "test_size": cfg.test_size,
     }
     metrics_block = {

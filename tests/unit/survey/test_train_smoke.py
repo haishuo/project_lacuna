@@ -4,15 +4,16 @@ import torch
 
 from lacuna.core.rng import RNGState
 from lacuna.data.catalog import create_default_catalog
+from lacuna.survey.example_source import SurveyExampleSource
 from lacuna.survey.run_manifest import validate_manifest
 from lacuna.survey.train import TrainConfig, train_delta_prior
 
 
 def _pools():
     cat = create_default_catalog()
-    train = [cat.load("survey_bfi"), cat.load("survey_cps1985")]
-    val = [cat.load("survey_psid1976")]
-    test = [cat.load("survey_cars93")]
+    train = SurveyExampleSource([cat.load("survey_bfi"), cat.load("survey_cps1985")])
+    val = SurveyExampleSource([cat.load("survey_psid1976")])
+    test = SurveyExampleSource([cat.load("survey_cars93")])
     return train, val, test
 
 
