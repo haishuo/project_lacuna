@@ -17,6 +17,15 @@ from .delta_generator import (
     rate_tolerance,
     select_target_predictor,
 )
+from .delta_head import (
+    DeltaBinHead,
+    DeltaPriorModel,
+    assert_fresh_and_trainable,
+    count_parameters,
+    create_delta_prior_model,
+    init_parameters_,
+)
+from .loss import fit_temperature, log_score, rps_loss, uniform_rps
 
 __all__ = [
     "AnswerSheet",
@@ -30,4 +39,14 @@ __all__ = [
     "select_target_predictor",
     "check_realized_rate",
     "rate_tolerance",
+    "DeltaBinHead",
+    "DeltaPriorModel",
+    "create_delta_prior_model",
+    "init_parameters_",
+    "assert_fresh_and_trainable",
+    "count_parameters",
+    "rps_loss",
+    "log_score",
+    "uniform_rps",
+    "fit_temperature",
 ]
