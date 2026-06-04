@@ -8,12 +8,16 @@ H0 (MAR-on-j):                  P(miss_t) = σ(β₀′ + β₁′·z_j),  j ∈
   - restricted null: j fixed to the original predictor z_p (= the P1 β₁′-profiled null).
   - richer null:     j chosen from {z_p, z_a, ...} to best fit H1 (predictor choice).
 
-β₁′ profiling objective (explicit): for each candidate j,
-    β₁′*(j) = argmax_{β₁′} E_{H1}[ log L_{H0(j,β₁′)}(observed) ] = argmin KL(H1_obs ‖ H0(j,β₁′)_obs),
-β₀′ rate-matched per (j, β₁′). The richer null then picks j* = argmax_j of that fitted likelihood.
-The original predictor z_p IS an allowed choice ⇒ the richer null's hypothesis set ⊇ the restricted
-null's ⇒ on the SAME multi-column data, E_richer ≥ E_restricted (harder or equal). A violation beyond
-MC tolerance is a bug / MC noise, never "easier."
+β₁′ profiling (WITHIN each candidate j): β₁′*(j) = argmax_{β₁′} E_{H1}[log L_{H0(j,β₁′)}(mask)] (the
+rate-matched MAR that best fits the missingness indicator given z_j), β₀′ rate-matched.
+
+Candidate SELECTION (ACROSS predictors): the richer (composite) null's ceiling is the LEAST-FAVORABLE
+member = j* = argmax_j Bayes_error(H1, H0(j)) — the candidate HARDEST to distinguish — NOT argmax of
+the mask-likelihood. These disagree under a shadow column (z_a≈z_t at high ρ_a): the mask-likelihood
+prefers z_a (missingness correlates with z_a) but the *observed-data* discriminator exploits z_a as a
+shadow to detect the truncation, making MAR-on-z_a MORE distinguishable. Selecting by Bayes error is
+the correct least-favorable-null criterion and guarantees E_richer ≥ E_restricted (z_p is always a
+candidate). A residual violation beyond MC tolerance is a bug / MC noise, never "easier."
 
 The oracle LLR generalizes the P1 form: the missing-target term integrates z_t over p(z_t | ALL
 observed predictors) (the discriminator's shadow information); the observed/MAR terms use the chosen
@@ -147,19 +151,25 @@ def compute_p1ra_cell(
     nodes, weights = gauss_hermite(n_quad)
     grid = _beta1_grid()
 
+    # Within each candidate predictor, profile β₁′ by the mask-likelihood proxy (fine — the shadow
+    # effect is the same across β₁′ for a fixed predictor). ACROSS candidates, the richer (composite)
+    # null's ceiling is the LEAST-FAVORABLE member = the candidate with the MAXIMUM Bayes error (the
+    # hardest to distinguish), NOT the max mask-likelihood: those disagree under a shadow column, and
+    # max-mask-likelihood can pick a MORE distinguishable predictor (a monotonicity violation). Selecting
+    # by Bayes error guarantees E_richer ≥ E_restricted by construction (z_p is always a candidate).
     profiles = {j: profile_candidate(h1, j, xmodel, target_rate, rng.spawn(), nodes, weights, grid, n_fit)
                 for j in candidates}
-    restricted = profiles[P_IDX]
-    richer = max(profiles.values(), key=lambda p: p["fit_loglik"])
+    be = {j: bayes_error_mv(h1, j, p["beta0p"], p["beta1p"], xmodel, n, rng.spawn(), nodes, weights, n_mc)
+          for j, p in profiles.items()}
 
-    be_r = bayes_error_mv(h1, P_IDX, restricted["beta0p"], restricted["beta1p"], xmodel, n, rng.spawn(), nodes, weights, n_mc)
+    restricted = profiles[P_IDX]
+    be_r = be[P_IDX]
     kl_r = _kl_h1(h1, P_IDX, restricted["beta0p"], restricted["beta1p"], xmodel, rng.spawn(), nodes, weights, kl_sample)
-    if richer["j"] == P_IDX:
-        # richer null selected the original predictor ⇒ identical hypothesis ⇒ identical ceiling.
-        be_R, kl_R = be_r, kl_r
-    else:
-        be_R = bayes_error_mv(h1, richer["j"], richer["beta0p"], richer["beta1p"], xmodel, n, rng.spawn(), nodes, weights, n_mc)
-        kl_R = _kl_h1(h1, richer["j"], richer["beta0p"], richer["beta1p"], xmodel, rng.spawn(), nodes, weights, kl_sample)
+    richer_j = max(be, key=lambda j: be[j]["bayes_error"])  # least-favorable null member
+    richer = profiles[richer_j]
+    be_R = be[richer_j]
+    kl_R = kl_r if richer_j == P_IDX else _kl_h1(h1, richer_j, richer["beta0p"], richer["beta1p"], xmodel, rng.spawn(), nodes, weights, kl_sample)
+    mask_fit_j = max(profiles, key=lambda j: profiles[j]["fit_loglik"])  # diagnostic only
 
     delta = be_R["bayes_error"] - be_r["bayes_error"]
     delta_se = math.sqrt(be_R["bayes_error_se"] ** 2 + be_r["bayes_error_se"] ** 2)
@@ -167,6 +177,7 @@ def compute_p1ra_cell(
         "rho_orig": rho_orig, "rho_a": rho_a, "delta": h1.beta2, "n": n, "target_rate": target_rate,
         "selected_predictor": "z_a" if richer["j"] == A_IDX else "z_p",
         "selected_predictor_idx": richer["j"],
+        "mask_fit_selected": "z_a" if mask_fit_j == A_IDX else "z_p",  # diagnostic: where the mask-likelihood proxy disagrees
         "beta1p_restricted": restricted["beta1p"], "beta0p_restricted": restricted["beta0p"],
         "beta1p_richer": richer["beta1p"], "beta0p_richer": richer["beta0p"],
         "E_restricted": be_r["bayes_error"], "E_restricted_se": be_r["bayes_error_se"],
