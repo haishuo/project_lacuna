@@ -43,6 +43,11 @@ from .example_source import (
 )
 from .proxy_score import column_r2, proxy_score, r2_distribution, target_r2_table
 from .column_stats import cardinality_distribution, target_cardinality_table
+from .consequence_features import (
+    FEATURE_NAMES,
+    N_FEATURES,
+    compute_consequence_features,
+)
 from .conditioned_head import (
     CONDITIONING_METHOD,
     TargetConditionedDeltaModel,

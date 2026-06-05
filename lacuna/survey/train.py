@@ -25,6 +25,7 @@ from lacuna.core.rng import RNGState
 from . import metrics as M
 from .batching import DeltaExample, collate
 from .conditioned_head import CONDITIONING_METHOD, create_target_conditioned_model
+from .consequence_features import N_FEATURES, schema as consequence_schema
 from .delta_head import assert_fresh_and_trainable, create_delta_prior_model
 from .example_source import ExampleSource
 from .leakage import assess_leakage, leakage_pass
@@ -57,6 +58,7 @@ class TrainConfig:
     dropout: float = 0.1
     head_hidden_dim: Optional[int] = None
     target_conditioned: bool = False  # rung 3: head conditions on the supplied target column
+    consequence_features: bool = False  # P2.2c: concat fixed observed-marginal features to the head
 
     def __post_init__(self):
         if not any(float(g) == 0.0 for g in self.delta_grid):
@@ -87,7 +89,7 @@ def _forward_examples(model, examples: List[DeltaExample], cfg: TrainConfig):
     for s in range(0, len(examples), cfg.batch_size):
         chunk = examples[s:s + cfg.batch_size]
         db = collate(chunk, max_rows=cfg.max_rows, max_cols=cfg.max_cols)
-        logits.append(model(db.tokens, db.target_idx).cpu())
+        logits.append(model(db.tokens, db.target_idx, db.consequence).cpu())
         labels.append(db.delta_bin)
         deltas.append(db.delta)
         sheets.extend(db.sheets)
@@ -135,12 +137,18 @@ def train_delta_prior(
     if not (val_source.num_bins == test_source.num_bins == num_bins):
         raise ValueError("train/val/test sources must agree on num_bins")
 
-    builder = create_target_conditioned_model if cfg.target_conditioned else create_delta_prior_model
-    model = builder(
+    if cfg.consequence_features and not cfg.target_conditioned:
+        raise ValueError("consequence_features requires target_conditioned=True")
+    common = dict(
         hidden_dim=cfg.hidden_dim, evidence_dim=cfg.evidence_dim, n_layers=cfg.n_layers,
         n_heads=cfg.n_heads, max_cols=cfg.max_cols, dropout=cfg.dropout,
         head_hidden_dim=cfg.head_hidden_dim, num_bins=num_bins, rng=rng.spawn(),
-    ).to(device)
+    )
+    if cfg.target_conditioned:
+        n_cons = N_FEATURES if cfg.consequence_features else 0
+        model = create_target_conditioned_model(n_consequence_features=n_cons, **common).to(device)
+    else:
+        model = create_delta_prior_model(**common).to(device)
     n_param = assert_fresh_and_trainable(model)
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
 
@@ -164,7 +172,7 @@ def train_delta_prior(
         for _ in range(cfg.train_batches_per_epoch):
             ex = _make_examples(train_source, cfg, cfg.batch_size, train_rng.spawn())
             db = collate(ex, max_rows=cfg.max_rows, max_cols=cfg.max_cols)
-            logits = model(db.tokens, db.target_idx)
+            logits = model(db.tokens, db.target_idx, db.consequence)
             loss = rps_loss(logits, db.delta_bin.to(logits.device))
             opt.zero_grad()
             loss.backward()
@@ -203,6 +211,9 @@ def train_delta_prior(
         "dropout": cfg.dropout, "head_hidden_dim": cfg.head_hidden_dim,
         "target_conditioned": cfg.target_conditioned,
         "conditioning": CONDITIONING_METHOD if cfg.target_conditioned else "global_evidence_only",
+        "consequence_features_enabled": cfg.consequence_features,
+        "n_consequence_features": N_FEATURES if cfg.consequence_features else 0,
+        "consequence_feature_schema": consequence_schema() if cfg.consequence_features else None,
         "head": "MLP([evidence;pooled_target]->hidden->num_bins)" if cfg.target_conditioned
         else "MLP(evidence->hidden->num_bins)",
     }

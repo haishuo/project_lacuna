@@ -26,6 +26,7 @@ from lacuna.data.semisynthetic import subsample_raw
 from lacuna.data.tokenization import tokenize_and_batch
 
 from .answer_sheet import AnswerSheet
+from .consequence_features import compute_consequence_features
 from .delta_generator import generate_self_censor_example
 from .lod_generator import generate_lod_example
 
@@ -46,6 +47,7 @@ class DeltaBatch:
     delta_bin: torch.Tensor  # [B] long — the supervised ordered-bin label
     delta: torch.Tensor  # [B] float — the continuous answer-sheet δ (for E[δ] error)
     target_idx: torch.Tensor  # [B] long — the SUPPLIED candidate target column (head conditioning)
+    consequence: torch.Tensor  # [B, N_FEATURES] — fixed observed-marginal consequence features
     sheets: List[AnswerSheet]  # per-example audit records (provenance; not fed to the model)
 
 
@@ -124,7 +126,12 @@ def collate(examples: List[DeltaExample], *, max_rows: int, max_cols: int) -> De
     delta_bin = torch.tensor([e.answer_sheet.delta_bin for e in examples], dtype=torch.long)
     delta = torch.tensor([e.answer_sheet.delta for e in examples], dtype=torch.float32)
     target_idx = torch.tensor([e.answer_sheet.target_col_idx for e in examples], dtype=torch.long)
+    consequence = torch.stack([
+        compute_consequence_features(e.observed.x, e.observed.r, e.answer_sheet.target_col_idx)
+        for e in examples
+    ])
     sheets = [e.answer_sheet for e in examples]
     return DeltaBatch(
-        tokens=batch, delta_bin=delta_bin, delta=delta, target_idx=target_idx, sheets=sheets
+        tokens=batch, delta_bin=delta_bin, delta=delta, target_idx=target_idx,
+        consequence=consequence, sheets=sheets,
     )

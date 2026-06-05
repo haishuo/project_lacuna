@@ -38,10 +38,14 @@ class TargetConditionedDeltaModel(nn.Module):
         head_hidden_dim: int = None,
         dropout: float = 0.1,
         num_bins: int = NUM_BINS,
+        n_consequence_features: int = 0,
     ):
         super().__init__()
         self.encoder = LacunaEncoder(encoder_config)
-        self.cond_dim = encoder_config.evidence_dim + encoder_config.hidden_dim
+        self.n_consequence_features = int(n_consequence_features)
+        self.cond_dim = encoder_config.evidence_dim + encoder_config.hidden_dim + self.n_consequence_features
+        if self.n_consequence_features > 0:
+            self.consequence_norm = nn.LayerNorm(self.n_consequence_features)
         self.head = DeltaBinHead(
             evidence_dim=self.cond_dim, num_bins=num_bins,
             hidden_dim=head_hidden_dim, dropout=dropout,
@@ -62,8 +66,8 @@ class TargetConditionedDeltaModel(nn.Module):
         rm = row_mask.to(token_repr.device).unsqueeze(-1).float()  # [B, R, 1]
         return (tgt * rm).sum(dim=1) / rm.sum(dim=1).clamp(min=1.0)  # [B, H]
 
-    def forward(self, batch, target_idx) -> torch.Tensor:
-        """(TokenBatch, [B] target index) -> [B, num_bins] raw logits."""
+    def forward(self, batch, target_idx, consequence=None) -> torch.Tensor:
+        """(TokenBatch, [B] target index, optional [B, F] consequence) -> [B, num_bins] logits."""
         device = next(self.parameters()).device
         batch = batch.to(device)
         enc = self.encoder(
@@ -71,11 +75,21 @@ class TargetConditionedDeltaModel(nn.Module):
         )
         evidence = enc["evidence"]  # [B, E]
         pooled_target = self._pool_target(enc["token_representations"], batch.row_mask, target_idx)
-        combined = torch.cat([evidence, pooled_target], dim=-1)  # [B, E + H]
+        parts = [evidence, pooled_target]
+        if self.n_consequence_features > 0:
+            if consequence is None:
+                raise ValueError("model has consequence features enabled but `consequence` is None")
+            c = consequence.to(device)
+            if c.dim() != 2 or c.shape[1] != self.n_consequence_features:
+                raise ValueError(
+                    f"consequence must be [B, {self.n_consequence_features}], got {tuple(c.shape)}"
+                )
+            parts.append(self.consequence_norm(c))
+        combined = torch.cat(parts, dim=-1)  # [B, E + H (+ F)]
         return self.head(combined)
 
-    def predict_proba(self, batch, target_idx) -> torch.Tensor:
-        logits = self.forward(batch, target_idx)
+    def predict_proba(self, batch, target_idx, consequence=None) -> torch.Tensor:
+        logits = self.forward(batch, target_idx, consequence)
         t = self.temperature.clamp(min=1e-6)
         return torch.softmax(logits / t, dim=-1)
 
@@ -95,6 +109,7 @@ def create_target_conditioned_model(
     dropout: float = 0.1,
     head_hidden_dim: int = None,
     num_bins: int = NUM_BINS,
+    n_consequence_features: int = 0,
     rng: RNGState = None,
 ) -> TargetConditionedDeltaModel:
     """Build a TargetConditionedDeltaModel; if `rng` is given, deterministically init its weights."""
@@ -104,6 +119,7 @@ def create_target_conditioned_model(
     )
     model = TargetConditionedDeltaModel(
         encoder_config=cfg, head_hidden_dim=head_hidden_dim, dropout=dropout, num_bins=num_bins,
+        n_consequence_features=n_consequence_features,
     )
     if rng is not None:
         init_parameters_(model, rng)
