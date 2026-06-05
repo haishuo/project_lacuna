@@ -239,3 +239,72 @@ State the kill condition up front, so we notice if we hit it:
 That is the bargain Lacuna makes with the identification theorem: we do not claim to know the
 unknowable. We claim to make the *assumption* about the unknowable **explicit, calibrated, auditable,
 and cheap** — and to **say so out loud when we are outside what we can support.**
+
+---
+
+## 8. Addendum (2026-06-05): the validation ladder, flat-likelihood idioms, and the metadata guardrail
+
+*Added after the P2.2/P2.2b investigation. Makes explicit a discipline that was implicit in §4.4 and
+§5, because a recent negative result was at risk of being mis-stated — both as "real-missingness
+failure" (wrong: it was semi-synthetic) and as a license to re-found the project on LLM opinion
+(forbidden). This addendum fixes both.*
+
+### 8.1 The validation ladder (supervised truth is ALWAYS semi-synthetic)
+
+Lacuna's supervised target is **never** naturally-missing real data — that data has no ground-truth
+δ (missing-in-real-life-is-missing-forever, §4.4). The ladder, in order, with the claim each rung
+licenses:
+
+1. **TRAIN** — real survey datasets with **semi-synthetic missingness we impose** (real X, our holes,
+   known δ). Supervised learning with real labels (§3).
+2. **VALIDATE / TEST** — **held-out** real survey datasets with semi-synthetic missingness, known δ.
+   This is the headline number: out-of-family / leave-datasets-out calibration of the δ-prior. **A
+   result is only a Lacuna result if it is measured here.**
+3. **APPLY** — naturally-missing real data, as **face-validity / expert-concordance / plausibility
+   only**, never as ground-truth accuracy (§4.4). The final plausibility check, not the test.
+
+**Naming discipline (binding):** an experiment on real X with holes we punched is
+"**semi-synthetic missingness imposed on real survey X**," not "real-missingness performance." The
+distinction is not pedantic — conflating them either over-claims (treating a plausibility check as a
+test) or over-despairs (reading a semi-synthetic flat-likelihood result as a real-data death).
+
+### 8.2 Flat-likelihood idioms (per-idiom detectability, §2 made operational)
+
+Detectability is **per-mechanism** (§2). Some idioms leave a recoverable footprint; some do not.
+Define: an idiom is a **flat-likelihood idiom** (under a stated representation, rate regime, and X
+manifold) when, *even on semi-synthetic data with known δ on real survey X*, the footprint→δ
+likelihood is empirically near-flat — the supervised channel cannot recover δ across the held-out
+ladder. This is a **computable, idiom-scoped property** (the §5 oracle / the ladder), not a verdict
+on Lacuna.
+
+> **Recorded finding:** *own-value smooth self-censoring, single target column, matched rate, current
+> tokenized footprint* is a **flat-likelihood idiom** under current evidence (P2.2b: rung 1 learns on
+> synthetic Gaussian X; on real survey X the channel is at the uniform floor and even a δ=0-vs-strong
+> contrast is at chance, after ruling out head/loss, localization, scale, proxy absorption,
+> cardinality, and resolution). This is **scoped to that idiom**, not to Lacuna. §2 predicts other
+> idioms (LOD / top-coding / sharp truncation, skip logic) are more detectable; that is untested and
+> is the open question.
+
+Consequence: do **not** keep trying to rescue a flat-likelihood idiom's footprint channel without
+genuinely new information (a different idiom, auxiliary variables, or a representation that exposes a
+signal we can show exists via the oracle first). Where the likelihood is genuinely flat, a wide,
+high-entropy prior is the *correct* output (§3, §4.2) — provided we **say so**, and provided the
+prior we then report is itself calibrated against held-out semi-synthetic truth (§8.3).
+
+### 8.3 The metadata-prior guardrail (priors must be earned, not asserted)
+
+When the footprint likelihood is flat, the non-arbitrariness of real missingness "lives in the
+PRIOR, not the likelihood" (§2) — and column semantics / codebook / question text are a legitimate
+source for that prior. **But a metadata-authored prior is admissible only if it is itself
+trained/evaluated against held-out semi-synthetic answer sheets or grounded benchmark labels** (the
+§8.1 ladder), reported with calibration. It is **never** admissible as unevaluated LLM/expert opinion.
+
+> **Binding:** Lacuna does not get to survive by redefining itself as "an LLM said MAR." A metadata
+> prior is a *hypothesis about the semantics→δ map* that must be falsifiable and calibrated on
+> semi-synthetic truth exactly like the footprint channel. If a metadata prior cannot be shown
+> calibrated on the held-out ladder, it is opinion, and §4.4/§7 forbid shipping it as governance.
+
+The product remains: **semi-synthetic supervision on real survey X → held-out survey validation →
+calibrated priors (footprint-channel where the idiom permits, metadata-channel where it does not,
+both evaluated the same way) → cautious face-validity transfer to natural data.** The two channels
+are alternatives *within* one validated paradigm, not an escape hatch from it.

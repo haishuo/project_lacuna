@@ -4,6 +4,24 @@
 This closes the P2.2/P2.2b "learn δ from the real-X footprint" investigation. Stop-for-review —
 the recommended next step is a STRATEGIC decision, not another model-tuning diagnostic.*
 
+> **FRAMING CORRECTION (2026-06-05, PI ruling — supersedes parts of this doc).** Two precisions, now
+> binding (see NORTH-STAR §8):
+> 1. **These experiments are SEMI-SYNTHETIC, not "real missingness."** Every run here is
+>    *semi-synthetic missingness imposed on real survey X* — real values, holes WE punched, δ KNOWN.
+>    That is the legitimate supervised test (NORTH-STAR §8.1 rung 2), not a real-data performance
+>    claim. Read every "real-X floor" below as "the footprint→δ channel is flat *even on
+>    semi-synthetic data with known δ on real survey X*."
+> 2. **The result is NARROW and does NOT license replacing Lacuna with a metadata/LLM prior.** It
+>    marks *own-value smooth self-censoring, single column, matched rate, current footprint* as a
+>    **flat-likelihood idiom** (NORTH-STAR §8.2) — one idiom, not Lacuna. §2 predicts other idioms
+>    (LOD/top-coding, skip logic) are more detectable; untested. The "re-scope to prior-driven
+>    governance / metadata-authored prior" recommendation in the §"Strategic implication" and
+>    §"Recommendation" sections below **OVERREACHED and is withdrawn.** A metadata-prior channel is
+>    admissible ONLY if itself calibrated against held-out semi-synthetic answer sheets
+>    (NORTH-STAR §8.3) — never as unevaluated opinion. The corrected fork (test another idiom vs build
+>    the evaluated metadata channel) is in the session report; the technically-correct *findings*
+>    (the tables and what is ruled out) stand as written.
+
 ## Headline: the own-value δ footprint is effectively INVISIBLE on real survey X at matched rate
 
 Two facts, both decisive:
