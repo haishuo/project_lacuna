@@ -130,3 +130,56 @@ def test_set_temperature_rejects_nonpositive():
     model = _model()
     with pytest.raises(ValueError):
         model.set_temperature(-1.0)
+
+
+# ---- rep-ECDF distributional stream (Proposal B): enabled path ----
+
+def _ecdf_model(seed=1, n_probes=4):
+    return create_target_conditioned_model(
+        hidden_dim=64, evidence_dim=32, n_layers=2, n_heads=2, max_cols=32,
+        num_bins=NUM_BINS, rep_ecdf_pooling=True, n_shape_probes=n_probes,
+        rng=RNGState(seed=seed),
+    )
+
+
+def test_default_path_unchanged_no_stream_child():
+    """Disabled (default) ⇒ mean pool, no rep_pool child, head width = evidence + hidden."""
+    model = _model()
+    assert not model.rep_ecdf_pooling
+    assert not hasattr(model, "rep_pool")
+    assert {n for n, _ in model.named_children()} == {"encoder", "head"}
+    assert model.head.net[0].in_features == (
+        model.encoder.config.evidence_dim + model.encoder.config.hidden_dim
+    )
+
+
+def test_ecdf_head_width_and_child():
+    """Enabled ⇒ head input = evidence + rep_pool.out_dim; rep_pool is a child module."""
+    model = _ecdf_model(n_probes=4)
+    assert model.rep_ecdf_pooling and hasattr(model, "rep_pool")
+    assert "rep_pool" in {n for n, _ in model.named_children()}
+    assert model.head.net[0].in_features == (
+        model.encoder.config.evidence_dim + model.rep_pool.out_dim
+    )
+
+
+def test_ecdf_forward_and_backprop():
+    model = _ecdf_model()
+    model.train()
+    db = _batch()
+    logits = model(db.tokens, db.target_idx)
+    assert logits.shape == (4, NUM_BINS)
+    loss = torch.nn.functional.cross_entropy(logits, db.delta_bin)
+    loss.backward()
+    # gradient reaches the encoder THROUGH the quantile pooling (the whole point of the stream)
+    enc_grad = sum(p.grad.abs().sum().item() for p in model.encoder.parameters() if p.grad is not None)
+    proj_grad = model.rep_pool.proj.weight.grad
+    assert enc_grad > 0
+    assert proj_grad is not None and float(proj_grad.abs().sum()) > 0
+
+
+def test_ecdf_no_v1_heads():
+    model = _ecdf_model()
+    for h in ("moe", "reconstruction", "decision_rule", "missingness_extractor"):
+        assert not hasattr(model, h)
+    assert {n for n, _ in model.named_children()} == {"encoder", "head", "rep_pool"}

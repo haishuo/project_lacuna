@@ -61,6 +61,8 @@ class TrainConfig:
     head_hidden_dim: Optional[int] = None
     target_conditioned: bool = False  # rung 3: head conditions on the supplied target column
     consequence_features: bool = False  # P2.2c: concat fixed observed-marginal features to the head
+    rep_ecdf_pooling: bool = False  # distributional stream: learned ECDF pooling replaces the target mean
+    n_shape_probes: int = 4  # rep-ECDF: learned shape-probe channels (m); Q is fixed in the module
     coarse_scheme: str = "none"  # "none"(7-bin) | "binary" | "coarse3" (curriculum target)
     model_kind: str = "auto"  # "auto" (encoder/conditioned) | "features_only"
 
@@ -69,6 +71,8 @@ class TrainConfig:
             raise ValueError("delta_grid must include 0.0 (MAR) so P(δ=0) is learnable")
         if self.beta1_range[0] < 0.0 or self.beta1_range[1] < self.beta1_range[0]:
             raise ValueError(f"beta1_range must satisfy 0 <= lo <= hi, got {self.beta1_range}")
+        if self.rep_ecdf_pooling and not self.target_conditioned:
+            raise ValueError("rep_ecdf_pooling requires target_conditioned=True (it pools target reps)")
 
 
 def _make_examples(source: ExampleSource, cfg, n, rng, *, stratify=False) -> List[DeltaExample]:
@@ -163,7 +167,10 @@ def train_delta_prior(
         )
         if cfg.target_conditioned:
             n_cons = N_FEATURES if cfg.consequence_features else 0
-            model = create_target_conditioned_model(n_consequence_features=n_cons, **common).to(device)
+            model = create_target_conditioned_model(
+                n_consequence_features=n_cons, rep_ecdf_pooling=cfg.rep_ecdf_pooling,
+                n_shape_probes=cfg.n_shape_probes, **common,
+            ).to(device)
         else:
             model = create_delta_prior_model(**common).to(device)
     n_param = assert_fresh_and_trainable(model)
@@ -231,6 +238,11 @@ def train_delta_prior(
         "consequence_features_enabled": cfg.consequence_features,
         "n_consequence_features": N_FEATURES if cfg.consequence_features else 0,
         "consequence_feature_schema": consequence_schema() if cfg.consequence_features else None,
+        "rep_ecdf_pooling": cfg.rep_ecdf_pooling,
+        "rep_ecdf_schema": (model.rep_pool.schema()
+                            if (cfg.target_conditioned and cfg.rep_ecdf_pooling) else None),
+        "target_summary": ("rep_ecdf_order_statistics" if cfg.rep_ecdf_pooling
+                           else ("masked_mean" if cfg.target_conditioned else "none")),
         "model_kind": cfg.model_kind,
         "coarse_scheme": scheme_spec(scheme),
         "head": "MLP(LayerNorm(features)->hidden->num_bins)" if cfg.model_kind == "features_only"
