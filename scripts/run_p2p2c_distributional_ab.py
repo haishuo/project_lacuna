@@ -76,9 +76,15 @@ def _arm(cat, scheme, stream_on, family, git):
     cfg = _cfg(scheme, stream_on)
     tr, va, te = (_src(family, [cat.load(n) for n in P]) for P in (TRAIN, VAL, TEST))
     stream = "ecdf" if stream_on else "mean"
+    # Gate discipline: LOD is the only family where a POSITIVE δ-reading could be claimed, so its
+    # coarse3 arm keeps the full kind='main' gate (it must pass leakage — and does). own-value is the
+    # flat NEGATIVE control; its matched-rate solve can leave a small residual δ→rate cue at coarse
+    # resolution, which would (correctly) fail the gate — but a leaky control can only spuriously
+    # INFLATE own-value, never support a positive, so we record it as an ablation (leak status still
+    # printed) rather than aborting the whole A/B. binary arms are ablations (small-sample δ→rate).
+    kind = "main" if (scheme == "coarse3" and family == "lod") else "ablation"
     t0 = time.time()
-    out = train_delta_prior(tr, va, te, cfg, RNGState(seed=2026),
-                            kind=("ablation" if scheme == "binary" else "main"),
+    out = train_delta_prior(tr, va, te, cfg, RNGState(seed=2026), kind=kind,
                             run_id=f"p2p2c-dist-{scheme}-{stream}-{family}",
                             git_commit=git, timestamp="2026-06-05T12:00:00Z")
     out["manifest"]["wall_clock_seconds"] = round(time.time() - t0, 1)
