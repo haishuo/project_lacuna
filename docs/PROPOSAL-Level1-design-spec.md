@@ -233,6 +233,28 @@ but **"is the empirical prior rich enough to justify the posterior Lacuna report
 specifies the analysis (read-only inventory + a learning-curve diagnostic) that must run **alongside
 Stage 1** and that **gates acquisition-vs-architecture resource allocation** before Stages 2–4.
 
+### 9.0 Three data roles (binding) — natural missingness is NOT supervised δ-data
+Lacuna's scientific defensibility rests on **every supervised example having a known answer sheet**
+(known dataset, imposed mechanism, imposed δ, true label). Natural missingness has **none** of these —
+unknown mechanism, unknown δ, no counterfactual — it **is** the non-identifiability problem Lacuna exists
+to govern. Therefore natural missingness must **never** enter the supervised δ-training/eval stream. Three
+distinct data roles, kept separate:
+
+| role | what it is | δ ground truth? | use |
+|---|---|---|---|
+| **A. Natural survey data** | real missingness, raw | **No** (unknowable) | **manifold (M2) validation, OOD/coverage validation, detectability/footprint-plausibility validation, future survey-world generation** — face-validity only (§4.4); **never supervised δ-data** |
+| **B. Complete projection** | natural missingness removed/resolved; the base for semi-synthetic hole-punching | **Yes** (after holes imposed) | **the SOLE supervised δ-training/eval corpus** (the validation ladder) |
+| **C. Synthetic survey worlds** | generated from real survey structure; imposed mechanism + δ | **Yes** (imposed) | **large-scale training amplifier** (domain randomization); validated only on held-out real A/B; **never a validation substitute** |
+
+**Binding rules:**
+- **Ingestion is dual-output:** it **preserves** natural missingness into the **A-archive** *and*
+  separately emits the **B complete-projection** for supervision. Two representations, one source.
+- **The supervised stream = B (+ C once validated). Never A.**
+- **A is used only** for manifold/OOD/detectability validation and generation — never as labeled δ.
+
+*This corrects an earlier conflation in this section: "preserve natural missingness" means **archive it
+for validation (role A)**, not "train on it." Preserve — yes; supervise — no.*
+
 ### 9.1 Current catalog inventory (measured, read-only — `cat.list_datasets()` filtered to `survey_*`)
 **12 survey datasets, 114 columns, 65 targetable (cardinality ≥ 10), total n ≈ 62,228** (min 82, median
 ≈ 2,485, max 28,155).
@@ -257,7 +279,9 @@ Stage 1** and that **gates acquisition-vs-architecture resource allocation** bef
   nonresponse patterns that are themselves part of the survey manifold — is **not preserved**. The only
   missingness studied is our matched-rate semi-synthetic holes. The §3½ **M2 manifold check** (do real
   masks lie in the span of our generated footprints?) **cannot currently be run** because real masks were
-  discarded at load. *Any acquisition pipeline must preserve natural missingness.*
+  discarded at load. *In §9.0 terms: the current ingestion emits only representation **B** and **discards
+  representation A**. The fix is to **also archive A** (for manifold/OOD/detectability validation) — **not**
+  to route natural missingness into supervision.*
 - **Column types** are overwhelmingly **right-skewed positive continuous economic variables** (wage,
   income, price, hours) + ages / counts / education-years; sparse on categorical/ordinal **attitude
   (Likert)** items (only `bfi`, low-cardinality → just 1 targetable), and **no** skip-logic-bearing or
@@ -316,7 +340,7 @@ Stage 1** and that **gates acquisition-vs-architecture resource allocation** bef
 *Formatting requirement:* the pipeline must **preserve natural missingness** (unlike the current
 ingestion, §9.1) — this simultaneously fixes the M2 gap and supplies realistic top-coding/LOD X-tables.
 
-### 9.6 Synthetic-real dataset generation (later data-expansion arc)
+### 9.6 Synthetic-real dataset generation (later data-expansion arc) — role C (§9.0)
 - Train a generative model over real survey columns/tables → sample realistic synthetic survey **X** →
   impose semi-synthetic missingness → train Lacuna on generated worlds → **validate only on held-out
   REAL datasets.**
@@ -344,21 +368,23 @@ between them.
 
 ---
 
-## Open decisions for the PI (before Stage 1)
-1. **φ capacity** — `m` (per-value width), quantile grid `Q`, `E_col` (per-column embedding dim). Proposal:
-   reuse Stage-0 settings (`m≈16`, 12 quantiles + max) as the starting point.
-2. **Detectability target** — oracle information-gain regression vs a simpler ordinal "flat/partial/sharp"
-   target. Proposal: oracle information-gain where available, with the necessary-not-sufficient caveat
-   recorded.
-3. **OOD density model** — Mahalanobis/kNN (simple, auditable) vs a small normalizing flow. Proposal:
-   start Mahalanobis/kNN for the MVP; revisit if separation on held-out families is weak.
-4. **MCAR-departure auxiliary** — include in Stage 2 or defer. Proposal: include (cheap, honest, §2 solid
-   ground).
-5. **Data-sufficiency program (§9)** — (a) approve running the **learning-curve diagnostic** (4→8→12,
-   multi-seed) on the current catalog as a first, parallel analysis; (b) approve, in principle, the
-   **acquisition target** (dozens near-term → hundreds) and an ingestion pipeline that **preserves natural
-   missingness**; (c) decide whether to drop the **3 non-survey contaminants** (cars93, computers, survey)
-   from the catalog now. Proposal: yes to (a); yes-in-principle to (b); drop the 3 contaminants (they
-   pollute the survey-manifold prior).
+## Decisions (resolved — PI, 2026-06-05)
+1. **φ capacity** — **APPROVED** Stage-0 default: `m≈16`, 12 quantiles + max, moderate `E_col`. *Stage-1
+   goal is to **reproduce** the known column-primary signal in-pipeline, not a capacity sweep.*
+2. **Detectability target** — **APPROVED** oracle information-gain where available (necessary-not-
+   sufficient caveat recorded); simpler fallback elsewhere, **labeled as weaker**. Detectability =
+   "informativeness of the footprint," never a mechanism classifier.
+3. **OOD density model** — **APPROVED** Mahalanobis/kNN first (inspectable); richer density models only if
+   it fails to separate held-out families. No normalizing flow to start.
+4. **MCAR-departure auxiliary** — **APPROVED** for Stage 2, auxiliary only.
+5. **Data-sufficiency program (§9)** — **APPROVED** all three: (a) run the learning-curve diagnostic
+   (multi-seed) on the current catalog; (b) acquisition program approved in principle (dozens → hundreds);
+   (c) **drop the 3 non-survey contaminants** (cars93, computers, survey) from the survey catalog. Plus the
+   **§9.0 correction**: dual-output ingestion **archives natural missingness (role A)** and emits the
+   **complete projection (role B)**; **natural missingness is validation/generation data only, never
+   supervised δ-data.** *Note: dropping the 3 contaminants leaves **9 genuine surveys**, so the
+   learning-curve runs **4→8→9** (we cannot reach 12 with genuine surveys) — which **sharpens** the
+   acquisition case (§9.4).*
 
-**No implementation until this spec (and the five open decisions) are approved.**
+**Status: Level-1 design approved. Next deliverable = the Stage-1 implementation spec
+(`PROPOSAL-Stage1-implementation-spec.md`). No code until that spec is approved.**
