@@ -35,9 +35,10 @@ GATE_AUC = 0.65
 
 def _build(pool, deltas, rng, feat_fn, n=300):
     X, yb, y7, ds = [], [], [], []
+    ds_rng = rng.spawn()  # dataset choice INDEPENDENT of δ (avoid phase-locking dataset to label)
     for i in range(n):
         d = deltas[i % len(deltas)]
-        raw = pool[i % len(pool)]
+        raw = pool[int(ds_rng.randint(0, len(pool), (1,)).item())]
         res = generate_lod_example(raw, beta1=1.0, delta=d, target_rate=0.3,
                                    tau_quantile=0.70, rng=rng.spawn())
         X.append(feat_fn(res.x_observed, res.mask, res.answer_sheet.target_col_idx).numpy())
