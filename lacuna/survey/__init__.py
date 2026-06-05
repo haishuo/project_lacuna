@@ -33,6 +33,7 @@ from .example_source import (
     SyntheticTwoColSource,
 )
 from .proxy_score import column_r2, proxy_score, r2_distribution, target_r2_table
+from .column_stats import cardinality_distribution, target_cardinality_table
 from .conditioned_head import (
     CONDITIONING_METHOD,
     TargetConditionedDeltaModel,
@@ -69,6 +70,8 @@ __all__ = [
     "proxy_score",
     "target_r2_table",
     "r2_distribution",
+    "target_cardinality_table",
+    "cardinality_distribution",
     "TargetConditionedDeltaModel",
     "create_target_conditioned_model",
     "CONDITIONING_METHOD",
