@@ -33,6 +33,15 @@ Concretely, across the P2.2b ladder — all runs being *semi-synthetic missingne
 The head/loss can learn this idiom where the signal exists (synthetic). On real survey X the
 footprint→δ channel is empirically near-flat for this idiom, even for a strong effect.
 
+**Why this is a *demonstrated boundary condition*, not an implementation failure.** The result earns
+the word "boundary" precisely because of the **breadth of the rule-out list** above. Each rung removed
+a candidate *implementation* explanation (objective, localization, scale, proxy, cardinality,
+resolution); what survived is the **mechanism itself**. A single floored run could be a bug; a floor
+that persists after objective, interface, scale, proxy, discreteness, and resolution have each been
+independently excluded — and after the *same* stack provably learns the idiom on synthetic X — is
+evidence **about the mechanism's location in identification space**, not about our code. That is the
+difference between "we failed to extract a signal" and "we measured that the signal is not there."
+
 ## What was NOT established (guard against overgeneralization)
 
 - **NOT** that missingness is generally undetectable. Detectability is **mechanism-specific**, not
