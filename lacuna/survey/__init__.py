@@ -8,7 +8,15 @@ REAL survey X with a known-δ answer sheet, matched missing rate, ordered δ-bin
 validate-before-trust generator manifest. No model, loss, or training here (later phases).
 """
 
-from .answer_sheet import GENERATOR_FAMILY, SCHEMA_VERSION, AnswerSheet
+from .answer_sheet import (
+    ALLOWED_FAMILIES,
+    GENERATOR_FAMILY,
+    LOD_FAMILY,
+    SCHEMA_VERSION,
+    AnswerSheet,
+)
+from .lod_generator import LODParams, apply_lod_censor, generate_lod_example
+from .lod_oracle import lod_oracle_cell
 from .delta_bins import NUM_BINS, assign_delta_bin, bin_edges
 from .delta_generator import (
     SurveyCensorResult,
@@ -43,7 +51,13 @@ from .conditioned_head import (
 __all__ = [
     "AnswerSheet",
     "GENERATOR_FAMILY",
+    "LOD_FAMILY",
+    "ALLOWED_FAMILIES",
     "SCHEMA_VERSION",
+    "LODParams",
+    "apply_lod_censor",
+    "generate_lod_example",
+    "lod_oracle_cell",
     "NUM_BINS",
     "assign_delta_bin",
     "bin_edges",

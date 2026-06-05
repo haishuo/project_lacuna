@@ -20,10 +20,13 @@ is never silently completed with defaults.
 from dataclasses import dataclass, asdict
 
 # Bump when the field set changes; from_dict refuses mismatched payloads.
-SCHEMA_VERSION = 1
+# v2 (P2.2c): added optional `tau` / `frac_above_tau` for the LOD/top-coding idiom.
+SCHEMA_VERSION = 2
 
-# The one mechanism family P2.1 exercises (PROPOSAL §3, §13).
+# Mechanism families. P2.1/P2.2 = own-value smooth self-censoring; P2.2c adds LOD/top-coding.
 GENERATOR_FAMILY = "own_value_self_censoring"
+LOD_FAMILY = "lod_top_coding"
+ALLOWED_FAMILIES = frozenset({GENERATOR_FAMILY, LOD_FAMILY})
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,10 @@ class AnswerSheet:
     realized_rate: float
     corr_target_predictor: float
     seed: int
+    # LOD/top-coding only (None for own-value self-censoring): the z-scored threshold and the
+    # realized fraction of target rows above it. δ for LOD = the log-odds jump at this threshold.
+    tau: float = None
+    frac_above_tau: float = None
 
     def to_dict(self) -> dict:
         """JSON-friendly dict, tagged with the schema version."""
@@ -85,9 +92,8 @@ class AnswerSheet:
         if missing:
             raise ValueError(f"answer-sheet payload missing field(s): {missing}")
         family = payload["generator_family"]
-        if family != GENERATOR_FAMILY:
+        if family not in ALLOWED_FAMILIES:
             raise ValueError(
-                f"unknown generator_family {family!r}; "
-                f"P2.1 only produces {GENERATOR_FAMILY!r}"
+                f"unknown generator_family {family!r}; allowed: {sorted(ALLOWED_FAMILIES)}"
             )
         return AnswerSheet(**{f: payload[f] for f in field_names})
