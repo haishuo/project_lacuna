@@ -24,10 +24,12 @@ from lacuna.core.rng import RNGState
 
 from . import metrics as M
 from .batching import DeltaExample, collate
+from .coarse_bins import assign_bins, scheme_centers, scheme_num_bins, scheme_spec
 from .conditioned_head import CONDITIONING_METHOD, create_target_conditioned_model
 from .consequence_features import N_FEATURES, schema as consequence_schema
 from .delta_head import assert_fresh_and_trainable, create_delta_prior_model
 from .example_source import ExampleSource
+from .feature_only_head import create_feature_only_model
 from .leakage import assess_leakage, leakage_pass
 from .loss import fit_temperature, log_score, rps_loss, uniform_rps
 from . import run_manifest
@@ -59,6 +61,8 @@ class TrainConfig:
     head_hidden_dim: Optional[int] = None
     target_conditioned: bool = False  # rung 3: head conditions on the supplied target column
     consequence_features: bool = False  # P2.2c: concat fixed observed-marginal features to the head
+    coarse_scheme: str = "none"  # "none"(7-bin) | "binary" | "coarse3" (curriculum target)
+    model_kind: str = "auto"  # "auto" (encoder/conditioned) | "features_only"
 
     def __post_init__(self):
         if not any(float(g) == 0.0 for g in self.delta_grid):
@@ -81,8 +85,13 @@ def _make_examples(source: ExampleSource, cfg, n, rng, *, stratify=False) -> Lis
     return out
 
 
+def _labels_for(db, scheme: str) -> torch.Tensor:
+    """Coarse-or-7-bin labels for a batch under the active scheme (derived from the continuous δ)."""
+    return db.delta_bin if scheme == "none" else assign_bins(scheme, db.delta)
+
+
 @torch.no_grad()
-def _forward_examples(model, examples: List[DeltaExample], cfg: TrainConfig):
+def _forward_examples(model, examples: List[DeltaExample], cfg: TrainConfig, scheme: str = "none"):
     """Forward a fixed example list in chunks; return (logits, labels, deltas, sheets) on CPU."""
     model.eval()
     logits, labels, deltas, sheets = [], [], [], []
@@ -90,20 +99,20 @@ def _forward_examples(model, examples: List[DeltaExample], cfg: TrainConfig):
         chunk = examples[s:s + cfg.batch_size]
         db = collate(chunk, max_rows=cfg.max_rows, max_cols=cfg.max_cols)
         logits.append(model(db.tokens, db.target_idx, db.consequence).cpu())
-        labels.append(db.delta_bin)
+        labels.append(_labels_for(db, scheme))
         deltas.append(db.delta)
         sheets.extend(db.sheets)
     return torch.cat(logits), torch.cat(labels), torch.cat(deltas), sheets
 
 
-def _metrics_block(logits, labels, deltas, temperature: float) -> Dict:
-    """Calibration-first metric block at a given temperature."""
+def _metrics_block(logits, labels, deltas, temperature: float, centers=None) -> Dict:
+    """Calibration-first metric block at a given temperature (centers = active scheme's bin centers)."""
     scaled = logits / temperature
     probs = torch.softmax(scaled, dim=-1)
     return {
         "rps": float(rps_loss(scaled, labels).item()),
         "log_score": float(log_score(scaled, labels).item()),
-        "e_delta": M.e_delta_error(probs, deltas),
+        "e_delta": M.e_delta_error(probs, deltas, centers=centers),
         "bin_accuracy": M.bin_accuracy(probs, labels),
         "adjacent_accuracy": M.adjacent_accuracy(probs, labels),
         "p_delta0": M.p_delta_zero(probs),
@@ -133,22 +142,30 @@ def train_delta_prior(
     head / loss / metrics / leakage / manifest harness is identical across sources, which is what
     makes a ladder rung-to-rung difference attributable. Manifest is validated before return.
     """
-    num_bins = train_source.num_bins
-    if not (val_source.num_bins == test_source.num_bins == num_bins):
+    scheme = cfg.coarse_scheme
+    num_bins = scheme_num_bins(scheme)  # active target resolution (7 / 2 / 3)
+    centers = scheme_centers(scheme)
+    if scheme == "none" and not (train_source.num_bins == val_source.num_bins == test_source.num_bins == num_bins):
         raise ValueError("train/val/test sources must agree on num_bins")
 
-    if cfg.consequence_features and not cfg.target_conditioned:
-        raise ValueError("consequence_features requires target_conditioned=True")
-    common = dict(
-        hidden_dim=cfg.hidden_dim, evidence_dim=cfg.evidence_dim, n_layers=cfg.n_layers,
-        n_heads=cfg.n_heads, max_cols=cfg.max_cols, dropout=cfg.dropout,
-        head_hidden_dim=cfg.head_hidden_dim, num_bins=num_bins, rng=rng.spawn(),
-    )
-    if cfg.target_conditioned:
-        n_cons = N_FEATURES if cfg.consequence_features else 0
-        model = create_target_conditioned_model(n_consequence_features=n_cons, **common).to(device)
+    if cfg.model_kind == "features_only":
+        model = create_feature_only_model(
+            n_features=N_FEATURES, num_bins=num_bins, hidden_dim=cfg.head_hidden_dim,
+            dropout=cfg.dropout, rng=rng.spawn(),
+        ).to(device)
     else:
-        model = create_delta_prior_model(**common).to(device)
+        if cfg.consequence_features and not cfg.target_conditioned:
+            raise ValueError("consequence_features requires target_conditioned=True")
+        common = dict(
+            hidden_dim=cfg.hidden_dim, evidence_dim=cfg.evidence_dim, n_layers=cfg.n_layers,
+            n_heads=cfg.n_heads, max_cols=cfg.max_cols, dropout=cfg.dropout,
+            head_hidden_dim=cfg.head_hidden_dim, num_bins=num_bins, rng=rng.spawn(),
+        )
+        if cfg.target_conditioned:
+            n_cons = N_FEATURES if cfg.consequence_features else 0
+            model = create_target_conditioned_model(n_consequence_features=n_cons, **common).to(device)
+        else:
+            model = create_delta_prior_model(**common).to(device)
     n_param = assert_fresh_and_trainable(model)
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
 
@@ -173,12 +190,12 @@ def train_delta_prior(
             ex = _make_examples(train_source, cfg, cfg.batch_size, train_rng.spawn())
             db = collate(ex, max_rows=cfg.max_rows, max_cols=cfg.max_cols)
             logits = model(db.tokens, db.target_idx, db.consequence)
-            loss = rps_loss(logits, db.delta_bin.to(logits.device))
+            loss = rps_loss(logits, _labels_for(db, scheme).to(logits.device))
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_clip)
             opt.step()
-        v_logits, v_labels, _, _ = _forward_examples(model, val_ex, cfg)
+        v_logits, v_labels, _, _ = _forward_examples(model, val_ex, cfg, scheme)
         val_rps = float(rps_loss(v_logits, v_labels).item())
         if val_rps < best_val - 1e-5:
             best_val, since = val_rps, 0
@@ -192,14 +209,14 @@ def train_delta_prior(
         model.load_state_dict(best_state)  # in-memory best-val (NOT a loaded checkpoint)
 
     # Calibration: fit temperature on val, then evaluate test before/after.
-    v_logits, v_labels, _, _ = _forward_examples(model, val_ex, cfg)
+    v_logits, v_labels, _, _ = _forward_examples(model, val_ex, cfg, scheme)
     temperature = float(fit_temperature(v_logits, v_labels))
     model.set_temperature(temperature)
 
-    t_logits, t_labels, t_deltas, t_sheets = _forward_examples(model, test_ex, cfg)
-    _, _, _, v_sheets = _forward_examples(model, val_ex, cfg)
-    before = _metrics_block(t_logits, t_labels, t_deltas, temperature=1.0)
-    after = _metrics_block(t_logits, t_labels, t_deltas, temperature=temperature)
+    t_logits, t_labels, t_deltas, t_sheets = _forward_examples(model, test_ex, cfg, scheme)
+    _, _, _, v_sheets = _forward_examples(model, val_ex, cfg, scheme)
+    before = _metrics_block(t_logits, t_labels, t_deltas, temperature=1.0, centers=centers)
+    after = _metrics_block(t_logits, t_labels, t_deltas, temperature=temperature, centers=centers)
 
     # Leakage gate over the generated corpus (val + test sheets).
     report = assess_leakage(v_sheets + t_sheets, rng.spawn())
@@ -214,8 +231,11 @@ def train_delta_prior(
         "consequence_features_enabled": cfg.consequence_features,
         "n_consequence_features": N_FEATURES if cfg.consequence_features else 0,
         "consequence_feature_schema": consequence_schema() if cfg.consequence_features else None,
-        "head": "MLP([evidence;pooled_target]->hidden->num_bins)" if cfg.target_conditioned
-        else "MLP(evidence->hidden->num_bins)",
+        "model_kind": cfg.model_kind,
+        "coarse_scheme": scheme_spec(scheme),
+        "head": "MLP(LayerNorm(features)->hidden->num_bins)" if cfg.model_kind == "features_only"
+        else ("MLP([evidence;pooled_target]->hidden->num_bins)" if cfg.target_conditioned
+              else "MLP(evidence->hidden->num_bins)"),
     }
     split_scheme = {
         "train": train_source.describe(),
@@ -241,7 +261,7 @@ def train_delta_prior(
         checkpoint_loaded=False, all_layers_trainable=True, temperature=temperature,
         split_scheme=split_scheme, metrics=metrics_block, calibration=calibration_block,
         leakage=report.to_dict(), leakage_pass=lk_pass, wall_clock_seconds=wall_clock_seconds,
-        generator_family=train_source.generator_family,
+        generator_family=train_source.generator_family, num_bins=num_bins,
     )
     run_manifest.validate_manifest(manifest)
 

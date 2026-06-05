@@ -52,6 +52,8 @@ from .transfer_features import (
     N_TRANSFER_FEATURES,
     compute_transfer_features,
 )
+from .coarse_bins import assign_bins, scheme_num_bins, scheme_spec
+from .feature_only_head import FeatureOnlyDeltaModel, create_feature_only_model
 from .conditioned_head import (
     CONDITIONING_METHOD,
     TargetConditionedDeltaModel,

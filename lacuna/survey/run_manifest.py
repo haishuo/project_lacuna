@@ -98,6 +98,7 @@ def build_manifest(
     leakage_pass: bool,
     wall_clock_seconds: float,
     generator_family: str = GENERATOR_FAMILY,
+    num_bins: int = NUM_BINS,
 ) -> Dict:
     """Assemble a δ-prior run manifest. Does not write; pair with validate + write."""
     if kind not in _VALID_KINDS:
@@ -126,7 +127,7 @@ def build_manifest(
         "trainable_param_count": trainable_param_count,
         "checkpoint_loaded": checkpoint_loaded,
         "all_layers_trainable": all_layers_trainable,
-        "num_bins": NUM_BINS,
+        "num_bins": num_bins,
         "loss": LOSS,
         "temperature": temperature,
         "split_scheme": split_scheme,

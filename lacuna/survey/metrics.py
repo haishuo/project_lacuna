@@ -36,23 +36,29 @@ def bin_centers(tail_offset: float = TAIL_OFFSET) -> torch.Tensor:
     return torch.tensor(centers, dtype=torch.float32)
 
 
-def expected_delta(probs: torch.Tensor, tail_offset: float = TAIL_OFFSET) -> torch.Tensor:
-    """E[δ] per example = Σ p_k · center_k. `probs` is [B, K]."""
+def expected_delta(probs: torch.Tensor, tail_offset: float = TAIL_OFFSET,
+                   centers: torch.Tensor = None) -> torch.Tensor:
+    """E[δ] per example = Σ p_k · center_k. `probs` is [B, K].
+
+    `centers` (length K) overrides the canonical 7-bin centers — used by the coarse schemes.
+    """
     if probs.dim() != 2:
         raise ValueError(f"probs must be [B, K], got {tuple(probs.shape)}")
-    centers = bin_centers(tail_offset).to(probs.device)
-    if probs.shape[1] != centers.shape[0]:
-        raise ValueError(f"probs K={probs.shape[1]} != num_bins={centers.shape[0]}")
-    return (probs * centers.unsqueeze(0)).sum(dim=-1)
+    c = bin_centers(tail_offset) if centers is None else centers
+    c = c.to(probs.device)
+    if probs.shape[1] != c.shape[0]:
+        raise ValueError(f"probs K={probs.shape[1]} != num_bins={c.shape[0]}")
+    return (probs * c.unsqueeze(0)).sum(dim=-1)
 
 
 def e_delta_error(
-    probs: torch.Tensor, true_delta: torch.Tensor, tail_offset: float = TAIL_OFFSET
+    probs: torch.Tensor, true_delta: torch.Tensor, tail_offset: float = TAIL_OFFSET,
+    centers: torch.Tensor = None,
 ) -> dict:
-    """MAE / RMSE of E[δ] vs the answer-sheet continuous δ."""
+    """MAE / RMSE of E[δ] vs the answer-sheet continuous δ (under the active bin centers)."""
     if true_delta.dim() != 1 or true_delta.shape[0] != probs.shape[0]:
         raise ValueError(f"true_delta must be [B={probs.shape[0]}], got {tuple(true_delta.shape)}")
-    pred = expected_delta(probs, tail_offset)
+    pred = expected_delta(probs, tail_offset, centers=centers)
     err = pred - true_delta.to(pred.dtype)
     return {"mae": float(err.abs().mean().item()), "rmse": float((err ** 2).mean().sqrt().item())}
 
