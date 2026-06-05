@@ -30,8 +30,8 @@ from lacuna.data.ingestion import RawDataset
 from lacuna.feasibility.delta_generator import apply_self_censor
 from lacuna.feasibility.xmodel import ConditionalGaussian
 
-from .answer_sheet import GENERATOR_FAMILY, AnswerSheet
-from .batching import DeltaExample, make_example
+from .answer_sheet import GENERATOR_FAMILY, LOD_FAMILY, AnswerSheet
+from .batching import DeltaExample, make_example, make_lod_example
 from .delta_bins import NUM_BINS, assign_delta_bin
 
 
@@ -39,6 +39,7 @@ class ExampleSource(ABC):
     """Produces one δ-self-censoring example for a given (delta, beta1). num_bins fixes the head width."""
 
     num_bins: int = NUM_BINS
+    generator_family: str = GENERATOR_FAMILY  # recorded in the run manifest
 
     @abstractmethod
     def make_one(self, cfg, rng: RNGState, *, delta: float, beta1: float) -> DeltaExample:
@@ -67,6 +68,36 @@ class SurveyExampleSource(ExampleSource):
 
     def describe(self) -> dict:
         return {"x_source": "real_survey", "datasets": [r.name for r in self.pool]}
+
+
+class LODSurveyExampleSource(ExampleSource):
+    """Real survey X + LOD/top-coding step censoring (P2.2c). Same shape as SurveyExampleSource.
+
+    `tau_quantile` (the value-axis split, held fixed across δ) is an idiom parameter carried by the
+    source. δ-bins/num_bins are shared with the own-value idiom so the A/B uses an identical head.
+    """
+
+    generator_family = LOD_FAMILY
+
+    def __init__(self, pool: List[RawDataset], tau_quantile: float = 0.70, num_bins: int = NUM_BINS):
+        if len(pool) == 0:
+            raise ValueError("LODSurveyExampleSource requires a non-empty dataset pool")
+        if not (0.0 < tau_quantile < 1.0):
+            raise ValueError(f"tau_quantile must be in (0, 1), got {tau_quantile}")
+        self.pool = pool
+        self.tau_quantile = tau_quantile
+        self.num_bins = num_bins
+
+    def make_one(self, cfg, rng: RNGState, *, delta: float, beta1: float) -> DeltaExample:
+        raw = self.pool[rng.randint(0, len(self.pool), (1,)).item()]
+        return make_lod_example(
+            raw, beta1=beta1, delta=delta, target_rate=cfg.target_rate,
+            tau_quantile=self.tau_quantile, rng=rng.spawn(), max_rows=cfg.max_rows,
+        )
+
+    def describe(self) -> dict:
+        return {"x_source": "real_survey", "idiom": "lod_top_coding",
+                "tau_quantile": self.tau_quantile, "datasets": [r.name for r in self.pool]}
 
 
 class StratifiedRealXSource(ExampleSource):

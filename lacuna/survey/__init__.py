@@ -36,6 +36,7 @@ from .delta_head import (
 from .loss import fit_temperature, log_score, rps_loss, uniform_rps
 from .example_source import (
     ExampleSource,
+    LODSurveyExampleSource,
     StratifiedRealXSource,
     SurveyExampleSource,
     SyntheticTwoColSource,
@@ -80,6 +81,7 @@ __all__ = [
     "SurveyExampleSource",
     "SyntheticTwoColSource",
     "StratifiedRealXSource",
+    "LODSurveyExampleSource",
     "column_r2",
     "proxy_score",
     "target_r2_table",

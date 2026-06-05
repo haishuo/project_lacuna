@@ -27,6 +27,7 @@ from lacuna.data.tokenization import tokenize_and_batch
 
 from .answer_sheet import AnswerSheet
 from .delta_generator import generate_self_censor_example
+from .lod_generator import generate_lod_example
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,32 @@ def make_example(
         feature_names=raw_sub.feature_names,
         dataset_id=raw.name,
         meta={"source": raw.name, "is_semisynthetic": True},
+    )
+    return DeltaExample(observed=observed, answer_sheet=res.answer_sheet)
+
+
+def make_lod_example(
+    raw: RawDataset,
+    *,
+    beta1: float,
+    delta: float,
+    target_rate: float,
+    tau_quantile: float,
+    rng: RNGState,
+    max_rows: int,
+    target_idx: int = None,
+) -> DeltaExample:
+    """Subsample rows, apply LOD/top-coding step censoring, wrap as a tokenizable ObservedDataset."""
+    raw_sub = subsample_raw(raw, max_rows=max_rows, rng=rng.spawn())
+    res = generate_lod_example(
+        raw_sub, beta1=beta1, delta=delta, target_rate=target_rate,
+        tau_quantile=tau_quantile, rng=rng.spawn(), target_idx=target_idx,
+    )
+    n, d = res.mask.shape
+    observed = ObservedDataset(
+        x=res.x_observed, r=res.mask, n=n, d=d,
+        feature_names=raw_sub.feature_names, dataset_id=raw.name,
+        meta={"source": raw.name, "is_semisynthetic": True, "idiom": "lod_top_coding"},
     )
     return DeltaExample(observed=observed, answer_sheet=res.answer_sheet)
 

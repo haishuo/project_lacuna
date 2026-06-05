@@ -15,13 +15,29 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
-from .answer_sheet import GENERATOR_FAMILY, SCHEMA_VERSION
+from .answer_sheet import ALLOWED_FAMILIES, GENERATOR_FAMILY, LOD_FAMILY, SCHEMA_VERSION
 from .delta_bins import NUM_BINS, bin_edges
 from .manifest import BETA0_SOLVER, DELTA_FORMULA, GENERATOR_PATH
 
 _VALID_KINDS = ("main", "ablation", "smoke")
 MODEL_PATH = "lacuna.survey.delta_head.DeltaPriorModel"
 LOSS = "RPS"
+
+# Per-idiom generator provenance (recorded in the manifest by family).
+_FAMILY_PROVENANCE = {
+    GENERATOR_FAMILY: {
+        "generator_path": GENERATOR_PATH,
+        "delta_formula": DELTA_FORMULA,
+        "beta0_solver": BETA0_SOLVER,
+    },
+    LOD_FAMILY: {
+        "generator_path": "lacuna.survey.lod_generator.generate_lod_example",
+        "delta_formula": "P(missing_target)=sigmoid(beta0 + beta1*z_pred + delta*1[z_target>tau]); "
+                         "delta=log-odds jump at threshold; MAR<=>delta==0",
+        "beta0_solver": "bisection on monotone mean-sigmoid; population/sample target rate matched "
+                        "to target_rate for ANY delta (only value-localization carries delta)",
+    },
+}
 
 REQUIRED_FIELDS: List[str] = [
     "run_id",
@@ -81,19 +97,24 @@ def build_manifest(
     leakage: Dict,
     leakage_pass: bool,
     wall_clock_seconds: float,
+    generator_family: str = GENERATOR_FAMILY,
 ) -> Dict:
     """Assemble a δ-prior run manifest. Does not write; pair with validate + write."""
     if kind not in _VALID_KINDS:
         raise ValueError(f"kind must be one of {_VALID_KINDS}, got {kind!r}")
+    if generator_family not in _FAMILY_PROVENANCE:
+        raise ValueError(f"unknown generator_family {generator_family!r}; "
+                         f"known: {sorted(_FAMILY_PROVENANCE)}")
+    prov = _FAMILY_PROVENANCE[generator_family]
     return {
         "run_id": run_id,
         "git_commit": git_commit,
         "timestamp": timestamp,
         "kind": kind,
-        "generator_family": GENERATOR_FAMILY,
-        "generator_path": GENERATOR_PATH,
-        "delta_formula": DELTA_FORMULA,
-        "beta0_solver": BETA0_SOLVER,
+        "generator_family": generator_family,
+        "generator_path": prov["generator_path"],
+        "delta_formula": prov["delta_formula"],
+        "beta0_solver": prov["beta0_solver"],
         "delta_bins": bin_edges(),
         "delta_grid": list(delta_grid),
         "beta1_range": list(beta1_range),
@@ -128,8 +149,8 @@ def validate_manifest(manifest: Dict) -> None:
 
     if manifest["kind"] not in _VALID_KINDS:
         raise ValueError(f"kind must be one of {_VALID_KINDS}, got {manifest['kind']!r}")
-    if manifest["generator_family"] != GENERATOR_FAMILY:
-        raise ValueError(f"generator_family must be {GENERATOR_FAMILY!r}")
+    if manifest["generator_family"] not in ALLOWED_FAMILIES:
+        raise ValueError(f"generator_family must be in {sorted(ALLOWED_FAMILIES)}")
     if manifest["loss"] != LOSS:
         raise ValueError(f"P2.2 main loss must be {LOSS!r} (no 3-class CE / binary), got {manifest['loss']!r}")
     if manifest["answer_sheet_schema_version"] != SCHEMA_VERSION:

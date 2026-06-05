@@ -230,6 +230,7 @@ def train_delta_prior(
         checkpoint_loaded=False, all_layers_trainable=True, temperature=temperature,
         split_scheme=split_scheme, metrics=metrics_block, calibration=calibration_block,
         leakage=report.to_dict(), leakage_pass=lk_pass, wall_clock_seconds=wall_clock_seconds,
+        generator_family=train_source.generator_family,
     )
     run_manifest.validate_manifest(manifest)
 
