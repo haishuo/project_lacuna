@@ -3,6 +3,18 @@
 *Branch `p2/delta-prior-rearchitecture`. Note: `feasibility-p2p2c-consequence-features-note.md`;
 prior A/B: `feasibility-p2p2c-lod-ladder-findings.md`. Stop-for-review.*
 
+> **CORRECTION (2026-06-05, see `feasibility-p2p2c-transfer-gate-findings.md`).** The **binary**
+> δ0-vs-δ2.5 LR AUCs in this doc (in-dist 0.94 / **OOF 0.43 "direction flips"**) were produced by a
+> **phase-locking bug** (dataset index and δ index both cycled mod-2, locking each test dataset to one
+> δ — the LR separated *datasets*, not δ). The **corrected** binary numbers (independent dataset
+> sampling) are **in-dist 0.876 / OOF 0.734** — i.e. the 17 features **DO transfer for coarse δ**; the
+> "generalization gap / direction flips" framing below is **wrong for the binary contrast** and is
+> superseded. UNAFFECTED and still valid: the **7-bin** OOF numbers (≈ chance — fine δ does not
+> transfer well; grid len 7 vs pool len 2 are coprime) and the **neural A/B "both arms floor"** result
+> (the example sources sample datasets randomly, independent of δ). Net corrected story: coarse δ
+> transfers out-of-family; FINE 7-bin δ does not; the 7-bin model floored at the weak 7-bin
+> transferable ceiling. Read the body below with the binary-AUC claims replaced accordingly.
+
 ## Result: both arms still floor out-of-family — but the diagnostics reveal a GENERALIZATION gap, not a wall
 
 Same held-out (leave-datasets-out) A/B, target-conditioned, **+ the fixed 17 consequence features**
