@@ -224,6 +224,126 @@ rewrite on the retained scaffold**, not a from-zero project.
 
 ---
 
+## 9. Data sufficiency / prior richness
+
+**Why this is first-class, not a footnote.** `P_prior` *includes* `{real survey datasets}`, so the
+**catalog is part of the scientific prior**, not merely training data. The posterior Lacuna reports is
+only as meaningful as the prior is rich. The governing question is therefore not "can the model train?"
+but **"is the empirical prior rich enough to justify the posterior Lacuna reports?"** This section
+specifies the analysis (read-only inventory + a learning-curve diagnostic) that must run **alongside
+Stage 1** and that **gates acquisition-vs-architecture resource allocation** before Stages 2–4.
+
+### 9.1 Current catalog inventory (measured, read-only — `cat.list_datasets()` filtered to `survey_*`)
+**12 survey datasets, 114 columns, 65 targetable (cardinality ≥ 10), total n ≈ 62,228** (min 82, median
+≈ 2,485, max 28,155).
+
+| dataset | n | d | targetable | card range | domain (inferred) | genuine survey? |
+|---|---|---|---|---|---|---|
+| survey_cps1988 | 28,155 | 3 | 3 | 19..5970 | labor/income (CPS) | yes |
+| survey_yrbss | 11,522 | 5 | 2 | 7..238 | health-risk behavior | yes |
+| survey_computers | 6,259 | 7 | 4 | 3..808 | product pricing | **no (product data)** |
+| survey_psid7682 | 4,165 | 6 | 5 | 7..1017 | labor/income (PSID) | yes |
+| survey_workinghours | 3,382 | 11 | 5 | 2..1102 | labor/income | yes |
+| survey_chile | 2,590 | 4 | 3 | 7..2012 | political attitudes | yes |
+| survey_hmda | 2,380 | 6 | 4 | 4..1537 | mortgage/finance | yes |
+| survey_bfi | 2,236 | 28 | 1 | 2..59 | psychology (Big-Five Likert) | yes |
+| survey_psid1976 | 753 | 17 | 12 | 4..697 | labor/income (PSID) | yes |
+| survey_cps1985 | 534 | 4 | 4 | 17..238 | labor/income (CPS) | yes |
+| survey_survey | 170 | 5 | 5 | 41..73 | student measurements (MASS) | **no (teaching set)** |
+| survey_cars93 | 82 | 18 | 17 | 3..74 | automotive specs | **no (product data)** |
+
+- **Natural missingness = 0.000 across ALL 12.** The ingestion path drops NaNs and yields complete
+  matrices. **Consequence (a recorded limitation):** natural survey missingness — the real item-
+  nonresponse patterns that are themselves part of the survey manifold — is **not preserved**. The only
+  missingness studied is our matched-rate semi-synthetic holes. The §3½ **M2 manifold check** (do real
+  masks lie in the span of our generated footprints?) **cannot currently be run** because real masks were
+  discarded at load. *Any acquisition pipeline must preserve natural missingness.*
+- **Column types** are overwhelmingly **right-skewed positive continuous economic variables** (wage,
+  income, price, hours) + ages / counts / education-years; sparse on categorical/ordinal **attitude
+  (Likert)** items (only `bfi`, low-cardinality → just 1 targetable), and **no** skip-logic-bearing or
+  social-desirability-sensitive items.
+- **Sample sizes** are highly uneven; **4 of 12 have < 800 rows** (cars93 82, survey 170, cps1985 534,
+  psid1976 753).
+
+### 9.2 Effective diversity (the real concern)
+- **These are not 12 independent survey worlds.** Five are labor/income economics (cps1985, cps1988,
+  psid1976, psid7682, workinghours) sharing near-identical column vocabularies (wage/education/experience/
+  age/hours) → high redundancy. **Effective distinct "worlds" ≈ 6–7**, and three of the twelve
+  (cars93, computers, survey) are **not genuine surveys**.
+- **Domain gaps (major survey families entirely absent):** demographic census (ACS/IPUMS), general social
+  attitudes (GSS/ANES/ESS/WVS), comprehensive health (NHANES/BRFSS), education surveys.
+- **Idiom-vocabulary gaps:** the §3½ survey-idiom vocabulary the prior is meant to span — skip logic,
+  social-desirability censoring, LOD on lab values, income top-coding, DK/refusal coding — is barely
+  represented (we *impose* LOD/own-value synthetically, but the X-tables that would make those footprints
+  realistic, e.g. income top-coding in CPS/ACS, lab LOD in NHANES, are absent).
+- **Verdict:** the catalog is **small, redundant, domain-skewed (labor-econ), natural-missingness-
+  stripped, and contaminated with non-survey tables.** For a *named prior claiming to represent the
+  survey-missingness manifold*, this is **thin**.
+
+### 9.3 Learning-curve / scaling plan
+- **Plan:** train/eval Level-0 (and later Level-1) as a function of **#base training datasets at 4, 8, 12**
+  (the current maximum), with **many seeds** (leave-datasets-out is high-variance at small catalog),
+  reporting held-out **calibration/coverage + OOF AUC/RPS vs catalog size** and the **slope at the largest
+  size**.
+- **Hard limitation:** we **cannot run 16/32/64 without acquisition** — so the requested 4→64 curve is
+  itself **acquisition-gated**. The current curve can only diagnose the slope at 4→8→12.
+- **Interpretation:** slope still clearly positive at 12 → **data-limited → acquire.** Apparent saturation
+  by 8–12 → architecture/prior-formulation candidate — **but with a binding caveat:** saturation on a
+  *redundant* 12 is **not** evidence that *diverse* data would not help (it may saturate because the 12 are
+  near-duplicates). **Saturation on the current catalog must not be read as an architecture verdict**
+  without at least one genuinely new **domain** added.
+
+### 9.4 Dataset-acquisition threshold (explicit estimate)
+- **A handful more is not enough.** To make leave-datasets-out meaningful (hold out whole datasets while
+  training on a *diverse* remainder) **and** to span the idiom/domain vocabulary, we need **dozens now**
+  — target **≥ 30–50 genuinely distinct survey datasets** across health / demographics / income / labor /
+  education / social-attitudes / risk-behavior / political — scaling toward **hundreds** (survey *waves*:
+  NHANES cycles, BRFSS years, GSS waves, IPUMS extracts) for a defensible manifold prior.
+- **Stated plainly: dozens near-term, hundreds for a mature prior.** This is a precondition for the
+  posterior to be scientifically meaningful — not gold-plating.
+
+### 9.5 Candidate data sources (all public; legally downloadable)
+| source | domain it adds | idiom realism it adds |
+|---|---|---|
+| **NHANES** waves | health / nutrition / lab | **LOD on lab values** (real), item nonresponse |
+| **BRFSS** years | health-risk behavior (large) | categorical/ordinal nonresponse |
+| **GSS** waves | social attitudes | **skip logic**, social-desirability, DK/refusal |
+| **CPS / ACS / IPUMS** extracts | demographics / labor / income (huge) | **income top-coding** (real) |
+| **Add Health** | adolescent health/behavior | sensitive-item censoring |
+| **ANES** | political attitudes | income/vote nonresponse |
+| **ESS / WVS** | cross-national social values | Likert, DK/refusal coding |
+
+*Formatting requirement:* the pipeline must **preserve natural missingness** (unlike the current
+ingestion, §9.1) — this simultaneously fixes the M2 gap and supplies realistic top-coding/LOD X-tables.
+
+### 9.6 Synthetic-real dataset generation (later data-expansion arc)
+- Train a generative model over real survey columns/tables → sample realistic synthetic survey **X** →
+  impose semi-synthetic missingness → train Lacuna on generated worlds → **validate only on held-out
+  REAL datasets.**
+- **Binding guardrail:** generated X is **domain randomization** (expands the training factor of
+  `P_prior`), **not proof.** It can **never** replace held-out real validation (§4.4, §8.1). The held-out
+  **real** ladder remains the sole arbiter.
+
+### 9.7 Decision rule (explicit)
+1. Level-1 performance **improves predictably with more REAL datasets** → **prioritize acquisition.**
+2. It **saturates quickly on the current catalog** → architecture/prior-formulation is a candidate
+   bottleneck — **but** confirm with ≥1 genuinely new **domain** before concluding (the §9.3 redundancy
+   caveat); saturation on a redundant 12 is not an architecture verdict.
+3. Generated survey-X improves **generated-X** but **not held-out REAL-X** → **reject as generator
+   overfitting** (domain randomization that did not transfer).
+4. Generated survey-X improves **held-out REAL-X** → the generator is a **validated training amplifier**;
+   adopt it as a `P_prior` training factor (still **not** a validation substitute).
+
+### 9.8 Preliminary verdict (to be quantified by 9.3)
+On the inventory alone: **the current empirical prior is NOT yet rich enough to justify a deployable,
+calibrated survey-manifold posterior.** It is sufficient to **build and de-risk Level 1 as a proof of
+concept** and to **run the learning-curve diagnostic** — but a *deployable* prior requires **dozens →
+hundreds** of diverse, natural-missingness-preserving real survey datasets. The build (Stages 1–4) and
+the data program (9.3 → 9.4 → 9.5) proceed **in parallel**; the learning-curve result allocates effort
+between them.
+
+---
+
 ## Open decisions for the PI (before Stage 1)
 1. **φ capacity** — `m` (per-value width), quantile grid `Q`, `E_col` (per-column embedding dim). Proposal:
    reuse Stage-0 settings (`m≈16`, 12 quantiles + max) as the starting point.
@@ -234,5 +354,11 @@ rewrite on the retained scaffold**, not a from-zero project.
    start Mahalanobis/kNN for the MVP; revisit if separation on held-out families is weak.
 4. **MCAR-departure auxiliary** — include in Stage 2 or defer. Proposal: include (cheap, honest, §2 solid
    ground).
+5. **Data-sufficiency program (§9)** — (a) approve running the **learning-curve diagnostic** (4→8→12,
+   multi-seed) on the current catalog as a first, parallel analysis; (b) approve, in principle, the
+   **acquisition target** (dozens near-term → hundreds) and an ingestion pipeline that **preserves natural
+   missingness**; (c) decide whether to drop the **3 non-survey contaminants** (cars93, computers, survey)
+   from the catalog now. Proposal: yes to (a); yes-in-principle to (b); drop the 3 contaminants (they
+   pollute the survey-manifold prior).
 
-**No implementation until this spec (and the four open decisions) are approved.**
+**No implementation until this spec (and the five open decisions) are approved.**
