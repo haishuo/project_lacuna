@@ -48,6 +48,10 @@ from .consequence_features import (
     N_FEATURES,
     compute_consequence_features,
 )
+from .transfer_features import (
+    N_TRANSFER_FEATURES,
+    compute_transfer_features,
+)
 from .conditioned_head import (
     CONDITIONING_METHOD,
     TargetConditionedDeltaModel,
