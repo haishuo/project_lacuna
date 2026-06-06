@@ -233,6 +233,26 @@ but **"is the empirical prior rich enough to justify the posterior Lacuna report
 specifies the analysis (read-only inventory + a learning-curve diagnostic) that must run **alongside
 Stage 1** and that **gates acquisition-vs-architecture resource allocation** before Stages 2–4.
 
+### 9.A Three evidence standards (which question are we answering?)
+Data sufficiency is meaningless without a **standard**. Three, in increasing demand:
+
+| standard | goal | sufficient evidence |
+|---|---|---|
+| **1. Proof-of-concept / dissertation** | establish the program is **viable** | signal exists for some idioms; the right representation recovers more than the old backbone *(already shown — §8 / Stage 0)*; Level-1 reproduces the column-primary signal **in-pipeline**; calibration / detectability / abstention behave correctly; **performance improves with catalog diversity**; the learning curve suggests more data would plausibly help. **Needs enough diverse datasets to show a credible positive trend — not hundreds.** |
+| **2. Grant-proposal** | justify funding for larger acquisition / generation | **positive learning curve** as real catalog grows; evidence performance is **data-limited, not conceptually flat**; an estimate of how much more is needed; named sources; a plan to **preserve natural missingness (role A) while supervising only on semi-synthetic (role B)**. **A credible "there is a there there" slope — not solving Lacuna.** |
+| **3. Deployment / commercial** | robust on arbitrary survey data | dozens–hundreds of distinct surveys; natural-missingness ingestion; broad idiom vocabulary; cross-domain calibration; OOD/abstention validation; possibly synthetic-real generation; external expert face-validity. **Beyond the dissertation MVP.** |
+
+**Binding reframe.** The Level-1 data-sufficiency program asks the **dissertation/grant** question —
+*"do we have enough to demonstrate a credible scaling trend and justify the next acquisition phase?"* —
+**not** the deployment question *"do we already have enough for deployment?"* This makes the data question
+a **scientific result (the scaling curve)**, not a blocker.
+
+- **Dissertation-level success:** Level-1 works on the current (9 genuine) catalog well enough to
+  **reproduce the Stage-0 column-primary signal in-pipeline**, **and** performance **improves** as the
+  catalog becomes more diverse.
+- **Grant-level success:** the **slope of the learning curve remains positive at the edge of the current
+  catalog (N=9)**, implying broader survey-data acquisition is a scientifically justified next investment.
+
 ### 9.0 Three data roles (binding) — natural missingness is NOT supervised δ-data
 Lacuna's scientific defensibility rests on **every supervised example having a known answer sheet**
 (known dataset, imposed mechanism, imposed δ, true label). Natural missingness has **none** of these —
@@ -304,18 +324,25 @@ for validation (role A)**, not "train on it." Preserve — yes; supervise — no
   stripped, and contaminated with non-survey tables.** For a *named prior claiming to represent the
   survey-missingness manifold*, this is **thin**.
 
-### 9.3 Learning-curve / scaling plan
-- **Plan:** train/eval Level-0 (and later Level-1) as a function of **#base training datasets at 4, 8, 12**
-  (the current maximum), with **many seeds** (leave-datasets-out is high-variance at small catalog),
-  reporting held-out **calibration/coverage + OOF AUC/RPS vs catalog size** and the **slope at the largest
-  size**.
-- **Hard limitation:** we **cannot run 16/32/64 without acquisition** — so the requested 4→64 curve is
-  itself **acquisition-gated**. The current curve can only diagnose the slope at 4→8→12.
-- **Interpretation:** slope still clearly positive at 12 → **data-limited → acquire.** Apparent saturation
-  by 8–12 → architecture/prior-formulation candidate — **but with a binding caveat:** saturation on a
-  *redundant* 12 is **not** evidence that *diverse* data would not help (it may saturate because the 12 are
-  near-duplicates). **Saturation on the current catalog must not be read as an architecture verdict**
-  without at least one genuinely new **domain** added.
+### 9.3 Learning-curve / scaling plan — *the deliverable scientific result (§9.A)*
+- **Plan:** train/eval Level-0/Level-1 as a function of **#base training datasets at N ∈ {4, 8, 9}**
+  (9 = the genuine maximum after dropping the 3 contaminants), with **many seeds** (leave-datasets-out is
+  high-variance at small catalog), on a fixed held-out test set. The curve **continues to 12, 16, 32 … as
+  acquired domains are added** — reaching N>9 *requires* acquisition, which is exactly what the curve is
+  meant to justify (grant standard).
+- **Report (per N, with seed/split variance):**
+  - **δ-prior calibration / coverage** (ECE, coverage tables);
+  - **LOD/top-coding sharpness** (binary δ0-vs-δ2.5 OOF AUC; δ-prior concentration);
+  - **own-value prior-dominated behavior** (δ-prior ≈ `prior_marginal`, low info-gain);
+  - **detectability-vs-oracle agreement** *(matures at Stage 2)*;
+  - **OOD / abstention** on held-out idiom families *(matures at Stage 3)*;
+  - **variance across seeds/splits** (essential at small N).
+  *(At Stage 1 the available subset is calibration + LOD AUC + own-value flatness + variance; the
+  detectability and OOD curves come online as Stages 2–3 land.)*
+- **Interpretation (the §9.7 decision rule):** slope clearly **positive at N=9** → **data-limited →
+  acquire** (grant-level success). Apparent **saturation** → architecture/prior-formulation *candidate* —
+  **but binding caveat:** saturation on a *redundant* 9 is **not** evidence that *diverse* data would not
+  help; **must not be read as an architecture verdict** without ≥1 genuinely new **domain** added.
 
 ### 9.4 Dataset-acquisition threshold (explicit estimate)
 - **A handful more is not enough.** To make leave-datasets-out meaningful (hold out whole datasets while
@@ -358,13 +385,20 @@ ingestion, §9.1) — this simultaneously fixes the M2 gap and supplies realisti
 4. Generated survey-X improves **held-out REAL-X** → the generator is a **validated training amplifier**;
    adopt it as a `P_prior` training factor (still **not** a validation substitute).
 
-### 9.8 Preliminary verdict (to be quantified by 9.3)
-On the inventory alone: **the current empirical prior is NOT yet rich enough to justify a deployable,
-calibrated survey-manifold posterior.** It is sufficient to **build and de-risk Level 1 as a proof of
-concept** and to **run the learning-curve diagnostic** — but a *deployable* prior requires **dozens →
-hundreds** of diverse, natural-missingness-preserving real survey datasets. The build (Stages 1–4) and
-the data program (9.3 → 9.4 → 9.5) proceed **in parallel**; the learning-curve result allocates effort
-between them.
+### 9.8 Verdict — answered at the right standard (§9.A)
+**Do not ask the deployment question of a dissertation MVP.** At the **deployment** standard the current
+catalog is **not** rich enough (dozens → hundreds, natural-missingness-preserving, broad idioms — §9.4) —
+but that is **not the question Level 1 answers**. At the **dissertation / grant** standard the operative
+bar is the **scaling trend**, and the current 9-genuine catalog is **sufficient to attempt it**:
+- **Dissertation:** reproduce the Stage-0 signal in-pipeline **and** show performance improves with
+  diversity (the 4→8→9 curve).
+- **Grant:** the curve's **slope is still positive at N=9**, justifying acquisition as the next
+  investment.
+
+The learning curve (§9.3) is therefore **the deliverable scientific result**, not a gate the project must
+pass before proceeding. The build (Stages 1–4) and the data program (9.3 → 9.4 → 9.5) run **in parallel**;
+the curve's slope — not a deployment-readiness check — allocates effort between *acquire* and
+*architecture* (§9.7).
 
 ---
 

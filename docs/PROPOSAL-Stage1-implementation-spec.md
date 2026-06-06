@@ -92,17 +92,25 @@ behavior is checkable.
 - **Honest small-catalog caveat:** with only 9 genuine surveys the leave-datasets-out split is
   **under-powered and high-variance** → run **multiple seeds** and report variance; tie directly to §6.
 
-## 6. Learning-curve diagnostic plan (parallel, §9.3)
+## 6. Learning-curve diagnostic plan (parallel) — the deliverable scientific result
 
-- Train/eval **Level-0/φ-spine** at **N ∈ {4, 8, 9}** genuine training datasets (max 9 post-drop;
-  **cannot reach 12 with genuine surveys** — this *sharpens* the acquisition case), **many seeds**,
-  fixed held-out test datasets.
-- **Report:** held-out calibration/coverage + binary OOF AUC/RPS **vs N**, and the **slope at N=9**.
-- **Read (per §9.7):** slope clearly positive at 9 → **data-limited → acquire**; apparent saturation →
-  candidate architecture/formulation issue **but not a verdict** (redundant 9; confirm with a genuinely
-  new domain first).
-- This diagnostic uses only Level-0/φ + the eval ladder (cheap); it runs **alongside** Stage-1, gating
-  acquisition-vs-architecture effort — it does **not** block Stage-1 completion.
+*Answered at the **dissertation/grant** standard (design-spec §9.A), **not** the deployment standard. The
+question is "is there a credible positive scaling trend?", not "is this deployable?"*
+
+- Train/eval **Level-0/φ-spine** at **N ∈ {4, 8, 9}** genuine training datasets (9 = max post-drop;
+  reaching N>9 *requires* acquisition — which the curve exists to justify), **many seeds**, fixed held-out
+  test set.
+- **Report (per N, with seed/split variance):** held-out **δ-prior calibration/coverage** + **LOD
+  sharpness** (binary OOF AUC/RPS) + **own-value prior-dominated behavior** + **variance**. *(Detectability-
+  vs-oracle and OOD/abstention curves are added when Stages 2–3 land; Stage-1 reports the available
+  subset.)*
+- **Success bars (design-spec §9.A):**
+  - **Dissertation:** Stage-0 signal reproduced in-pipeline (M1) **and** metrics **improve** 4→8→9.
+  - **Grant:** the **slope is still positive at N=9** ⇒ acquisition is a justified next investment.
+- **Read (per design-spec §9.7):** positive slope at 9 → **data-limited → acquire**; apparent saturation →
+  architecture *candidate* **but not a verdict** (redundant 9; confirm with ≥1 genuinely new domain first).
+- Uses only Level-0/φ + the eval ladder (cheap); runs **alongside** Stage-1 and **does not block** its
+  completion. The curve is a **result to report**, not a gate to pass.
 
 ## 7. Test plan (Rule 7 — per module: normal / edge / failure)
 
