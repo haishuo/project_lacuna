@@ -1,18 +1,16 @@
 """
 scripts/run_cross_domain_curve.py
 
-Cross-DOMAIN learning curve (cross-domain plan §3; MASTER §8) — the deliverable scientific result.
-Does the φ-spine's held-out transfer improve as we add genuinely-distinct survey DOMAINS (not file
-count)? Top-coding idiom, fixed held-out labor test, 3 seeds. Cumulative domain sets:
+Cross-DOMAIN learning curve with the LARGER codebook-curated NHANES role-B bases (cross-domain plan §3;
+MASTER §8). Tests the PI's question: was the earlier FLAT curve caused by small/thin bases? Top-coding
+OOF AUC vs #domains, fixed labor test, 3 seeds, max_rows=384. Cumulative:
 
-  P1 labor               (cps1988, psid1976, psid7682)                       1 domain
-  P2 +psychology +health (+ bfi, yrbss)                                      3 domains
-  P3 +demographics +social (+ rb_nhanes_demographics, rb_gssvocab)           5 domains
-  P4 +income +health-wt  (+ rb_nhanes_income, rb_nhanes_weight)              7 domains
+  P1 labor               (cps1988, psid1976, psid7682)                     1 domain
+  P2 +psychology +health (+ bfi, yrbss)                                    3 domains
+  P3 +NHANES block       (+ rb_nhanes_weight ~3833, rb_nhanes_poverty ~4774)  5 domains (ONE block)
 
-Genuine datasets via catalog; role-B bases (projected_from_naturally_missing) via /mnt/data/lacuna/
-role_b. A positive slope at the catalog edge ⇒ acquisition justified (grant result). Read in DOMAINS,
-not files; same-block role-B bases are not independent (here each new base is a distinct domain).
+rb_nhanes_weight + rb_nhanes_poverty share NHANES-2017-18 respondents ⇒ ONE block; both are in TRAIN
+(test = labor) so no train/test leakage. Read in DOMAINS, not files.
 
 Run: python -u scripts/run_cross_domain_curve.py
 """
@@ -46,9 +44,9 @@ def _rb(name):
 
 
 def _cfg():
-    return Level1Config(delta_grid=[0.0, 2.5], beta1_range=(1.0, 1.0), target_rate=0.3, max_rows=200,
-                        batch_size=16, train_size=600, max_epochs=40, patience=6, val_size=120,
-                        test_size=120, m=16, e_col=32, coarse_scheme="binary")
+    return Level1Config(delta_grid=[0.0, 2.5], beta1_range=(1.0, 1.0), target_rate=0.3, max_rows=384,
+                        batch_size=16, train_size=600, max_epochs=40, patience=6, val_size=140,
+                        test_size=140, m=16, e_col=32, coarse_scheme="binary")
 
 
 @torch.no_grad()
@@ -83,29 +81,29 @@ def main():
     L = lambda *names: [cat.load(n) for n in names]
     labor = L("survey_cps1988", "survey_psid1976", "survey_psid7682")
     p2 = labor + L("survey_bfi", "survey_yrbss")
-    p3 = p2 + [_rb("rb_nhanes_demographics"), _rb("rb_gssvocab")]
-    p4 = p3 + [_rb("rb_nhanes_income"), _rb("rb_nhanes_weight")]
+    p3 = p2 + [_rb("rb_nhanes_weight"), _rb("rb_nhanes_poverty")]
     print("=" * 96)
-    print("CROSS-DOMAIN LEARNING CURVE — top-coding OOF AUC vs #domains (fixed labor test)")
+    print("CROSS-DOMAIN CURVE w/ LARGER NHANES bases — top-coding OOF AUC vs #domains (labor test, m384)")
     print("=" * 96)
     pts = [_point(cat, labor, 1, "labor", git),
            _point(cat, p2, 3, "+psychology +health", git),
-           _point(cat, p3, 5, "+demographics +social", git),
-           _point(cat, p4, 7, "+income +health-weight", git)]
+           _point(cat, p3, 5, "+NHANES weight+poverty (big)", git)]
     xs = np.array([p[0] for p in pts]); ys = np.array([p[1] for p in pts])
     slope = float(np.polyfit(xs, ys, 1)[0])
     print("\n" + "=" * 96)
     print(f"  curve: " + " -> ".join(f"{p[0]}d:{p[1]:.3f}" for p in pts))
-    print(f"  SLOPE (AUC per domain) = {slope:+.4f}  |  edge delta (P4-P1) = {ys[-1]-ys[0]:+.3f}")
-    if slope > 0.005:
-        verdict = ("POSITIVE cross-domain slope: adding survey DOMAINS improves the φ-spine's held-out "
-                   "transfer -> acquisition is scientifically justified (grant result).")
-    elif abs(slope) <= 0.005:
-        verdict = ("FLAT slope on the current (small) role-B domains: not yet data-limited at this scale, "
-                   "or the small bases are too thin — needs larger/more domains before a verdict.")
+    print(f"  SLOPE = {slope:+.4f}/domain | P2->P3 (add big NHANES) = {ys[2]-ys[1]:+.3f} | "
+          f"edge P3-P1 = {ys[-1]-ys[0]:+.3f}")
+    if ys[2] - ys[1] >= 0.02:
+        v = ("BIGGER NHANES bases MOVE the curve (+%.3f) -> domain diversity helps when bases are large "
+             "enough; the prior flat curve was a small-base artifact. Scaling hypothesis SUPPORTED." % (ys[2]-ys[1]))
+    elif abs(ys[2] - ys[1]) < 0.02:
+        v = ("Still ~FLAT even with larger NHANES bases (+%.3f) -> the flat curve is NOT just a small-base "
+             "artifact; either labor-test transfer is the wrong probe (try leave-one-domain-out) or the "
+             "signal is genuinely weak at this corpus scale -> external acquisition becomes the priority." % (ys[2]-ys[1]))
     else:
-        verdict = "NEGATIVE slope: adding these domains did not help (inspect base quality / size)."
-    print(f"  VERDICT: {verdict}")
+        v = "Negative: bigger NHANES bases hurt labor transfer (inspect)."
+    print(f"  VERDICT: {v}")
     print("=" * 96)
 
 
