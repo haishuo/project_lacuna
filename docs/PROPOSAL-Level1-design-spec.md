@@ -325,6 +325,12 @@ for validation (role A)**, not "train on it." Preserve — yes; supervise — no
   survey-missingness manifold*, this is **thin**.
 
 ### 9.3 Learning-curve / scaling plan — *the deliverable scientific result (§9.A)*
+> **Refined (2026-06-06) → see `PROPOSAL-cross-domain-corpus-plan.md`.** The curve is now **domain-based,
+> not file-count-based**: exploit on-disk role-B projections (NHANES/ESS) to add genuinely-distinct
+> *domains*, with a **block-aware leave-DOMAIN-out** split (NHANES/ESS slices = one block, no same-
+> respondent leakage). Correlated slices are **not** counted as independent scaling evidence. The text
+> below (N∈{4,8,9}) is the original file-count framing, superseded by the domain framing for cross-domain
+> generalization.
 - **Plan:** train/eval Level-0/Level-1 as a function of **#base training datasets at N ∈ {4, 8, 9}**
   (9 = the genuine maximum after dropping the 3 contaminants), with **many seeds** (leave-datasets-out is
   high-variance at small catalog), on a fixed held-out test set. The curve **continues to 12, 16, 32 … as
