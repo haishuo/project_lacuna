@@ -23,6 +23,26 @@ Success (pre-registered, held-out leave-datasets-out on the **9 genuine** survey
 Stage 1 is **not** judged on beating raw-ECDF discrimination (non-goal, design-spec §8). It is judged on
 *reproducing the signal in-pipeline* + *governance discipline*.
 
+## 0.5 Framing updates folded (2026-06-06 — master §12; `MASTER-lacuna-survey-architecture.md` governs)
+
+- **Two-stage / MCAR-gate.** Inference order is **Stage A (MCAR-vs-not gate, identifiable) → Stage B
+  (δ-prior)**. **Stage-1's BUILD remains the Stage-B φ-spine + δ-prior head** (the architecture-validation
+  core, reproducing Stage 0); the **MCAR-departure gate is promoted from a Level-1 Stage-2 auxiliary to
+  Stage A** and is built as its own stage. **Architectural order (A→B) ≠ build order (φ-spine first).** The
+  overall stage ordering in the Level-1 design spec §7 is superseded by master §5.
+- **Per-column output space = {MCAR-departure, δ-prior, detectability, UNKNOWN}**, where **"unknown" =
+  off-manifold / abstain** — a first-class label, distinct from in-manifold-flat. Stage-1 emits the δ-prior
+  and reserves the other slots (detectability + UNKNOWN build in Stages 2–3).
+- **Idiom rename `lod_top_coding → top_coding`** (survey-realistic top-coding, **not** assay-LOD). The
+  binary δ0-vs-δ2.5 reproduction slice is the **top-coding** contrast. Code symbols `lod_*`/`make_lod_*`
+  are renamed to `top_coding_*` as a defined first build step.
+- **Survey-idiom vocabulary only** in `named_prior.idiom_vocabulary` (item nonresponse, skip logic,
+  top-coding/bracketing, social-desirability self-censoring, attrition, DK-vs-refuse).
+- **Detectability is comparison-class-relative** (informativeness vs the named class — profiled-MAR-on-
+  predictors / `P_prior` support), reported with the class named (Stage 2).
+- **Headline measurement = the "lab-coat fraction"** (data-alone Level-1 δ recovery vs the metadata
+  channel, oracle-gated); own-value-flat is a *measurement*, not a failure.
+
 ## 1. Scope (and exclusions)
 
 **In scope:** column-major batching · φ distribution encoder · δ-prior head · named-prior manifest block ·
@@ -60,7 +80,7 @@ lacking it. Schema:
 named_prior:
   dataset_catalog: [ {name, n, d, content_hash} ]      # the GENUINE survey base tables used (role B)
   contaminants_excluded: ["survey_cars93","survey_computers","survey_survey"]
-  idiom_vocabulary: [ {family, params} ]               # e.g. {own_value_self_censoring}, {lod_top_coding, tau}
+  idiom_vocabulary: [ {family, params} ]               # SURVEY idioms only; e.g. {own_value_self_censoring}, {top_coding, tau}
   delta_grid: [...]
   delta_grid_weights: [...]                            # the δ sampling distribution
   prior_marginal: { bin_index: prob }                  # = the δ-grid marginal over bins (the flat-output target)
@@ -100,7 +120,7 @@ question is "is there a credible positive scaling trend?", not "is this deployab
 - Train/eval **Level-0/φ-spine** at **N ∈ {4, 8, 9}** genuine training datasets (9 = max post-drop;
   reaching N>9 *requires* acquisition — which the curve exists to justify), **many seeds**, fixed held-out
   test set.
-- **Report (per N, with seed/split variance):** held-out **δ-prior calibration/coverage** + **LOD
+- **Report (per N, with seed/split variance):** held-out **δ-prior calibration/coverage** + **top-coding
   sharpness** (binary OOF AUC/RPS) + **own-value prior-dominated behavior** + **variance**. *(Detectability-
   vs-oracle and OOD/abstention curves are added when Stages 2–3 land; Stage-1 reports the available
   subset.)*

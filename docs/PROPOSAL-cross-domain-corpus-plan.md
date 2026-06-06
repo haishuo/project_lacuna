@@ -5,6 +5,18 @@ the PI's 5-point sequence (2026-06-06) after `DATA-ROLE-B-PROJECTION-feasibility
 role-A/role-B discipline (design-spec §9.0). Reframes the learning curve from **file-count** to
 **genuinely-distinct domains** (PI: correlated slices are not independent evidence).*
 
+## 0.5 Framing updates folded (2026-06-06 — `MASTER-lacuna-survey-architecture.md` §12 governs)
+
+- **`lod_top_coding → top_coding`** (survey-realistic top-coding, **not** assay-LOD). Idiom assignment:
+  **income = top-coding**; **weight = social-desirability self-censoring** (smooth).
+- **NHANES projection = questionnaire + demographic items only; EXCLUDE lab/exam assays** (instrument-LOD
+  is out of Lacuna-Survey scope).
+- **Survey-idiom vocabulary only** (item nonresponse, skip logic, top-coding/bracketing, social-
+  desirability, attrition, DK-vs-refuse).
+- The cross-domain curve reports **detectability comparison-class-relative** (named class) and the
+  **"lab-coat fraction"** (data-alone vs metadata, oracle-gated) as headline; **UNKNOWN** (off-manifold)
+  is a first-class label; the **MCAR-vs-not gate (Stage A)** precedes the δ-prior (master §5).
+
 ## 1. Confirmed sequence (plan of record)
 
 1. **Build the Level-1 φ-spine** (Stage-1 spec; still pending its approval + 4 sub-decisions).
@@ -47,7 +59,7 @@ flag travels into the named-prior manifest so any result is auditable for this b
 |---|---|---|---|
 | `nhanes_demographics` | demographics | NHANES-2017–18 | ~3 continuous targets, ~126k rows |
 | `nhanes_inq_income` | health/income | NHANES-2017–18 | income → ideal for **top-coding** idiom |
-| `nhanes_whq_weight` | health | NHANES-2017–18 | weight → ideal for **LOD** idiom |
+| `nhanes_whq_weight` | health | NHANES-2017–18 | weight → ideal for **social-desirability self-censoring** |
 | `nhanes_dpq_phq9` | health | NHANES-2017–18 | depression (ordinal-heavy; predictors) |
 | `ess_pooled` | attitudes | ESS-R11 | pooled (1 world); ~38 continuous targets post-recode |
 | *(PISA 2018/2022)* | education | PISA | **deferred** — multi-GB SAS extraction |
@@ -68,7 +80,7 @@ domain/source are **one block**, not independent points.
      on the *other* domains? (the scaling slope — the grant result).
   2. **Leave-one-domain-out transfer:** train on all-but-one domain, test on the held-out domain — the
      §5 out-of-family transportability number (the headline calibration metric).
-- **Report per domain-set, with variance:** δ-prior calibration/coverage; LOD/top-coding sharpness;
+- **Report per domain-set, with variance:** δ-prior calibration/coverage; top-coding sharpness;
   own-value prior-dominated behavior; seed/split variance. *(Detectability-vs-oracle and OOD curves arrive
   with Stages 2–3.)*
 - **Interpretation discipline:** the slope is read over **domains**; a rise from adding correlated slices
@@ -85,7 +97,7 @@ domain/source are **one block**, not independent points.
 
 ## 5. Open decisions for the PI
 
-1. **NHANES modules to project** — proposal: `demographics`, `inq_income` (top-coding), `whq_weight` (LOD)
+1. **NHANES modules to project** — proposal: `demographics`, `inq_income` (top-coding), `whq_weight` (social-desirability)
    first (continuous targets); `dpq_phq9`/`duq_drug` as predictor-rich health context. PISA **deferred**.
 2. **ESS unit** — **pooled (1 world)** [proposal, avoids country-slice inflation] vs a few large single-
    country tables (a correlated block). 

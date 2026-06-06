@@ -28,8 +28,10 @@ the scaffold is **kept**.
 > abstention.**
 
 Three layers (`ARCHITECTURE-OBJECT-revised.md`):
-- **Layer 1 — the missingness CONSEQUENCE** (estimable): the distributional distortion of the observed
-  data relative to a plausible reference. The network's real job; a two-distribution comparison, *not*
+- **Layer 1 — the missingness CONSEQUENCE** (estimable): the **observable footprint in the observed-data
+  law** — *optionally* parameterized as a deviation from a **named prior reference** (the reference is
+  **prior-bearing, never directly identified**; the *identified* object is the observed-data law itself,
+  and the reference/deviation is optional internal structure). The network's real job; *not*
   classification.
 - **Layer 2 — the identification BRIDGE** (consequence→δ): many-to-one (Molenberghs); **carried by the
   manifold prior**, not learned.
@@ -161,7 +163,8 @@ that would justify a *neural* architecture over a one-line raw-ECDF baseline.
 
 1. **Build the Level-1 φ-spine** (🟡 — needs Stage-1 spec + 4 sub-decisions).
 2. **Project on-disk role-A → role-B bases** (🟡 — needs the role-B projection spec): NHANES demographics +
-   income (top-coding) + weight (top-coding/LOD-as-top-coding) + ESS pooled; PISA ⏸️.
+   income (**top-coding**) + weight (**social-desirability self-censoring**) + ESS pooled (attitudes);
+   **NHANES questionnaire + demographic items only — no lab/exam assays**; PISA ⏸️.
 3. **Run the cross-domain learning curve** (needs 1 + 2).
 4. **Decide acquisition from the slope.**
 5. **Synthetic generation (⏸️) only then.**
@@ -185,15 +188,21 @@ mechanism objective · no assay-LOD (instrument scope) · no claim to beat non-i
 unqualified "non-identifiable" (name the comparison class) · count **domains/independent worlds**, not
 files.
 
-## 12. Open decisions (pending PI) 🟡
+## 12. Decisions & open items
 
-- **Stage-1 sub-decisions:** `e_col`=32; full 7-bin grid + binary δ0-vs-δ2.5 slice; 5/2/2 split (keep
-  cps1985/workinghours test); new `level1_train.py`. *(`PROPOSAL-Stage1-implementation-spec.md`)*
-- **Role-B projection / cross-domain:** NHANES modules; ESS pooled-vs-country; leave-one-domain-out; flagged
-  separate registry; sentinel/τ params; parallel sequencing. *(`PROPOSAL-cross-domain-corpus-plan.md`)*
-- **Framing updates to fold into the specs on approval:** two-stage MCAR-gate (elevate MCAR-departure to
-  Stage A); "unknown" as a first-class label; `lod_top_coding → top_coding` rename + NHANES-questionnaire-
-  only; detectability defined comparison-class-relative; "lab-coat fraction" as a headline aim.
+- **Framing updates — ✅ FOLDED (2026-06-06)** into the Stage-1 + cross-domain specs: two-stage MCAR-gate
+  (MCAR-departure elevated to Stage A); "unknown" as a first-class off-manifold label; `lod_top_coding →
+  top_coding` rename + NHANES-questionnaire/demographic-only; survey-idiom vocabulary only; detectability
+  defined comparison-class-relative; "lab-coat fraction" as a headline measurement.
+- **Stage-1 sub-decisions — ✅ PI defaults confirmed:** `e_col`=32; full 7-bin grid + binary δ0-vs-δ2.5
+  evaluation slice; split = keep `cps1985`/`workinghours` as continuity test **unless the block-aware
+  domain split supersedes it** (§8 cross-domain); new `level1_train.py`.
+  *(`PROPOSAL-Stage1-implementation-spec.md`)*
+- **Role-B projection / cross-domain — 🟡 pending:** NHANES modules; ESS pooled-vs-country; leave-one-
+  domain-out; flagged separate registry; sentinel/τ params; parallel sequencing.
+  *(`PROPOSAL-cross-domain-corpus-plan.md`)*
+- **🟡 Awaiting PI go on the concrete implementation starts** (then code): Stage-1 Level-1 φ-spine; role-B
+  projection of NHANES/ESS; cross-domain learning curve.
 
 ## 13. Document index (supporting detail)
 
