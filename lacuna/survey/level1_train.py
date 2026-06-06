@@ -49,9 +49,9 @@ class Level1Config:
     max_rows: int = 384
     max_cols: int = 32  # unused by φ (column-major); kept for source compatibility
     batch_size: int = 16
-    train_batches_per_epoch: int = 30
-    max_epochs: int = 20
-    patience: int = 5
+    train_size: int = 600  # FIXED pre-generated training corpus, re-used across epochs (see loop note)
+    max_epochs: int = 40
+    patience: int = 6
     lr: float = 2e-3
     grad_clip: float = 1.0
     val_size: int = 120
@@ -150,16 +150,21 @@ def train_level1(
     val_ex = _make_examples(val_source, cfg, cfg.val_size, rng.spawn(), stratify=True)
     test_ex = _make_examples(test_source, cfg, cfg.test_size, rng.spawn(), stratify=True)
 
+    # FIXED pre-generated training corpus, re-used across epochs (NOT fresh-every-batch: the online
+    # regime underfits the sharp footprint signal — top_coding collapses to own_value; revisiting a
+    # fixed corpus recovers the Stage-0 spectrum, Stage-1 M1 diagnosis).
+    train_ex = _make_examples(train_source, cfg, cfg.train_size, rng.spawn(), stratify=True)
+    shuffle_gen = torch.Generator().manual_seed(int(rng.seed))
     best_val, best_state, since, epochs_run = math.inf, None, 0, 0
-    train_rng = rng.spawn()
     for epoch in range(cfg.max_epochs):
         epochs_run = epoch + 1
         model.train()
         # NON-DETERMINISTIC: train-time Dropout draws from torch's global RNG (nn.Dropout takes no
-        # generator). The injected-RNG contract covers init, eval-forward, and seeded data/leakage.
-        for _ in range(cfg.train_batches_per_epoch):
-            ex = _make_examples(train_source, cfg, cfg.batch_size, train_rng.spawn())
-            cb = collate_columns(ex, max_rows=cfg.max_rows)
+        # generator). The injected-RNG contract covers init, eval-forward, seeded data/leakage, and
+        # the epoch shuffle order (shuffle_gen).
+        perm = torch.randperm(len(train_ex), generator=shuffle_gen).tolist()
+        for s in range(0, len(train_ex), cfg.batch_size):
+            cb = collate_columns([train_ex[i] for i in perm[s:s + cfg.batch_size]], max_rows=cfg.max_rows)
             logits = model(cb)
             loss = rps_loss(logits, _labels(cb, scheme).to(logits.device))
             opt.zero_grad(); loss.backward()
