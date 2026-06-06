@@ -86,4 +86,33 @@ Options, ranked:
 4. **Accept** the φ-spine result as the architecture validation and write up the data-bottleneck finding
    as the scaling result (honest negative/inconclusive at current scale).
 
+## 6. UPDATE (2026-06-06) — larger NHANES bases moved the curve (weakly)
+
+PI pivoted to data scale: codebook-curated FULL NHANES weight+poverty modules (`build_nhanes_role_b.py`).
+**Bases built + passed §9 quality checks** (the spike gate dropped `WHD120` @0.0039, protecting the prior):
+- `rb_nhanes_weight` **3,833 rows** [preferred], 4/5 self-reported-weight targets pass (social-desirability).
+- `rb_nhanes_poverty` **4,774 rows** [preferred], `INDFMPIR` poverty 0–5 pass (top-coding). ~8–10× the extracts.
+
+**Scaled cross-domain curve** (top-coding OOF AUC, labor test, 3 seeds, max_rows=384):
+
+| | small bases (§3) | **large NHANES bases** |
+|---|---|---|
+| 1d labor | — | 0.608 ± 0.009 |
+| 3d +psych+health | 0.627 | 0.625 ± 0.023 |
+| 5d +NHANES (big) | 0.634 | **0.644 ± 0.033** |
+| **slope / domain** | **+0.0017** | **+0.0091** |
+| edge Δ | +0.009 | **+0.036** |
+| add-NHANES Δ (P2→P3) | — | **+0.019** |
+
+**Honest reading:** with *larger* bases the slope **quadrupled** (+0.0017 → +0.0091) and the edge Δ
+**tripled** (+0.009 → +0.036). So the earlier flat curve was **partly a small-base artifact** — bigger,
+cleaner domains *do* move it. **But the effect is modest and within seed noise** (±0.02–0.03/point; the
++0.019 add-NHANES Δ is borderline). This is a **credible WEAK positive trend, not decisive proof.**
+
+**Decision bearing (PI step 5):** the trend strengthened with base size ⇒ the corpus is **data-limited**
+and more/larger domains help ⇒ **external acquisition is justified to get a DECISIVE curve** (grant
+result, weakly supported). Before/with acquisition, two cheap ways to tighten the estimate: **more seeds**
+(shrink ±0.03) and **leave-one-domain-out** (a less-noisy probe than the fixed labor test). The φ-spine
+remains validated; the bottleneck remains data, now with a measured (weak-positive) scaling signal.
+
 No further runs without PI direction.
