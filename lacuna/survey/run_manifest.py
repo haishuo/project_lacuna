@@ -99,8 +99,15 @@ def build_manifest(
     wall_clock_seconds: float,
     generator_family: str = GENERATOR_FAMILY,
     num_bins: int = NUM_BINS,
+    model_path: str = MODEL_PATH,
+    named_prior: Dict = None,
 ) -> Dict:
-    """Assemble a δ-prior run manifest. Does not write; pair with validate + write."""
+    """Assemble a δ-prior run manifest. Does not write; pair with validate + write.
+
+    `model_path` lets a non-P2.2 model (e.g. the Level-1 φ-spine) record its own path. `named_prior`
+    (Level-1, MASTER §7) records the explicit semi-synthetic training measure P_prior; validate it
+    separately with `validate_named_prior`.
+    """
     if kind not in _VALID_KINDS:
         raise ValueError(f"kind must be one of {_VALID_KINDS}, got {kind!r}")
     if generator_family not in _FAMILY_PROVENANCE:
@@ -108,6 +115,7 @@ def build_manifest(
                          f"known: {sorted(_FAMILY_PROVENANCE)}")
     prov = _FAMILY_PROVENANCE[generator_family]
     return {
+        "named_prior": named_prior,
         "run_id": run_id,
         "git_commit": git_commit,
         "timestamp": timestamp,
@@ -122,7 +130,7 @@ def build_manifest(
         "target_rate": target_rate,
         "seed": seed,
         "answer_sheet_schema_version": SCHEMA_VERSION,
-        "model_path": MODEL_PATH,
+        "model_path": model_path,
         "model_arch": model_arch,
         "trainable_param_count": trainable_param_count,
         "checkpoint_loaded": checkpoint_loaded,
@@ -171,6 +179,32 @@ def validate_manifest(manifest: Dict) -> None:
                 "kind='main' with leakage_pass=False is invalid: a rate cue means the δ-prior "
                 "may be reading δ off the missing rate (audit §10) — result not interpretable"
             )
+
+
+_NAMED_PRIOR_KEYS = (
+    "dataset_catalog", "contaminants_excluded", "idiom_vocabulary", "delta_grid",
+    "delta_grid_weights", "prior_marginal", "rate_regime", "phi_config", "data_role",
+)
+
+
+def validate_named_prior(named_prior: Dict) -> None:
+    """Fail loud unless the Level-1 named-prior block is complete and role-B (MASTER §7).
+
+    The dataset catalog IS part of the scientific prior, so a Level-1 result is uninterpretable
+    without an explicit, auditable P_prior. Supervised data must be role B (never natural missingness).
+    """
+    if not isinstance(named_prior, dict):
+        raise ValueError("named_prior must be a dict for a Level-1 run")
+    missing = [k for k in _NAMED_PRIOR_KEYS if k not in named_prior]
+    if missing:
+        raise ValueError(f"named_prior missing required key(s): {missing}")
+    if named_prior["data_role"] != "B_complete_projection":
+        raise ValueError(
+            f"named_prior.data_role must be 'B_complete_projection' (never train on natural "
+            f"missingness, MASTER §7), got {named_prior['data_role']!r}"
+        )
+    if not isinstance(named_prior["idiom_vocabulary"], list) or not named_prior["idiom_vocabulary"]:
+        raise ValueError("named_prior.idiom_vocabulary must be a non-empty list of survey idioms")
 
 
 def write_manifest(path: Path, manifest: Dict) -> Path:
