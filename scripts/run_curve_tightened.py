@@ -77,6 +77,7 @@ def main():
     labor_core = L("survey_cps1988", "survey_psid1976", "survey_psid7682")
     bfi, yrbss = L("survey_bfi"), L("survey_yrbss")
     nhanes = [_rb("rb_nhanes_weight"), _rb("rb_nhanes_poverty")]
+    scf_wealth = [_rb("rb_scf2022_wealth")]   # NEW domain `wealth` (SCF 2022, role-B, preferred ~4595)
     labor_test = L("survey_cps1985", "survey_workinghours")
 
     print("=" * 96); print("A) MULTI-SEED cumulative curve (8 seeds; labor test)"); print("=" * 96)
@@ -97,7 +98,10 @@ def main():
     print("=" * 96)
     loo = [("NHANES(weight+poverty)", nhanes, labor_core, labor_core + bfi + yrbss),
            ("health(yrbss)", yrbss, labor_core, labor_core + bfi + nhanes),
-           ("psychology(bfi)", bfi, labor_core, labor_core + yrbss + nhanes)]
+           ("psychology(bfi)", bfi, labor_core, labor_core + yrbss + nhanes),
+           # NEW: the decisive held-out WEALTH test (large, continuous targets; plan §9). DIVERSE
+           # excludes the held-out wealth domain; SCF is one block ⇒ never in train when held out.
+           ("wealth(scf)", scf_wealth, labor_core, labor_core + bfi + yrbss + nhanes)]
     for dname, test_pool, narrow, diverse in loo:
         an = _train_eval(narrow, test_pool, LOO_SEEDS, f"loo-n-{dname[:4]}", git)
         ad = _train_eval(diverse, test_pool, LOO_SEEDS, f"loo-d-{dname[:4]}", git)

@@ -42,6 +42,23 @@ def test_domain_of():
     assert SC.domain_of("survey_bfi") == "psychology"
 
 
+def test_role_b_registry_wealth_and_blocks():
+    # SCF wealth base registered as a new domain in its own block.
+    assert SC.role_b_domain_of("rb_scf2022_wealth") == "wealth"
+    assert SC.role_b_block_of("rb_scf2022_wealth") == "scf"
+    # NHANES weight+poverty share ONE block (same respondents ⇒ never split across train/test).
+    assert SC.role_b_block_of("rb_nhanes_weight") == SC.role_b_block_of("rb_nhanes_poverty")
+    # every registered base has a (domain, block) pair.
+    for name, (domain, block) in SC.ROLE_B_BASES.items():
+        assert domain and block
+
+
+def test_role_b_registry_guards_unknown():
+    for bad_lookup in (SC.role_b_domain_of, SC.role_b_block_of):
+        with pytest.raises(ValueError):
+            bad_lookup("rb_not_a_base")
+
+
 # ---------- column_batching ----------
 
 def _examples(n=4, family="lod", max_rows=128, seed=7):

@@ -41,6 +41,35 @@ DOMAIN = {
 # share a block — added by the role-B projection). Block-aware splits keep a block together.
 SOURCE_BLOCK = {name: name for name in GENUINE_SURVEYS}
 
+# --- Role-B projected bases (the corpus-ledger registry; ACQUISITION-FRAMEWORK §2) ----------------
+# Bases produced by complete-case projection of a role-A source (build_*_role_b.py). Each maps to its
+# (domain, block_id). Bases sharing respondents/instrument share a block_id and must NEVER split
+# across train/test (block-aware leave-one-domain-out; framework §1). This is the in-code ledger the
+# cross-domain curve wires from — distinct from GENUINE_SURVEYS (native survey_* tables loaded via the
+# catalog); role-B bases are read from /mnt/data/lacuna/role_b/<name>.csv by the curve runner.
+ROLE_B_BASES = {
+    "rb_nhanes_weight":       ("health", "NHANES-2017-18"),
+    "rb_nhanes_poverty":      ("demographics", "NHANES-2017-18"),
+    "rb_nhanes_income":       ("income", "NHANES-2017-18"),
+    "rb_nhanes_demographics": ("demographics", "NHANES-2017-18"),
+    "rb_gssvocab":            ("social", "GSS"),
+    "rb_scf2022_wealth":      ("wealth", "scf"),
+}
+
+
+def role_b_domain_of(name: str) -> str:
+    """Domain tag for a registered role-B base (fail loud if unknown)."""
+    if name not in ROLE_B_BASES:
+        raise ValueError(f"{name!r} is not a registered role-B base; known: {tuple(ROLE_B_BASES)}")
+    return ROLE_B_BASES[name][0]
+
+
+def role_b_block_of(name: str) -> str:
+    """Block id for a registered role-B base (same block ⇒ never split across train/test)."""
+    if name not in ROLE_B_BASES:
+        raise ValueError(f"{name!r} is not a registered role-B base; known: {tuple(ROLE_B_BASES)}")
+    return ROLE_B_BASES[name][1]
+
 
 def assert_genuine(name: str) -> str:
     """Return `name` if it is a genuine survey; fail loud if it is a known contaminant or unknown."""
