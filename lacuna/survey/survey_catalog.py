@@ -53,7 +53,8 @@ ROLE_B_BASES = {
     "rb_nhanes_income":       ("income", "NHANES-2017-18"),
     "rb_nhanes_demographics": ("demographics", "NHANES-2017-18"),
     "rb_gssvocab":            ("social", "GSS"),
-    "rb_scf2022_wealth":      ("wealth", "scf"),
+    "rb_scf2022_wealth_cont": ("wealth", "scf"),   # CANONICAL continuous-only wealth base (held-out test)
+    "rb_scf2022_wealth":      ("wealth", "scf"),   # as-built variant (documents the dilution confound)
 }
 
 

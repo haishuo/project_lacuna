@@ -161,3 +161,65 @@ remains validated; the bottleneck remains data; the scaling signal is now real o
 domain-specific.
 
 No further runs without PI direction.
+
+## 8. UPDATE (2026-06-07) — SCF 2022 wealth domain ingested; held-out wealth test is FLAT (honest negative)
+
+PI approved acquiring the **Survey of Consumer Finances 2022 Summary Extract** as a new continuous-target
+`wealth` domain — the rubric's top-of-both-axes pick and the *decisive* held-out-domain test the noisy
+NHANES result could not settle (`PROPOSAL-SCF-wealth-acquisition-plan.md`). Public domain, no registration.
+
+**Ingestion (strictly per the acquisition framework; `scripts/build_scf_role_b.py`).** `rscfp2022.dta`
+→ **implicate 1 only** (`y1 % 10 == 1`; the 5 implicates are imputed copies of the SAME 4,595 families,
+not 5× data — slice-inflation trap). **Role-B-only** (the public file is multiply imputed ⇒ no
+natural-missingness role-A archive; documented exception). Targets = **networth, income, asset, fin,
+nfin** (net worth + income + major asset aggregates); no sentinel recode (imputed dollars, no refuse
+codes); **plausible range admits NEGATIVE net worth** (6.9% negative). All **5/5 targets pass** the
+gates (spike 0.000, range-ok, card 1159–4250); **4,595 rows, preferred tier** (~8× any prior role-B
+base). Registered in the `survey_catalog.ROLE_B_BASES` ledger (`wealth` domain, block `scf`).
+
+**Ingestion finding — the uniform-target-sampling confound.** The frozen pipeline
+(`select_target_predictor`) samples the censored target **uniformly over all non-constant columns** — no
+cardinality filter. So **categorical/ordinal predictors get drawn as "top-coding targets,"** which is
+degenerate for a continuous idiom. The as-built 13-column base (8 categorical predictors,
+`continuous_col_fraction = 0.46`) therefore sits **below chance** on the held-out wealth test
+(narrow **0.441 ± 0.005**) — a **dilution artifact, not anti-transfer**. Restricting the base to
+**continuous columns only** (5 wealth aggregates + continuous `age`, `cont_frac = 1.0`) removes the
+confound. Two bases are emitted: `rb_scf2022_wealth_cont` (**canonical**, used for the test) and
+`rb_scf2022_wealth` (retained to *document* the confound). *(NHANES bases carry ~22% categorical columns
+— a milder version of the same effect — left unchanged for reproducibility; SCF's 62% made it acute.)*
+
+**Decisive held-out wealth result (block-aware leave-one-domain-out, continuous-only base):**
+
+| seeds | narrow (labor) | diverse (+psych+health+NHANES) | Δ | verdict |
+|---|---|---|---|---|
+| 5 (canonical run) | 0.677 ± 0.012 | 0.571 ± 0.156 | **−0.107** | ~flat (huge variance) |
+| 10 (tightened) | 0.655 (SE 0.026) | 0.602 (SE 0.041) | **−0.053** (2·SE 0.098) | **~flat / inconclusive** |
+
+Per-seed (10-seed): narrow `[.684 .675 .656 .690 .681 .679 .426 .668 .728 .659]` (one collapse);
+diverse `[.341 .680 .425 .718 .689 .682 .504 .641 .693 .647]` (three collapses).
+
+**Honest reading:**
+1. **Wealth top-coding IS detectable** from the existing corpus — narrow ≈ **0.66**, on par with the
+   bfi/yrbss narrow baselines (0.665 / 0.642). The φ-spine reads SCF's heavy-tailed continuous targets
+   fine; the below-chance number was *purely* the categorical-dilution artifact.
+2. **Domain diversity does NOT help transfer to wealth** (Δ = −0.05 to −0.11, within 2·SE ⇒
+   inconclusive/flat), and the diverse pool is **less stable** (3 collapsed seeds vs 1). This is the
+   **opposite** of the significant gains on psychology (bfi +0.064) and health (yrbss +0.037).
+3. **The pattern across held-out domains:** the diversity-helps-transfer effect appears on the
+   **Likert/ordinal** held-out domains (bfi, yrbss — significant) but **not** on the **continuous,
+   idiom-relevant** ones — **NHANES** weight/poverty (+0.045, noisy, not sig) and now **SCF wealth**
+   (flat-to-negative). The two domains we most care about for the top-coding/self-censoring vocabulary
+   are exactly where adding diversity fails to firm transfer.
+
+**Decision bearing (this complicates §7's "acquisition justified"):** the decisive continuous-target
+domain did **not** reproduce the diversity-helps-transfer effect. So "acquire more large continuous-target
+domains to firm the transfer" is **not** supported by this test — the gain so far is concentrated on
+ordinal/Likert domains, a possibly different (easier) transfer regime. **Caveats:** (a) the diverse
+instability (seed collapses on SCF's extreme dollar scale) may be an optimization-stability issue with a
+heterogeneous training pool on heavy-tailed X rather than a fundamental transfer failure — but no tuning
+was done (architecture/HP frozen), and the central tendency is clearly not a positive gain; (b) one
+held-out continuous domain (wealth) at 10 seeds is not the last word — but it agrees in sign with the
+noisy NHANES continuous result. **φ-spine still validated** (narrow 0.66 detectable); the new fact is
+that **out-of-family transfer from diversity does not (yet) extend to held-out continuous-target
+domains.** **238 survey tests green** (incl. the new role-B registry tests). **No further runs / no acquisition
+without PI direction** — this result should reset the acquisition expectation before any download.

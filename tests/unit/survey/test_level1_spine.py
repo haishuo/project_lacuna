@@ -43,9 +43,10 @@ def test_domain_of():
 
 
 def test_role_b_registry_wealth_and_blocks():
-    # SCF wealth base registered as a new domain in its own block.
-    assert SC.role_b_domain_of("rb_scf2022_wealth") == "wealth"
-    assert SC.role_b_block_of("rb_scf2022_wealth") == "scf"
+    # SCF wealth bases (canonical continuous-only + as-built) registered as `wealth` in block `scf`.
+    for base in ("rb_scf2022_wealth_cont", "rb_scf2022_wealth"):
+        assert SC.role_b_domain_of(base) == "wealth"
+        assert SC.role_b_block_of(base) == "scf"
     # NHANES weight+poverty share ONE block (same respondents ⇒ never split across train/test).
     assert SC.role_b_block_of("rb_nhanes_weight") == SC.role_b_block_of("rb_nhanes_poverty")
     # every registered base has a (domain, block) pair.

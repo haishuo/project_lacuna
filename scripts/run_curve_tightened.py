@@ -77,7 +77,10 @@ def main():
     labor_core = L("survey_cps1988", "survey_psid1976", "survey_psid7682")
     bfi, yrbss = L("survey_bfi"), L("survey_yrbss")
     nhanes = [_rb("rb_nhanes_weight"), _rb("rb_nhanes_poverty")]
-    scf_wealth = [_rb("rb_scf2022_wealth")]   # NEW domain `wealth` (SCF 2022, role-B, preferred ~4595)
+    # NEW domain `wealth` (SCF 2022, role-B, preferred ~4595). CANONICAL = continuous-only base
+    # (every uniformly-sampled top-coding target is then a valid continuous target; the as-built
+    # 13-col base sits below chance purely from categorical-target dilution — see findings §8).
+    scf_wealth = [_rb("rb_scf2022_wealth_cont")]
     labor_test = L("survey_cps1985", "survey_workinghours")
 
     print("=" * 96); print("A) MULTI-SEED cumulative curve (8 seeds; labor test)"); print("=" * 96)
