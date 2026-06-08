@@ -65,9 +65,12 @@ def main():
         return float(np.mean([min(np.linalg.norm(zc[c] - zc[t]) for t in pool) for c in Dcols]))
 
     plan = {
+        # diverse-but-mismatched = M + wealth ONLY (spec §3 note): for NHANES the ordinal domains
+        # partially cover the moderate-card columns, so the clean "add a regime-FAR domain" arm is
+        # matched + heavy-tailed wealth — NOT matched + ordinal.
         "nhanes": [("matched_labor", ["labor"]), ("mismatch_heavytail_wealth", ["wealth"]),
                    ("mismatch_ordinal_bfi_yrbss", ["bfi", "yrbss"]),
-                   ("diverse_mismatched", ["labor", "wealth", "bfi", "yrbss"])],
+                   ("diverse_mismatched_M_plus_wealth", ["labor", "wealth"])],
         "hmda": [("matched_labor_nhanes", ["labor", "nhanes"]), ("mismatch_heavytail_wealth", ["wealth"]),
                  ("mismatch_ordinal_bfi_yrbss", ["bfi", "yrbss"])],
         "wealth": [("control_all_moderate", ["labor", "nhanes", "hmda"])],
