@@ -1,0 +1,274 @@
+{
+  "rule": "theta = 95th pct of within-pool leave-one-column-out self-coverage",
+  "primary_keys": [
+    "l_skew",
+    "l_kurt",
+    "log10_card",
+    "has_neg"
+  ],
+  "standardize_mu": [
+    0.21221548740454432,
+    0.19360452891017174,
+    2.425008923448683,
+    0.075
+  ],
+  "standardize_sd": [
+    0.29834990000358064,
+    0.24339036962754979,
+    0.6683978863834346,
+    0.26339134382131846
+  ],
+  "pools": {
+    "pool_nhanes": {
+      "datasets": [
+        "survey_cps1985",
+        "survey_cps1988",
+        "survey_psid1976",
+        "survey_psid7682",
+        "survey_workinghours"
+      ],
+      "n_columns": 21,
+      "theta_gate": 1.8072,
+      "self_coverage": {
+        "survey_cps1985.age": 0.1272,
+        "survey_cps1985.experience": 0.0694,
+        "survey_cps1985.wage": 0.5058,
+        "survey_cps1988.experience": 1.8072,
+        "survey_cps1988.wage": 1.1555,
+        "survey_psid1976.age": 0.1963,
+        "survey_psid1976.experience": 0.1586,
+        "survey_psid1976.fincome": 0.1262,
+        "survey_psid1976.hage": 0.1963,
+        "survey_psid1976.hhours": 0.4372,
+        "survey_psid1976.hours": 0.5723,
+        "survey_psid1976.hwage": 0.1262,
+        "survey_psid1976.repwage": 0.5723,
+        "survey_psid1976.wage": 0.5058,
+        "survey_psid7682.experience": 0.2562,
+        "survey_psid7682.id": 0.5491,
+        "survey_psid7682.wage": 0.2653,
+        "survey_psid7682.weeks": 1.7363,
+        "survey_workinghours.age": 0.0694,
+        "survey_workinghours.hours": 0.5491,
+        "survey_workinghours.income": 1.8072
+      }
+    },
+    "pool_hmda": {
+      "datasets": [
+        "survey_cps1985",
+        "survey_cps1988",
+        "survey_psid1976",
+        "survey_psid7682",
+        "survey_workinghours",
+        "rb_nhanes_weight",
+        "rb_nhanes_poverty",
+        "rb_nhanes_income"
+      ],
+      "n_columns": 31,
+      "theta_gate": 1.7718,
+      "self_coverage": {
+        "rb_nhanes_income.INDFMMPI": 0.2807,
+        "rb_nhanes_income.RIDAGEYR": 0.0215,
+        "rb_nhanes_poverty.INDFMPIR": 0.391,
+        "rb_nhanes_poverty.RIDAGEYR": 0.0215,
+        "rb_nhanes_weight.RIDAGEYR": 0.2117,
+        "rb_nhanes_weight.WHD010": 0.2749,
+        "rb_nhanes_weight.WHD020": 0.0329,
+        "rb_nhanes_weight.WHD050": 0.0329,
+        "rb_nhanes_weight.WHD110": 0.1074,
+        "rb_nhanes_weight.WHD140": 0.091,
+        "survey_cps1985.age": 0.1272,
+        "survey_cps1985.experience": 0.0694,
+        "survey_cps1985.wage": 0.2985,
+        "survey_cps1988.experience": 1.8072,
+        "survey_cps1988.wage": 1.1555,
+        "survey_psid1976.age": 0.1963,
+        "survey_psid1976.experience": 0.1586,
+        "survey_psid1976.fincome": 0.1262,
+        "survey_psid1976.hage": 0.1963,
+        "survey_psid1976.hhours": 0.4372,
+        "survey_psid1976.hours": 0.5723,
+        "survey_psid1976.hwage": 0.1262,
+        "survey_psid1976.repwage": 0.5723,
+        "survey_psid1976.wage": 0.5058,
+        "survey_psid7682.experience": 0.2562,
+        "survey_psid7682.id": 0.391,
+        "survey_psid7682.wage": 0.2653,
+        "survey_psid7682.weeks": 1.7363,
+        "survey_workinghours.age": 0.0694,
+        "survey_workinghours.hours": 0.5491,
+        "survey_workinghours.income": 1.8072
+      }
+    }
+  },
+  "coverage": {
+    "pool_nhanes": {
+      "nhanes": {
+        "rb_nhanes_income.INDFMMPI": {
+          "cov": 0.3008,
+          "gated_out": false
+        },
+        "rb_nhanes_income.RIDAGEYR": {
+          "cov": 0.4226,
+          "gated_out": false
+        },
+        "rb_nhanes_poverty.INDFMPIR": {
+          "cov": 0.391,
+          "gated_out": false
+        },
+        "rb_nhanes_poverty.RIDAGEYR": {
+          "cov": 0.4373,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.RIDAGEYR": {
+          "cov": 0.2517,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD010": {
+          "cov": 0.2749,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD020": {
+          "cov": 0.36,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD050": {
+          "cov": 0.3284,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD110": {
+          "cov": 0.2985,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD140": {
+          "cov": 0.3168,
+          "gated_out": false
+        }
+      },
+      "hmda": {
+        "survey_hmda.hirat": {
+          "cov": 0.4695,
+          "gated_out": false
+        },
+        "survey_hmda.lvrat": {
+          "cov": 1.1409,
+          "gated_out": false
+        },
+        "survey_hmda.pirat": {
+          "cov": 0.3554,
+          "gated_out": false
+        }
+      },
+      "wealth": {
+        "rb_scf2022_wealth_cont.age": {
+          "cov": 0.5518,
+          "gated_out": false
+        },
+        "rb_scf2022_wealth_cont.asset": {
+          "cov": 3.2875,
+          "gated_out": true
+        },
+        "rb_scf2022_wealth_cont.fin": {
+          "cov": 3.44,
+          "gated_out": true
+        },
+        "rb_scf2022_wealth_cont.income": {
+          "cov": 3.4182,
+          "gated_out": true
+        },
+        "rb_scf2022_wealth_cont.networth": {
+          "cov": 3.1194,
+          "gated_out": true
+        },
+        "rb_scf2022_wealth_cont.nfin": {
+          "cov": 3.4234,
+          "gated_out": true
+        }
+      }
+    },
+    "pool_hmda": {
+      "nhanes": {
+        "rb_nhanes_income.INDFMMPI": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_income.RIDAGEYR": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_poverty.INDFMPIR": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_poverty.RIDAGEYR": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.RIDAGEYR": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD010": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD020": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD050": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD110": {
+          "cov": 0.0,
+          "gated_out": false
+        },
+        "rb_nhanes_weight.WHD140": {
+          "cov": 0.0,
+          "gated_out": false
+        }
+      },
+      "hmda": {
+        "survey_hmda.hirat": {
+          "cov": 0.4695,
+          "gated_out": false
+        },
+        "survey_hmda.lvrat": {
+          "cov": 1.1409,
+          "gated_out": false
+        },
+        "survey_hmda.pirat": {
+          "cov": 0.3554,
+          "gated_out": false
+        }
+      },
+      "wealth": {
+        "rb_scf2022_wealth_cont.age": {
+          "cov": 0.2619,
+          "gated_out": false
+        },
+        "rb_scf2022_wealth_cont.asset": {
+          "cov": 3.2875,
+          "gated_out": true
+        },
+        "rb_scf2022_wealth_cont.fin": {
+          "cov": 3.44,
+          "gated_out": true
+        },
+        "rb_scf2022_wealth_cont.income": {
+          "cov": 3.4182,
+          "gated_out": true
+        },
+        "rb_scf2022_wealth_cont.networth": {
+          "cov": 3.1194,
+          "gated_out": true
+        },
+        "rb_scf2022_wealth_cont.nfin": {
+          "cov": 3.4234,
+          "gated_out": true
+        }
+      }
+    }
+  }
+}

@@ -87,6 +87,18 @@ P4. The D3 pathology (ECE↑ entropy↓) concentrates in gated-out cells (F4).
   continuous columns gated out.
 - **Gated calibration:** ECE on gated-in vs gated-out cells (the D3 §5 measurement, split by the gate).
 
+## 4½. Pre-execution note — scientific interpretation of F1 (PI, 2026-06-07, added before any run)
+
+> **Spearman(`I_gain`, `I_oracle`) ≥ 0.50 means the derived estimator is sufficiently aligned with oracle
+> distinguishability to support governance use as a RANKING signal across domains and idioms, subject to
+> the coverage gate.** It is not a claim of point-accurate informativeness estimation; the governance
+> deliverable (column triage — which columns deserve sensitivity analysis first) needs reliable *ordering*
+> within footprint support, and F1 is calibrated to exactly that bar.
+
+*Pre-hoc computational note (recorded before any training; no criterion altered):* F4's "gated-out cells
+contain the worst-ECE tertile" is computed as — pool all eval cells (held-out + control), rank by per-cell
+ECE, take the worst tertile; the clause holds iff **a majority (> 50%) of that tertile is gated-out**.
+
 ## 5. E-FALSIFY — criteria under which the head is struck (H₀ sufficient)
 
 ALL of:
