@@ -36,6 +36,9 @@ Three layers (`ARCHITECTURE-OBJECT-revised.md`):
 - **Layer 2 — the identification BRIDGE** (consequence→δ): many-to-one (Molenberghs); **carried by the
   manifold prior**, not learned.
 - **Layer 3 — the OUTPUT**: a calibrated δ-prior + a detectability state + abstention.
+  **(Amended 2026-06-08, §5½):** "detectability" is **split** — *oracle identifiability* (eval-time
+  quantity, retained) vs *deployed-channel reliability* (open research problem); the **runtime** output
+  carries coverage-state + UNKNOWN, **no runtime detectability claim**.
 
 The **reference is the δ=0 slice of the named prior** — a prior object, *not* an identified MAR
 expectation (`INFERENCE-OBJECT-CRITIQUE.md`). "Deviation" is an *optional internal parameterization*
@@ -61,7 +64,12 @@ This is exactly the **no-metadata** design (φ reads values, never names). Conse
   already compares an MNAR mechanism against the **best-fitting MAR-on-observed-predictors** (a plausible
   family), not the infinity. So:
   - own-value self-censoring → **"flat" because its MAR competitor (demographic-driven nonresponse) is
-    genuinely plausible** and reproduces the footprint.
+    genuinely plausible** and reproduces the footprint. **(Sharpened 2026-06-08:** flatness is a fact
+    about the **deployed channel** — at the *Bayes-oracle* level the profiled MAR does *not* fully
+    reproduce the footprint (P1; E-study §4). Own-value = *identifiable-in-principle, unlearned/
+    untransferable so far*. Detectability claims now name **which quantity** — identifiability vs
+    channel reliability — in addition to the comparison class; see §5½ and
+    `CONSOLIDATION-MEMO-detectability-target.md`.)
   - top-coding → **"detectable" because its only MAR mimic is off-manifold/contrived** (= M3, manifold
     near-injectivity).
 - **Binding phrasing:** every (non-)detectability claim **names its comparison class** (profiled
@@ -103,14 +111,39 @@ heavier neural architecture must earn itself via Layer-2 deviation (Gate II, def
   integrated). **If MCAR → ignorable → no sensitivity analysis needed (triage answer); stop.**
 - **Stage B — only if not-MCAR** → the column-primary δ-prior pipeline:
   - **Level 0** — per-column φ distribution encoder (order-statistic/ECDF pooling; *proven* — Stage 0).
-  - **Level 1 (MVP)** — φ + mask-topology + named-prior + calibration + **detectability** + **abstention**.
-    Adds **governance**, not accuracy.
+  - **Level 1 (MVP)** — φ + mask-topology + named-prior + calibration + **coverage/abstention**.
+    Adds **governance**, not accuracy. *(2026-06-08: the planned **detectability head is REMOVED** — §5½;
+    eval-time oracle identifiability reporting replaces it.)*
   - **Level 2 (⏸️ gated, Gate II)** — optional conditional reference/deviation module (historically
     fragile: `transfer_features` failed; predictor-referencing). Built only if it beats raw-ECDF OOF.
 
-**Per-column output:** **{ MCAR-departure, δ-prior, detectability, UNKNOWN }** where **"unknown" = off-
-manifold / abstain** ("a mechanism we haven't learned") — a **first-class label**, distinct from
-in-manifold-flat (which returns the prior, *confidently uncertain*). Most common in natural missingness.
+**Per-column output (amended 2026-06-08):** **{ MCAR-departure, δ-prior, coverage-state, UNKNOWN }**
+where **"unknown" = off-manifold / abstain** ("a mechanism we haven't learned") — a **first-class label**,
+distinct from in-manifold-flat (which returns the prior, *confidently uncertain*). Most common in natural
+missingness. **No runtime detectability field** (§5½); oracle identifiability is reported **eval-time**.
+
+### 5½. Detectability split — Stage-2 head REMOVED (✅ decided 2026-06-08)
+
+Outcome of the pre-registered **E-JUSTIFY/E-FALSIFY** architectural review
+(`E-JUSTIFY-E-FALSIFY-findings.md`; reasons in `CONSOLIDATION-MEMO-detectability-target.md`):
+
+- **"Detectability" is two quantities, previously conflated:**
+  1. **Oracle identifiability** — Bayes-level distinguishability from the best plausible MAR
+     (comparison-class-relative). **Evaluation quantity**: semi-synthetic cells only; powers the idiom
+     map, oracle-gated negatives, and the lab-coat fraction. *Solid; retained.*
+  2. **Deployed-channel reliability** — whether the trained, transferable δ-prior can be trusted on this
+     column. The quantity a **runtime** signal must estimate. **OPEN RESEARCH PROBLEM** — nothing
+     validated estimates its in-manifold variation (E-study F4: coverage gates support but not
+     in-manifold miscalibration).
+- **Why the split is forced:** the oracle-to-channel gap **varies by idiom/cell** (diffuse likelihood
+  tilts are oracle-accumulable but unlearnable; structural truncation footprints are learnable), so the
+  oracle's *ranking* inverts under projection onto the channel (E-study: Spearman(I_gain, I_oracle) ≈ 0;
+  oracle idiom ordering **opposite** to the learned channel; even an oracle-targeted probe reaches only
+  ~0.17 OOF). A runtime signal calibrated to the oracle would be *confidently wrong as a safety signal*.
+- **Decisions:** Stage-2 detectability head **removed from the build plan** (re-entry only via a new
+  pre-registered spec targeting a deployed-channel reliability quantity; the **gate role stays closed to
+  learned components** — self-reference argument + D3). Runtime detectability claims **deferred**.
+  Coverage gate keeps its D3-validated OOD/governance role. **No replacement head is being designed.**
 
 **Load-bearing minimum** (`ARCHITECTURE-INVESTIGATION` §D): within-column φ + calibrated output +
 (for Level 2) a deviation mechanism. φ-alone = raw-ECDF, so Level 2's deviation module is the only thing
@@ -190,6 +223,17 @@ files.
 
 ## 12. Decisions & open items
 
+- **Detectability split + head removal — ✅ DECIDED (2026-06-08):** Stage-2 detectability head **removed**
+  after the pre-registered E-JUSTIFY/E-FALSIFY review (no outcome branch granted survival; derived
+  info-gain also failed — Spearman vs oracle ≈ 0). "Detectability" = **oracle identifiability**
+  (eval-time, retained) ⊕ **deployed-channel reliability** (open problem). Runtime output carries
+  coverage-state + UNKNOWN only. See §5½. *(Earlier text in `PROPOSAL-Level1-design-spec.md` §3
+  describing an oracle-calibrated detectability head is **superseded**.)*
+- **Data/transfer arc (2026-06-07):** SCF 2022 wealth ingested (role-B-only); broad scaling hypothesis
+  falsified → **conditional/footprint-regime coverage** (D2 map, D3 pre-registered test: coverage predicts
+  transfer, Pearson −0.91, pool-level); acquisition targeted by **regime clusters**, not domain count.
+  See `CONSOLIDATION-MEMO-SCF-wealth-conditional-scaling.md`, `D3-regime-transfer-findings.md`.
+
 - **Framing updates — ✅ FOLDED (2026-06-06)** into the Stage-1 + cross-domain specs: two-stage MCAR-gate
   (MCAR-departure elevated to Stage A); "unknown" as a first-class off-manifold label; `lod_top_coding →
   top_coding` rename + NHANES-questionnaire/demographic-only; survey-idiom vocabulary only; detectability
@@ -216,7 +260,14 @@ findings.md` · `ARCHITECTURE-INVESTIGATION-lacuna-survey.md`
 (incl. §9 data sufficiency) · `PROPOSAL-Stage1-implementation-spec.md` · `PROPOSAL-cross-domain-corpus-
 plan.md`
 **Data:** `DATA-INVENTORY-ground-truth.md` · `DATA-ROLE-B-PROJECTION-feasibility.md` ·
-`lacuna_survey/DATA_ACQUISITION.md` (v1.0-era acquisition guide)
+`lacuna_survey/DATA_ACQUISITION.md` (v1.0-era acquisition guide) ·
+`ACQUISITION-FRAMEWORK-lacuna-survey.md` · `PROPOSAL-SCF-wealth-acquisition-plan.md` ·
+`feasibility-stage1-crossdomain-findings.md`
+**Regime/transfer (2026-06):** `CONSOLIDATION-MEMO-SCF-wealth-conditional-scaling.md` ·
+`REGIME-MAP-findings.md` · `PROPOSAL-D3-regime-matched-transfer-spec.md` · `D3-regime-transfer-findings.md`
+**Detectability (2026-06):** `PROPOSAL-detectability-analysis.md` ·
+`PROPOSAL-E-JUSTIFY-E-FALSIFY-detectability-study.md` · `E-JUSTIFY-E-FALSIFY-findings.md` ·
+`CONSOLIDATION-MEMO-detectability-target.md` (why oracle informativeness is the wrong runtime target)
 **Superseded (history):** `PROPOSAL-distributional-consequence-stream-audit.md` (the patch — now Option B,
 not built on)
 
