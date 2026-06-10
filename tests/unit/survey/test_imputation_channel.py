@@ -90,3 +90,52 @@ def test_fail_loud():
 def test_mcar_pair_mask_guards():
     with pytest.raises(ValueError):
         IC.mcar_pair_mask(np.ones(30, dtype=bool), RNGState(seed=1))  # nothing punched
+
+
+# ---------- no-truth-conditional station (empty-cell prereg e1374f9) ----------
+
+def _view(X, t_idx, obs_mask):
+    v = X.copy().astype(float)
+    v[~obs_mask, t_idx] = np.nan
+    return v
+
+
+def test_no_truth_structural_truth_blindness():
+    # outputs identical whatever values sit at punched positions BEFORE NaN-ing — and NaN is enforced.
+    X, t_idx = _toy()
+    mech = _self_censor_mask(X[:, t_idx])
+    v = _view(X, t_idx, mech)
+    a = IC.no_truth_features(v, t_idx, imputer="linear", seed=3, holdout_rng=RNGState(seed=11))
+    X2 = X.copy(); X2[~mech, t_idx] = 1e9   # poison the truth
+    b = IC.no_truth_features(_view(X2, t_idx, mech), t_idx, imputer="linear", seed=3,
+                             holdout_rng=RNGState(seed=11))
+    assert a == b  # cannot depend on the deleted values
+
+
+def test_no_truth_determinism_and_names():
+    X, t_idx = _toy(n=300)
+    mech = _self_censor_mask(X[:, t_idx], seed=4)
+    v = _view(X, t_idx, mech)
+    a = IC.no_truth_features(v, t_idx, imputer="rf", seed=5, holdout_rng=RNGState(seed=7))
+    b = IC.no_truth_features(v, t_idx, imputer="rf", seed=5, holdout_rng=RNGState(seed=7))
+    assert a == b and set(a) == set(IC.NO_TRUTH_FEATURE_NAMES) and len(a) == 16
+
+
+def test_no_truth_residual_signature_direction():
+    # own-value upper-tail punching truncates observed residuals from above => negative skew/deficit.
+    X, t_idx = _toy(n=600, rho=0.6)
+    mech = _self_censor_mask(X[:, t_idx], delta=6.0, seed=2)
+    f = IC.no_truth_features(_view(X, t_idx, mech), t_idx, imputer="linear", seed=0,
+                             holdout_rng=RNGState(seed=3))
+    assert f["r_skew"] < 0 and f["r_reach_deficit"] < 0
+
+
+def test_no_truth_fail_loud():
+    X, t_idx = _toy(n=200)
+    mech = _self_censor_mask(X[:, t_idx])
+    with pytest.raises(ValueError):  # NaN predictor forbidden (only the target is punched)
+        v = _view(X, t_idx, mech); v[0, 0] = np.nan
+        IC.no_truth_features(v, t_idx, imputer="linear", seed=0, holdout_rng=RNGState(seed=1))
+    with pytest.raises(ValueError):  # nothing punched
+        IC.no_truth_features(X.astype(float), t_idx, imputer="linear", seed=0,
+                             holdout_rng=RNGState(seed=1))

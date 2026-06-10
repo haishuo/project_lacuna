@@ -171,6 +171,106 @@ def imputer_channel_features(
     return {f"d_{s}": out["mech"][s] - out["mcar"][s] for s in STAT_NAMES}
 
 
+# --- No-truth-conditional station (PREREGISTRATION-conditional-without-truth-cell, commit e1374f9) ---
+# The empty-cell extractor: conditional structure WITHOUT truth. Receives ONLY the mech-masked view
+# (punched target cells = NaN, enforced — leak guard L3); never an alternate-mask view (L1: the paired
+# MCAR view contains the deleted values = truth in disguise); target standardized on mech-observed
+# cells only (L2); within-view MCAR holdout punched from OBSERVED cells (L4) with the imputer RE-FIT
+# excluding the holdout before scoring it (L5); holdout RNG injected by the caller, derived from the
+# example index only (L8).
+
+NO_TRUTH_FEATURE_NAMES = (
+    # H — holdout calibration (6): the G1 statistics at self-punched OBSERVED cells (legit truth)
+    "h_B", "h_PIT_loc", "h_PIT_tail", "h_B_top", "h_W1", "h_cov80",
+    # S — imputation shift at the REAL punched cells vs in-view references (5)
+    "s_mean_shift", "s_W1_obs", "s_W1_holdout", "s_tail_mass", "s_sigma_diff",
+    # R — residual-selection signature on observed rows (3; transfer_features Group-A definitions)
+    "r_skew", "r_spread_ratio", "r_reach_deficit",
+    # anchors (2)
+    "a_rate", "a_corr_tp",
+)
+_MIN_HOLDOUT = 5
+
+
+def _q(v: np.ndarray, p: float) -> float:
+    return float(np.quantile(v, p))
+
+
+def no_truth_features(
+    x_view: np.ndarray, target_idx: int, *, imputer: str, seed: int, holdout_rng,
+) -> Dict[str, float]:
+    """The 16 no-truth-conditional features from the mech-masked view ONLY.
+
+    `x_view` is [n, d] with the PUNCHED target cells set to NaN (predictors complete). Fail loud
+    (leak guard) if any punched-position value is supplied or any predictor is NaN.
+    """
+    if x_view.ndim != 2 or x_view.shape[1] < 2:
+        raise ValueError(f"x_view must be [n, d>=2], got {x_view.shape}")
+    n, d = x_view.shape
+    if not (0 <= target_idx < d):
+        raise ValueError(f"target_idx {target_idx} out of range [0, {d})")
+    y_raw = x_view[:, target_idx]
+    mask_obs = ~np.isnan(y_raw)
+    P_raw = np.delete(x_view, target_idx, axis=1)
+    if np.isnan(P_raw).any():
+        raise ValueError("predictor columns must be complete (only the target is punched)")
+    if int(mask_obs.sum()) < _MIN_OBS or int((~mask_obs).sum()) < _MIN_MIS:
+        raise ValueError(f"degenerate view: {int(mask_obs.sum())} obs / {int((~mask_obs).sum())} punched")
+
+    # L2: standardize the target on mech-OBSERVED cells only; predictors over all rows (complete).
+    mu_o, sd_o = float(y_raw[mask_obs].mean()), float(y_raw[mask_obs].std())
+    if sd_o == 0:
+        raise ValueError("target constant on observed rows; station undefined")
+    yz = (y_raw - mu_o) / sd_o          # NaN propagates at punched cells — never read there
+    P = _zscore_cols(P_raw.astype(np.float64))
+
+    obs_idx = np.where(mask_obs)[0]
+    n_mis = int((~mask_obs).sum())
+    k = min(n_mis, len(obs_idx) - _MIN_OBS)
+    if k < _MIN_HOLDOUT:
+        raise ValueError(f"holdout too small ({k}); need >= {_MIN_HOLDOUT}")
+    hold = obs_idx[np.asarray(holdout_rng.choice(len(obs_idx), k, replace=False))]   # L4/L8
+    train = np.setdiff1d(obs_idx, hold)
+
+    # H: re-fit excluding holdout (L5), score at holdout cells (their truth was observed — legitimate).
+    mu_h, sg_h = _fit_predict(imputer, P[train], yz[train], P[hold], seed)
+    H = mask_stats(yz[hold], mu_h, sg_h)
+
+    # S: deployment-style fit on ALL observed rows, predictions at the REAL punched cells.
+    mis = np.where(~mask_obs)[0]
+    mu_m, sg_m = _fit_predict(imputer, P[obs_idx], yz[obs_idx], P[mis], seed)
+    y_obs = yz[obs_idx]
+    s = {
+        "s_mean_shift": float(mu_m.mean() - y_obs.mean()),
+        "s_W1_obs": float(np.mean(np.abs(np.sort(mu_m) - np.quantile(y_obs, np.linspace(0, 1, len(mu_m)))))),
+        "s_W1_holdout": float(np.mean(np.abs(np.sort(mu_m) - np.quantile(mu_h, np.linspace(0, 1, len(mu_m)))))),
+        "s_tail_mass": float((mu_m > _q(y_obs, 0.9)).mean()),
+        "s_sigma_diff": float(sg_m.mean() - sg_h.mean()),
+    }
+
+    # R: residual-selection signature on observed rows (full-observed fit's in-sample residuals).
+    mu_in, _ = _fit_predict(imputer, P[obs_idx], yz[obs_idx], P[obs_idx], seed)
+    e = y_obs - mu_in
+    es = e.std() if e.std() > 0 else 1.0
+    ez = (e - e.mean()) / es
+    spread_lo = max(_q(e, 0.5) - _q(e, 0.05), 1e-9)
+    R = {
+        "r_skew": float(np.mean(ez ** 3)),
+        "r_spread_ratio": float((_q(e, 0.95) - _q(e, 0.5)) / spread_lo),
+        "r_reach_deficit": float((_q(e, 0.975) - _q(e, 0.5)) - (_q(e, 0.5) - _q(e, 0.025))),
+    }
+
+    zt = (y_obs - y_obs.mean()) / (y_obs.std() if y_obs.std() > 0 else 1.0)
+    corrs = [float(np.mean(zt * ((c - c.mean()) / (c.std() if c.std() > 0 else 1.0))))
+             for c in P[obs_idx].T]
+    best = max(corrs, key=abs) if corrs else 0.0
+    out = {"h_B": H["B"], "h_PIT_loc": H["PIT_loc"], "h_PIT_tail": H["PIT_tail"],
+           "h_B_top": H["B_top"], "h_W1": H["W1"], "h_cov80": H["cov80"],
+           **s, **R, "a_rate": float(n_mis / n), "a_corr_tp": best}
+    assert set(out) == set(NO_TRUTH_FEATURE_NAMES)
+    return out
+
+
 def mcar_pair_mask(mask_mech: np.ndarray, rng) -> np.ndarray:
     """Matched-rate MCAR observed-mask: same #punched cells, positions drawn uniformly (injected RNG)."""
     n = len(mask_mech)
