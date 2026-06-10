@@ -1,5 +1,14 @@
 # Where Does the Information Disappear? — The Four-Level Hierarchy (consolidation)
 
+> **⚠️ READ WITH the adversarial review (`ADVERSARIAL-REVIEW-four-level-hierarchy.md`, 2026-06-09), which
+> AMENDS this document:** (1) the hierarchy is a **lattice, not a chain** — L1 ⊉ L2 (two non-nested
+> apexes over one observed-data floor; empirically shown by own-value cells with `I_oracle` ≈ 0.08–0.12
+> at δ=2.5 where the truth channel is high); (2) the §B 2×2's `transfer_features` cell is **top-coding,
+> cross-era, suggestive only** — the **own-value conditional-without-truth cell is EMPTY**; (3) the
+> headline "the binding 2→3 loss is TRUTH" is re-worded to "**with neither truth nor mechanism
+> assumptions, only structural footprints survive; truth and mechanism assumptions are non-nested
+> substitutes.**" Where the two documents conflict, the review is current.
+
 *Conceptual synthesis — **specification/analysis only. No experiments, no G2 design, no architecture
 proposals, no runtime proxies, no implementation** (binding; PI 2026-06-08). Treats G1 as a scientific
 result and asks where mechanism/δ information is lost between omniscience and deployment. Synthesizes:
