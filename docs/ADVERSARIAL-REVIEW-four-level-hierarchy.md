@@ -1,5 +1,12 @@
 # Adversarial Review — How Much Weight Can the Four-Level Hierarchy Bear?
 
+> **RESOLVED (2026-06-10):** the empty cell this review identified (§3) was pre-registered
+> (`PREREGISTRATION-conditional-without-truth-cell.md`) and **measured: MIXED, unanimous** — own-value
+> conditional-without-truth ≈ 0.77 (ρ ≈ 0.51). The truth-vs-conditionality attribution is now a measured
+> **two-term decomposition** (≈51% representation / ≈49% identification), and `transfer_features` is
+> superseded for top-coding by the matched protocol (0.81–0.83). See the synthesis §0½ (result of record)
+> and `conditional-without-truth-cell-findings.md`. The §4 "residual exposure" is closed.
+
 *Specification-only adversarial review (PI 2026-06-09). **No new experiments, no implementation, no G2.**
 Pressure-tests `CONSOLIDATION-four-level-information-hierarchy.md` against the repository's actual
 records (scripts, findings docs, run artifacts, git history). Where the review finds errors in the

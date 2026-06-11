@@ -63,13 +63,14 @@ This is exactly the **no-metadata** design (φ reads values, never names). Conse
 - **"Detectable" is always relative to a *named plausible class*, never "air" or all-of-math.** Our oracle
   already compares an MNAR mechanism against the **best-fitting MAR-on-observed-predictors** (a plausible
   family), not the infinity. So:
-  - own-value self-censoring → **"flat" because its MAR competitor (demographic-driven nonresponse) is
-    genuinely plausible** and reproduces the footprint. **(Sharpened 2026-06-08:** flatness is a fact
-    about the **deployed channel** — at the *Bayes-oracle* level the profiled MAR does *not* fully
-    reproduce the footprint (P1; E-study §4). Own-value = *identifiable-in-principle, unlearned/
-    untransferable so far*. Detectability claims now name **which quantity** — identifiability vs
-    channel reliability — in addition to the comparison class; see §5½ and
-    `CONSOLIDATION-MEMO-detectability-target.md`.)
+  - own-value self-censoring → **(SCOPED, 2026-06-10 — replaces every unqualified "own-value is flat"):**
+    own-value is **flat to marginal footprint features (≈0.57)**, **NOT flat to conditional
+    observed-view features (≈0.77, eval-only)**, and **highly visible under truth-counterfactual
+    evaluation (0.93–0.99)** — i.e., *marginally weak, conditionally visible, still partially
+    identification-limited.* At the *Bayes-oracle* level the profiled MAR does *not* fully reproduce the
+    footprint (P1; E-study §4; cell-dependent/bimodal). Detectability claims name **which quantity AND
+    which station** in addition to the comparison class; see §5½, the four-level hierarchy synthesis
+    (§0½ measured result), and `CONSOLIDATION-MEMO-detectability-target.md`.
   - top-coding → **"detectable" because its only MAR mimic is off-manifold/contrived** (= M3, manifold
     near-injectivity).
 - **Binding phrasing:** every (non-)detectability claim **names its comparison class** (profiled
@@ -144,6 +145,28 @@ Outcome of the pre-registered **E-JUSTIFY/E-FALSIFY** architectural review
   pre-registered spec targeting a deployed-channel reliability quantity; the **gate role stays closed to
   learned components** — self-reference argument + D3). Runtime detectability claims **deferred**.
   Coverage gate keeps its D3-validated OOD/governance role. **No replacement head is being designed.**
+
+### 5¾. The measured information ladder (✅ result of record, 2026-06-10)
+
+From G1 + the empty-cell experiment (pre-registered; MIXED verdict, unanimous 4/4 imputer classes;
+`G1-imputation-channel-findings.md`, `conditional-without-truth-cell-findings.md`, four-level synthesis
+§0½). Own-value, **scope: binary δ=2.5, matched rate 0.3, n≈384, current survey role-B corpus, H/S/R
+feature family — eval-only, NO runtime claim:**
+
+> **marginal footprint floor ≈ 0.57 → conditional observed-view mid-rung ≈ 0.77 → truth-counterfactual
+> apex 0.93–0.99; the oracle apex is mechanism-informed and cell-dependent (bimodal).**
+
+- **The lab-coat fraction is a two-term deployment-gap decomposition:** **representation share**
+  (φ → conditional observed-view, ≈ 51%) + **identification share** (conditional observed-view →
+  truth-counterfactual, ≈ 49%).
+- The no-truth conditional station **detects selection more strongly than it distinguishes mechanisms**
+  (idiom separation collapsed without truth: 0.54–0.68 vs 0.68–0.83 with truth).
+- **`transfer_features` (0.523) is superseded for top-coding** by the matched protocol (no-truth
+  conditional 0.81–0.83); retained only as historical evidence that **cross-era feature results are not
+  portable**.
+- **DO NOT OVERCLAIM (binding):** not proof of runtime recoverability · the identification wall does
+  not disappear · conditional features do not "solve" own-value · no G2 design yet · no architecture
+  amendments beyond this conceptual synthesis.
 
 **Load-bearing minimum** (`ARCHITECTURE-INVESTIGATION` §D): within-column φ + calibrated output +
 (for Level 2) a deviation mechanism. φ-alone = raw-ECDF, so Level 2's deviation module is the only thing
@@ -233,6 +256,13 @@ files.
   falsified → **conditional/footprint-regime coverage** (D2 map, D3 pre-registered test: coverage predicts
   transfer, Pearson −0.91, pool-level); acquisition targeted by **regime clusters**, not domain count.
   See `CONSOLIDATION-MEMO-SCF-wealth-conditional-scaling.md`, `D3-regime-transfer-findings.md`.
+- **Information-ladder arc — ✅ RESULT OF RECORD (2026-06-10):** G1 (imputation counterfactual channel,
+  eval-only, passed decisively) + the pre-registered **empty cell** (conditional-without-truth; **MIXED**,
+  unanimous) ⇒ the measured ladder of §5¾ — own-value's deployment gap = **≈51% representation +
+  ≈49% identification**; "own-value is flat" is **scoped** (marginal-only); `transfer_features`
+  superseded for top-coding. Hierarchy = **lattice** (truth and mechanism assumptions are non-nested
+  substitutes; adversarial review). Consolidation only — **no G2, no runtime claims, no architecture
+  changes.** See the four-level synthesis (§0½) + adversarial review + findings docs.
 
 - **Framing updates — ✅ FOLDED (2026-06-06)** into the Stage-1 + cross-domain specs: two-stage MCAR-gate
   (MCAR-departure elevated to Stage A); "unknown" as a first-class off-manifold label; `lod_top_coding →
@@ -268,6 +298,12 @@ plan.md`
 **Detectability (2026-06):** `PROPOSAL-detectability-analysis.md` ·
 `PROPOSAL-E-JUSTIFY-E-FALSIFY-detectability-study.md` · `E-JUSTIFY-E-FALSIFY-findings.md` ·
 `CONSOLIDATION-MEMO-detectability-target.md` (why oracle informativeness is the wrong runtime target)
+**Information ladder (2026-06):** `PROPOSAL-MAR-imputation-counterfactual-channel.md` ·
+`PREREGISTRATION-G1-imputation-channel.md` · `G1-imputation-channel-findings.md` ·
+`CONSOLIDATION-four-level-information-hierarchy.md` (**§0½ = the measured result of record**) ·
+`ADVERSARIAL-REVIEW-four-level-hierarchy.md` (lattice; substitutes) ·
+`PREREGISTRATION-conditional-without-truth-cell.md` · `conditional-without-truth-cell-findings.md`
+(the empty cell, MIXED)
 **Superseded (history):** `PROPOSAL-distributional-consequence-stream-audit.md` (the patch — now Option B,
 not built on)
 

@@ -1,13 +1,47 @@
 # Where Does the Information Disappear? — The Four-Level Hierarchy (consolidation)
 
-> **⚠️ READ WITH the adversarial review (`ADVERSARIAL-REVIEW-four-level-hierarchy.md`, 2026-06-09), which
-> AMENDS this document:** (1) the hierarchy is a **lattice, not a chain** — L1 ⊉ L2 (two non-nested
-> apexes over one observed-data floor; empirically shown by own-value cells with `I_oracle` ≈ 0.08–0.12
-> at δ=2.5 where the truth channel is high); (2) the §B 2×2's `transfer_features` cell is **top-coding,
-> cross-era, suggestive only** — the **own-value conditional-without-truth cell is EMPTY**; (3) the
-> headline "the binding 2→3 loss is TRUTH" is re-worded to "**with neither truth nor mechanism
-> assumptions, only structural footprints survive; truth and mechanism assumptions are non-nested
-> substitutes.**" Where the two documents conflict, the review is current.
+> **STATUS (2026-06-10): amended by the adversarial review AND resolved by the measured empty cell.**
+> Read with `ADVERSARIAL-REVIEW-four-level-hierarchy.md` (lattice-not-chain; truth and mechanism
+> assumptions are non-nested substitutes) and `conditional-without-truth-cell-findings.md` (the empty
+> cell, **measured: MIXED, unanimous**). **§0½ below is the result of record** and overrides the
+> original §B headline and 2×2 wherever they conflict.
+
+## 0½. THE MEASURED RESULT OF RECORD (2026-06-10; PI-accepted)
+
+The truth-bottleneck / conditional-bottleneck fork is **replaced by a measured decomposition** (own-value,
+binary δ=2.5, matched rate 0.3, n≈384, current survey role-B corpus, H/S/R feature family, LR LODO —
+**eval-only; no runtime claim**):
+
+| station | own-value OOF AUC | what it has |
+|---|---|---|
+| **marginal footprint floor (φ)** | **≈ 0.57** | observed marginal only |
+| **conditional observed-view mid-rung** | **≈ 0.77** (0.74–0.80; ρ mean 0.506) | observed view + conditional structure; **no truth** |
+| **truth-counterfactual apex** | **0.93–0.99** | the deleted values; no mechanism knowledge |
+| **oracle apex** | mechanism-informed, **cell-dependent** (mean high, bimodal: 0.08–1.00 at δ=2.5) | the mechanism family; never the realized truth |
+
+- **Own-value is: marginally weak, conditionally visible, and still partially identification-limited.**
+- **The lab-coat fraction is a two-term deployment-gap decomposition:** the **representation share**
+  (φ → conditional observed-view, ≈ 51% of the G1 increment) and the **identification share**
+  (conditional observed-view → truth-counterfactual, ≈ 49%).
+- **Scoped replacement for every "own-value is flat" statement:** *own-value is flat to marginal
+  footprint features, NOT flat to conditional observed-view features, and highly visible under
+  truth-counterfactual evaluation.*
+- **`transfer_features` (0.523) is SUPERSEDED for top-coding by the matched protocol** (no-truth
+  conditional reaches 0.81–0.83 on the same corpus/splits): it remains only as historical evidence that
+  **cross-era feature results are not portable** across corpora/feature families.
+- **The no-truth conditional station detects *selection* more strongly than it distinguishes
+  *mechanisms*:** idiom separation collapsed without truth (0.54–0.68 vs 0.68–0.83 with truth) — the
+  truth-referenced PIT shape was the mechanism reader.
+
+> **DO NOT OVERCLAIM (binding):**
+> - Do **not** say this proves runtime recoverability — the mid-rung is an eval-station measurement
+>   under semi-synthetic conditions; no runtime pathway is validated.
+> - Do **not** say the identification wall disappears — ≈ half the gap remains truth/assumptions-only,
+>   and mechanism *identification* (idiom separation) collapsed without truth.
+> - Do **not** say conditional features "solve" own-value — 0.77 ≪ 0.93–0.99, and the result is δ=2.5
+>   / rate-0.3 / corpus-scoped.
+> - Do **not** design G2 yet.
+> - Do **not** amend architecture beyond this conceptual synthesis.
 
 *Conceptual synthesis — **specification/analysis only. No experiments, no G2 design, no architecture
 proposals, no runtime proxies, no implementation** (binding; PI 2026-06-08). Treats G1 as a scientific
@@ -57,16 +91,18 @@ counterfactual* — even a linear imputer suffices in-family.
 (target-given-predictors) access — φ reads only the marginal. These can be disentangled because the
 project has already (inadvertently) run the missing cell of the 2×2:
 
-| | **conditional access** | **marginal only** |
+| own-value (measured, matched protocol — §0½) | **conditional access** | **marginal only** |
 |---|---|---|
 | **with truth** | **Level 2: 0.90–0.99 OOF** (G1) | *(not run; trivially informative — the punched cells' truth-marginal is directly visible)* |
-| **without truth** | **`transfer_features` / predictor-referencing: 0.523 OOF** (≈ chance; P2.2c) | **Level 3: 0.574 own-value / 0.633 top-coding** (G1 baseline) |
+| **without truth** | **0.74–0.80 OOF — the mid-rung** (empty-cell run; MIXED verdict) | **Level 3: 0.574 own-value / 0.633 top-coding** (G1 baseline) |
 
-Conditional-without-truth ≈ chance; marginal-without-truth ≈ weak-but-nonzero. **The binding loss at
-2→3 is TRUTH, not conditionality.** (Strictly: truth *or something that substitutes for it* — Level 1
-shows the parametric mechanism family is such a substitute, since the oracle reads observed data only.
-What no level reads is the own-value shadow from observed data *without* either truth or an assumed
-mechanism.)
+**[SUPERSEDED by §0½]** ~~"The binding loss at 2→3 is TRUTH, not conditionality."~~ The measured form:
+the 2→3 collapse decomposes into a **representation loss** (marginal-only φ discards conditional
+observed-view signal: 0.574 → ≈ 0.77, ≈ 51%) **and** a **truth loss** (≈ 0.77 → 0.93–0.99, ≈ 49%).
+`transfer_features` (0.523) was top-coding, cross-era, and is superseded for that idiom by the matched
+no-truth-conditional measurement (0.81–0.83); it survives only as evidence that cross-era feature
+results are not portable. (Level 1 remains the other substitute: the oracle reads observed data with
+mechanism knowledge.)
 
 **3 → 4 loses: little content, but adds constraints and failure modes.** The φ-spine was *designed* to
 match feature-level information (Stage-0: φ 0.735 ≈ raw-ECDF 0.735), and in-distribution it does. What
@@ -109,13 +145,17 @@ Before G1, "own-value is flat" blurred all four into one negative.
 The question "is Lacuna's bottleneck lack of signal / transfer / identification / runtime observability?"
 has **no single answer — it is idiom-dependent, and G1 lets us assign each idiom its wall:**
 
-- **Own-value (diffuse, sensitive-item selection): an IDENTIFICATION wall at 2→3.** Signal exists; truth
-  recovers it almost perfectly with *any* imputer; observed-data statistics — marginal *or* conditional —
-  recover almost none of it. The information lives in the missing values themselves; their shadow on the
-  observed law is readable only through an assumed mechanism (Level 1) — i.e., through exactly the
-  untestable assumptions sensitivity analysis is *about*. **No amount of role-B data, architecture, or
-  transfer engineering moves this wall**; only assumptions (the named prior `P_prior`, mechanism families)
-  or external information (metadata; deferred) can.
+- **Own-value (diffuse, sensitive-item selection): TWO PARTIAL WALLS, measured (§0½, supersedes the
+  original single-wall claim).** Signal exists; truth recovers it almost perfectly with *any* imputer.
+  The deployment gap then decomposes: a **representation wall** (marginal-only φ discards conditional
+  observed-view signal — ≈ 51% of the gap, 0.574 → ≈ 0.77; own-value is *flat to marginal features, not
+  flat to conditional observed-view features*) **and** a residual **identification wall** (≈ 49%,
+  ≈ 0.77 → 0.93–0.99 — readable only through truth or an assumed mechanism, i.e., exactly the untestable
+  assumptions sensitivity analysis is *about*; and mechanism *identification* collapses without truth —
+  the no-truth station detects *selection*, not *which* mechanism). The representation share is in
+  principle addressable from the observed view (eval-only statement; **no runtime claim**); the
+  identification share is moved only by assumptions (`P_prior`, mechanism families) or external
+  information (metadata; deferred).
 - **Top-coding (structural, truncation-type selection): a TRANSFER/COVERAGE wall at 3→4.** The footprint
   is marginal-readable and learnable; what limits deployment is footprint-regime coverage of the training
   pool (D3) plus estimation stability and reliability self-knowledge (E-study). **This wall is moved by
@@ -138,13 +178,13 @@ wall* (diffuse idioms). The project did not have this division of labor explicit
 | L1 signal vs plausible MAR | ✓ strong (BE→0 at large δ) | ✓ strong — *exceeds* top-coding at moderate δ, n=384 | P2.2c, P1, E-study |
 | L2 truth-recoverable, no mechanism | ✓ 0.88–0.95 OOF | ✓ 0.90–0.99 OOF (incl. wealth 0.98) | G1 |
 | L2 estimator-class sensitivity | low (all 4 distinct classes pass) | low, except linear on heavy tails (wealth 0.596) | G1 |
-| conditional-no-truth | — | ✗ 0.523 (dead) | transfer_features |
-| L3 marginal footprint | ◐ 0.63 LR / 0.72–0.75 best-config | ✗ 0.57–0.65 (weak/flat) | G1, Stage-0 |
+| conditional-no-truth (**mid-rung**, matched protocol) | ✓ **0.81–0.83** (supersedes `transfer_features` 0.523 — cross-era, non-portable, historical only) | ◐ **0.74–0.80** (MIXED; ρ ≈ 0.51; detects *selection* > *mechanism* — idiom sep 0.54–0.68) | empty-cell run |
+| L3 marginal footprint | ◐ 0.63 LR / 0.72–0.75 best-config | ✗ 0.57 (*flat to marginal features only* — see mid-rung row) | G1, Stage-0 |
 | L4 deployed, in-coverage | ◐ 0.64–0.74 | ✗ base-rate | D3, Stage-1, P2.2c |
 | L4 deployed, out-of-coverage | ✗ 0.46–0.58 + confidently wrong | ✗ | D3, E-study |
 | L4 reliability self-knowledge | ✗ (`I_gain` ⊥ oracle; ECE↑ entropy↓ off-manifold) | ✗ | E-study |
-| **the wall** | **transfer/coverage (3→4)** | **identification (2→3)** | this doc |
-| what moves the wall | regime-cluster data; coverage governance | assumptions (`P_prior`), external info | this doc |
+| **the wall(s)** | **transfer/coverage (3→4)** | **TWO partial walls: representation ≈ 51% + identification ≈ 49% (§0½)** | this doc + empty-cell run |
+| what moves the wall(s) | regime-cluster data; coverage governance | representation share: conditional observed-view features (eval-only, no runtime claim); identification share: assumptions (`P_prior`), external info | this doc + empty-cell run |
 
 *(Future idioms slot into the same rows; the MCAR/MAR null occupies L1 trivially and anchors every
 paired design.)*
