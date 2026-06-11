@@ -87,13 +87,19 @@ def mcar_rotated_booklet(X: torch.Tensor, rng: RNGState) -> torch.Tensor:
     p = TARGET_RATE*K*d/n_rot in (0, 1]. Assignment independent of values => MCAR-by-design.
     """
     n, d = _check(X, "mcar_rotated_booklet")
-    K = int(rng.randint(2, 4, (1,)).item())            # K in {2, 3}
-    n_rot = K * math.ceil(TARGET_RATE * d)             # multiple of K, >= 0.3*K*d
-    if n_rot > d:
-        n_rot = d - (d % K)
-    p = TARGET_RATE * K * d / n_rot
-    if not (0.0 < p <= 1.0) or n_rot < K:
-        raise ValueError(f"mcar_rotated_booklet infeasible: d={d}, K={K}, n_rot={n_rot}, p={p:.3f}")
+    K = int(rng.randint(2, 4, (1,)).item())            # preferred K in {2, 3}
+    p, n_rot = -1.0, 0
+    for K_try in range(K, 1, -1):                      # fall back toward K=2 if width can't host K
+        cand = K_try * math.ceil(TARGET_RATE * d)      # smallest multiple of K_try >= 0.3*K_try*d
+        if cand > d:
+            cand = d - (d % K_try)                     # largest multiple <= d
+        if cand >= K_try:
+            p_try = TARGET_RATE * K_try * d / cand
+            if 0.0 < p_try <= 1.0:
+                K, n_rot, p = K_try, cand, p_try
+                break
+    if not (0.0 < p <= 1.0):
+        raise ValueError(f"mcar_rotated_booklet infeasible: d={d} (no K in [2,{K}] admits rate)")
     cols = [int(i) for i in rng.choice(d, n_rot, replace=False)]
     blocks = [cols[i::K] for i in range(K)]
     assign = rng.randint(0, K, (n,))
