@@ -67,13 +67,47 @@ refusal-vs-DK, GBM: per-fold 0.752 / 0.784 / 0.781 / 0.756 / 0.763 ⇒ **pooled 
   run. (b) refusal-vs-DK predicts the *type* of nonresponse (a proxy for "is this the worrying
   MNAR-suspected kind"), not δ magnitude directly. (c) single seed; Stage 2 uses 5.
 
-## Next (Stage 2 — the real showdown)
+## Stage 2 — THE SHOWDOWN (network vs feature null on real signal)
 
-1. **Network vs frozen-feature null**, refusal-vs-DK (and the 3-way), on bit-identical examples,
-   5 seeds — does the network beat 0.767 by ≥ +0.05.
-2. **True leave-instrument-out** (ESS train → NHANES test, using NHANES 7/9 refusal/DK codes) —
-   the hard transfer test.
-3. If the network wins on real transferable signal: load-bearing on real complexity, the strongest
-   possible dissertation position. If parity: the matrix channel is feature-sufficient even where
-   real signal genuinely exists — and the learned generator (Part B) / semantic channel become the
-   neural contribution. Either way the verdict is now grounded on real labels, not our generators.
+`scripts/run_real_missingness_showdown.py`, `runs/real_missingness_showdown.json`. Real ESS
+refusal-vs-DK, names stripped, block-aware leave-country-out, 5 seeds. Feature null: GBM on the 10
+genuine-signal features. Network: permutation-invariant DeepSets row encoder — each column a token
+[value_z, status onehot, is_target, column population stats], target cell's status hidden, context
+= masked mean over non-target tokens; the network sees the **full raw respondent row** (strictly
+more information than the 10 features). Bar: network (mean−SE) − GBM ≥ +0.05.
+
+| arm | pooled leave-country-out OOF AUC |
+|---|---|
+| GBM feature null | **0.764** |
+| network seed 2026 / 7 / 99 / 13 / 41 | 0.751 / 0.753 / 0.752 / 0.751 / 0.750 |
+| network mean − SE | **0.751** |
+
+**Margin = −0.014 (bar +0.05) ⇒ network NOT load-bearing.** It trails the shallow null despite
+more information; seeds tight (no degenerate seeds, not an optimization artifact).
+
+## Verdict of the real-data test
+
+1. **The cat argument was half-right, and now we know which half.** Real missingness DOES carry
+   transferable, name-free mechanism signal the synthetic generators lacked (refusal-vs-DK 0.76 OOF)
+   — so the synthetic scrap verdict was about *our generators*, not real data. BUT the extra real
+   complexity is **still feature-capturable**: the network does not beat 37-statistics-style
+   shallow learning on real labels either. The matrix channel is feature-sufficient **synthetic AND
+   real**.
+2. **The matrix-channel book is closed, on real labels.** Across the whole review — T1/T2/T3
+   (synthetic) and Stage 1/2 (real) — no trained network is load-bearing for missingness-mechanism
+   inference from the numeric matrix. This is no longer a statement about our generators; it now
+   holds where real, transferable signal genuinely exists.
+3. **The remaining neural hope is OFF the matrix** — the semantic channel (read the item text;
+   load-bearing by type signature, statistics cannot read language) and the learned generator
+   (Part B; load-bearing by construction). Both untested; both are about information the matrix
+   does not contain. This is where a dissertation-grade network must now be sought, if anywhere.
+
+### Caveats (honest)
+- One network config (DeepSets), modest training; but the burden-of-proof design gave the network
+  *more* information than the null and it lost — the direction is not a tuning artifact.
+- Leave-COUNTRY-out shares the ESS questionnaire; true leave-INSTRUMENT-out (ESS→NHANES) remains a
+  harder transfer test, **confounded by items-per-respondent** (ESS ~293 items vs NHANES ~12, so
+  the strongest feature — respondent disposition — is much thinner in NHANES). Worth running to
+  characterize cross-instrument robustness of the *signal*, but it does not change the
+  network-vs-feature verdict.
+- refusal-vs-DK is mechanism-type (a proxy for "the MNAR-suspected kind"), not δ magnitude.
