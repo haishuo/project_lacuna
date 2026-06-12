@@ -88,7 +88,15 @@ def make_examples(domains, n_total, seed_base):
                     except ValueError as err:
                         if attempt == 9:
                             raise RuntimeError(f"{g} on {nm}: 10 infeasible draws ({err})")
-                out.append({"x": Xs * R.float(), "R": R, "y": cls, "gen": g, "ds": nm, "rate": rate})
+                # RIG-REPAIR (post-diagnostic, documented): standardize each column by OBSERVED-cell
+                # mean/std (runtime-computable; v1.0 always trained on standardized inputs — raw
+                # dollar-scale values froze the encoder and made recon loss ~1e7, drowning the CE
+                # gradient; see runs/diag_t1_fit.log). Scale-free feature arm is unaffected.
+                mu = torch.stack([Xs[R[:, j], j].mean() for j in range(Xs.shape[1])])
+                sd = torch.stack([Xs[R[:, j], j].std() for j in range(Xs.shape[1])])
+                sd = torch.where(sd > 0, sd, torch.ones_like(sd))
+                Xz = (Xs - mu) / sd
+                out.append({"x": Xz * R.float(), "R": R, "y": cls, "gen": g, "ds": nm, "rate": rate})
     rngp = np.random.default_rng(seed_base)
     return [out[i] for i in rngp.permutation(len(out))[:n_total]]
 
