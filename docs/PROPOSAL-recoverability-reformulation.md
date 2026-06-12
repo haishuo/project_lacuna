@@ -157,6 +157,36 @@ The matrix-channel DETECTOR slot is retired (settled negative, synthetic + real)
 "predict the gap from footprints" — that learned channel floored repeatedly (D2/D3); the bound
 MEASURES two factors instead of predicting three.
 
+### 7.1 Imputer training objective: train for FUNCTIONALS, not cells (PI proposal, 2026-06-12)
+
+Cell-MSE alone trains conditional-mean imputation: preserves the mean, crushes variance/quantiles.
+Replace with L = L_cell + Σ_k λ_k (F_k(X̂) − F_k(X))² over functionals F_k — "preserve the
+analysis, not the blanks." (Nearest literature neighbor: OT/distribution-matching imputation,
+Muzellec et al. 2020; ours is the targeted per-analysis refinement.) Three binding design rules:
+
+1. **Rich randomized functional family, not a short list.** A short list is Goodhart-able (match
+   μ and σ pathologically while wrecking unnamed functionals). Train against a randomized battery
+   per batch — quantile grids, random cross-moments, β on random covariate subsets. Rich family ⇒
+   functional matching converges to conditional-DISTRIBUTION matching (moment-matching ↔ MMD/IPM);
+   the analyst's named functionals get extra λ weight on top.
+2. **Stochastic imputer (draws), reparameterized.** A point-imputer cannot satisfy μ- and
+   σ-penalties non-pathologically; the object is a per-cell predictive distribution, sampled, with
+   functionals computed on sampled completions. Cell-loss and functional-loss are in healthy
+   tension; λ sets the balance.
+3. **Train the functional loss on IGNORABLE (MCAR/MAR) holes only — δ enters exactly once.** On
+   MNAR holes the truth-functional is not a function of the inputs; the only way the network
+   reduces that loss is by absorbing the GENERATOR's δ-distribution (amortizing the prior). If the
+   imputer silently bakes in δ-corrections AND the bound adds the δ-range, δ is double-counted
+   and certification becomes incoherent. Clean split (default): imputer = identified part only;
+   δ appears once, explicitly, at bound time. (The alternative — a deliberately prior-bearing
+   imputer — is defensible but changes the bound's factorization and must be labeled
+   posterior-under-named-prior imputation. Pre-register the choice.)
+
+Frozen null for this slot: MICE-with-draws / GBM-based stochastic imputers (NOT strawman point
+imputers). Note the structural edge: tree-based imputers cannot optimize functional fidelity
+end-to-end; if any slot shows a genuine architecture advantage, it is this one — for an
+articulable reason, not hope.
+
 ## 8. Why this survives every objection raised against every prior version
 
 - *"Statistics learn your generators"* — the deployed claims are measured (rate, residual) or
@@ -173,6 +203,33 @@ MEASURES two factors instead of predicting three.
 - *"Why a network at all?"* — three slots, each facing a frozen shallow null, each killable by
   its own pre-registered test. The dissertation claim rests on whichever slots win their
   showdowns; the architecture does not require all three.
+
+## 8a. Lineage: v1.0 already contained this idea, subordinated (excavated 2026-06-12)
+
+The reformulation is not a pivot away from v1.0 — it is the promotion of v1.0's own buried
+subroutine. Commit-level evidence:
+
+- **Three mechanism-specific reconstruction heads** (`lacuna/models/reconstruction/heads.py`):
+  MCARHead (structure-blind MLP), MARHead (cross-attention imputer over raw observed values),
+  MNARSelfCensoringHead — a recoverability RACE between competing theories of the holes.
+- **The discriminative logic, verbatim** (`heads_container.py:67-69`): "Under MAR: MARHead has
+  LOWER error than MCARHead (cross-attention helps); Under MNAR: MARHead has SIMILAR/HIGHER error
+  (cross-attention doesn't help)" — computed as `natural_errors` on the generator-punched holes
+  AGAINST GROUND TRUTH (possible only because training was semi-synthetic).
+- **Wired into the MoE gate** (`moe.py`, `use_reconstruction_errors=True` default): gate input =
+  [evidence ; per-head reconstruction errors ; missingness features] — recoverability as one
+  feature block among three, serving a mechanism-label output.
+- **The foreshadowing**: heads.py opens with "CRITICAL FIX (2026-01-10)" — the original MARHead
+  attended over encoder REPRESENTATIONS and could not discriminate; the fix reached past the
+  encoder to RAW values. This is the §8/Stage-0 backbone finding (representations destroy the
+  recoverability-relevant signal) discovered five months early, patched locally, never followed
+  to its conclusion.
+
+What separates ghost from product — four inversions: (1) direction: v1.0 used recoverability as
+evidence FOR a mechanism label; here mechanism vocabulary serves recoverability. (2) units:
+pooled per-sample cell-MSE vs per-column per-FUNCTIONAL. (3) effort: small differential
+diagnosers vs an at-ceiling imputer with negative controls and the oracle split. (4) epistemics:
+the race's verdict was never validated; here coverage certification is the product.
 
 ## 9. What is kept from existing Lacuna
 
