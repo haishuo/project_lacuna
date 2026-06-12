@@ -37,6 +37,7 @@ from sklearn.metrics import roc_auc_score
 
 ESS = Path("/mnt/data/lacuna/role_b/ess_text_corpus.csv")
 NH = Path("/mnt/data/lacuna/role_b/nhanes_text_corpus.csv")
+GSS = Path("/mnt/data/lacuna/role_b/gss_text_corpus.csv")
 OUT = Path("runs/semantic_probe.json")
 SEED = 2026
 
@@ -52,14 +53,21 @@ def load_items():
     ess = pd.read_csv(ESS)
     ess["item_text"] = np.where(ess["full_text"].fillna("") != "", ess["full_text"], ess["text"])
     ess["instrument"] = "ESS11"
-    ess["block"] = ess["var"].map(family)
+    ess["block"] = "ess_" + ess["var"].map(family)
     nh = pd.read_csv(NH)
     nh["item_text"] = nh["text"]
     nh["instrument"] = "NHANES"
     nh["block"] = "nh_" + nh["module"]
+    gss = pd.read_csv(GSS)
+    gss["item_text"] = gss["text"]
+    gss["instrument"] = "GSS"
+    # family block: strip trailing digits so wave-variants (income06/income98) share a block
+    gss["block"] = "gss_" + gss["var"].str.replace(r"\d+$", "", regex=True)
     cols = ["instrument", "var", "item_text", "refusal_rate", "dk_rate", "block"]
-    df = pd.concat([ess[cols], nh[cols]], ignore_index=True)
+    df = pd.concat([ess[cols], nh[cols], gss[cols]], ignore_index=True)
     df = df[df["item_text"].str.len() > 5].reset_index(drop=True)
+    # within-instrument near-duplicate text dedup (wave variants often share identical label)
+    df = df.drop_duplicates(subset=["instrument", "item_text"]).reset_index(drop=True)
     return df
 
 
@@ -71,6 +79,12 @@ def embed_texts(texts):
 
 def tertile_labels(y):
     lo, hi = np.quantile(y, [1 / 3, 2 / 3])
+    if hi <= lo:
+        # degenerate (mass at one value, e.g. GSS refusal mostly 0): zero-vs-positive split
+        lab = np.full(len(y), -1)
+        lab[y <= lo] = 0
+        lab[y > lo] = 1
+        return lab
     lab = np.full(len(y), -1)
     lab[y <= lo] = 0
     lab[y >= hi] = 1
@@ -92,9 +106,9 @@ def eval_split(Xtr_txt, Xte_txt, Etr, Ete, ytr, yte, seed):
         lab_te = tertile_labels(yte)
         m = lab_te >= 0
         auc = float("nan")
-        if m.sum() >= 10 and len(set(lab_te[m])) == 2:
-            lab_tr = tertile_labels(ytr)
-            mt = lab_tr >= 0
+        lab_tr = tertile_labels(ytr)
+        mt = lab_tr >= 0
+        if m.sum() >= 10 and len(set(lab_te[m])) == 2 and len(set(lab_tr[mt])) == 2:
             lr = LogisticRegression(max_iter=2000, random_state=seed).fit(
                 ftr[mt] if not hasattr(ftr, "toarray") else ftr[mt], lab_tr[mt])
             sc = lr.predict_proba(fte[m] if not hasattr(fte, "toarray") else fte[m])[:, 1]
@@ -132,22 +146,25 @@ def main():
                     agg[arm][k].append(r[arm][k])
         ess_cv = {arm: {k: float(np.nanmean(v)) for k, v in d.items()} for arm, d in agg.items()}
 
-        # ---- leave-instrument-out: train ESS -> test NHANES ----
-        tr = np.where(df.instrument == "ESS11")[0]
-        te = np.where(df.instrument == "NHANES")[0]
-        ess_to_nh = eval_split(df.loc[tr, "item_text"], df.loc[te, "item_text"],
-                               E[tr], E[te], y[tr], y[te], SEED)
-        results[target] = {"ess_grouped_cv": ess_cv, "ess_to_nhanes": ess_to_nh}
+        # ---- leave-ONE-INSTRUMENT-out triangle: train on two, test on the third ----
+        loio = {}
+        for held in ("ESS11", "NHANES", "GSS"):
+            tr = np.where(df.instrument != held)[0]
+            te = np.where(df.instrument == held)[0]
+            loio[held] = eval_split(df.loc[tr, "item_text"], df.loc[te, "item_text"],
+                                    E[tr], E[te], y[tr], y[te], SEED)
+        results[target] = {"ess_grouped_cv": ess_cv, "leave_instrument_out": loio}
 
         print(f"\n=== target: {target} ===")
         print(f"  ESS grouped-family 5-fold CV (paraphrase-leak guarded):")
         for arm in ("tfidf", "embed"):
             c = ess_cv[arm]
             print(f"    {arm:6s}: Spearman {c['spearman']:+.3f} | tertile AUC {c['tertile_auc']:.3f}")
-        print(f"  ESS -> NHANES (leave-instrument-out, within-NHANES metrics):")
-        for arm in ("tfidf", "embed"):
-            c = ess_to_nh[arm]
-            print(f"    {arm:6s}: Spearman {c['spearman']:+.3f} | tertile AUC {c['tertile_auc']:.3f}")
+        for held, r in loio.items():
+            print(f"  hold out {held} (train on other two, within-{held} metrics):")
+            for arm in ("tfidf", "embed"):
+                c = r[arm]
+                print(f"    {arm:6s}: Spearman {c['spearman']:+.3f} | tertile AUC {c['tertile_auc']:.3f}")
 
     OUT.write_text(json.dumps(results, indent=2))
     print(f"\nwrote {OUT}")

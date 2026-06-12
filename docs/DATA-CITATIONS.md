@@ -38,6 +38,19 @@ Extract Public Data*. https://www.federalreserve.gov/econres/scfindex.htm
 - Role: role-B wealth base `rb_scf2022_wealth_cont` (implicate 1 only; role-B-only — public file
   imputes item nonresponse).
 
+## General Social Survey 1972–2024
+
+Davern, Michael; Bautista, Rene; Freese, Jeremy; Herd, Pamela; and Morgan, Stephen L. *General
+Social Survey 1972–2024 Cumulative File* (Release 3, March 2026) [Data set]. Chicago: NORC at the
+University of Chicago. https://gss.norc.org/get-the-data
+
+- On disk: `/mnt/data/lacuna/incoming/gss7224_r3.dta` (+ `GSS 2024 Codebook R3.pdf`,
+  from `gss_stata.zip`, downloaded 2026-06-12, no registration required)
+- Role: third instrument for the semantic channel — item label text + EXPLICITLY TYPED
+  missingness (Stata extended missing .r/.d/.n/.i/.s = refused / don't know / no answer /
+  IAP-routing / skipped; no sentinel inference needed). Corpus:
+  `/mnt/data/lacuna/role_b/gss_text_corpus.csv`.
+
 ## PISA 2018 / 2022 (downloaded, not yet used in experiments)
 
 OECD. *Programme for International Student Assessment (PISA) 2018 and 2022 student questionnaire
