@@ -22,23 +22,24 @@ from sklearn.metrics import roc_auc_score
 ESS = Path("/mnt/data/lacuna/rejected/ESS11e04_1.csv")
 OUT = Path("runs/real_missingness_transfer.json")
 SEED = 2026
-REF = {7, 77, 777, 7777}; DK = {8, 88, 888, 8888}; NA = {9, 99, 999, 9999}; NAP = {6, 66, 666, 6666}
-SENT = REF | DK | NA | NAP
+from lacuna.survey.ess_codes import resolve_ess_column
 
 
-def admit_column(s):
-    v = s.dropna().values
-    if len(v) == 0:
-        return False
-    valid = v[~np.isin(v, list(SENT))]
-    if len(valid) == 0 or not np.all(valid == valid.astype(int)):
-        return False
-    if valid.min() < 0 or valid.max() > 30:
-        return False
-    for fams in [(6, 7, 8, 9), (66, 77, 88, 99), (666, 777, 888, 999)]:
-        if any(x in s.values for x in fams) and min(fams) > valid.max():
-            return True
-    return False
+def build_label_matrices(num):
+    """Per-column width-correct sentinel resolution (RIG-REPAIR — see ess_codes.py)."""
+    cols, lab_l, obs_l, x_l = [], [], [], []
+    for c in num.columns:
+        codes = resolve_ess_column(num[c].values)
+        if codes is None:
+            continue
+        x = num[c].to_numpy(np.float64)
+        l = np.full(len(x), -1, int)
+        l[np.isin(x, list(codes.refusal))] = 0
+        l[np.isin(x, list(codes.dont_know))] = 1
+        l[np.isin(x, list(codes.not_applicable))] = 2
+        o = (~np.isnan(x)) & (~np.isin(x, list(codes.all_sentinels)))
+        cols.append(c); lab_l.append(l); obs_l.append(o); x_l.append(x)
+    return cols, np.stack(x_l, 1), np.stack(lab_l, 1), np.stack(obs_l, 1)
 
 
 def main():
@@ -46,14 +47,9 @@ def main():
     ess = pd.read_csv(ESS, low_memory=False)
     country = ess["cntry"].to_numpy()
     num = ess.select_dtypes(include=[np.number])
-    cols = [c for c in num.columns if admit_column(num[c])]
-    X = num[cols].to_numpy(np.float64)
+    cols, X, lab, observed = build_label_matrices(num)
     n, d = X.shape
     print(f"admitted {d} cols, {n} respondents, {len(set(country))} countries")
-
-    lab = np.where(np.isin(X, list(REF)), 0, np.where(np.isin(X, list(DK)), 1,
-                  np.where(np.isin(X, list(NAP)), 2, -1))).astype(int)
-    observed = (~np.isnan(X)) & (~np.isin(X, list(SENT)))
     mu = np.nanmean(np.where(observed, X, np.nan), 0); sd = np.nanstd(np.where(observed, X, np.nan), 0)
     sd = np.where(sd > 0, sd, 1.0); Vz = np.where(observed, (X - mu) / sd, 0.0)
     row_obs = observed.sum(1).astype(float)

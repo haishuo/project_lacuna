@@ -36,21 +36,26 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 SEEDS = [2026, 7, 99, 13, 41]
 N_CAP = 60000          # total refusal+DK examples (balanced)
 BS, EPOCHS, LR = 512, 10, 2e-3
-REF = {7, 77, 777, 7777}; DK = {8, 88, 888, 8888}; NA = {9, 99, 999, 9999}; NAP = {6, 66, 666, 6666}
-SENT = REF | DK | NA | NAP
+from lacuna.survey.ess_codes import resolve_ess_column
 
 
-def admit(s):
-    v = s.dropna().values
-    if len(v) == 0:
-        return False
-    valid = v[~np.isin(v, list(SENT))]
-    if len(valid) == 0 or not np.all(valid == valid.astype(int)) or valid.min() < 0 or valid.max() > 30:
-        return False
-    for fams in [(6, 7, 8, 9), (66, 77, 88, 99), (666, 777, 888, 999)]:
-        if any(x in s.values for x in fams) and min(fams) > valid.max():
-            return True
-    return False
+def build_label_matrices(num):
+    """Per-column width-correct sentinel resolution (RIG-REPAIR of the single-digit-collision
+    bug: the first run counted valid answers 7/8/9 on 0-10 scales as refusals/DKs; see
+    lacuna/survey/ess_codes.py). Returns (cols, X, lab, observed)."""
+    cols, lab_l, obs_l, x_l = [], [], [], []
+    for c in num.columns:
+        codes = resolve_ess_column(num[c].values)
+        if codes is None:
+            continue
+        x = num[c].to_numpy(np.float64)
+        l = np.full(len(x), -1, int)
+        l[np.isin(x, list(codes.refusal))] = 0
+        l[np.isin(x, list(codes.dont_know))] = 1
+        l[np.isin(x, list(codes.not_applicable))] = 2
+        o = (~np.isnan(x)) & (~np.isin(x, list(codes.all_sentinels)))
+        cols.append(c); lab_l.append(l); obs_l.append(o); x_l.append(x)
+    return cols, np.stack(x_l, 1), np.stack(lab_l, 1), np.stack(obs_l, 1)
 
 
 class DeepSets(nn.Module):
@@ -77,12 +82,8 @@ def main():
     ess = pd.read_csv(ESS, low_memory=False)
     country = ess["cntry"].to_numpy()
     num = ess.select_dtypes(include=[np.number])
-    cols = [c for c in num.columns if admit(num[c])]
-    X = num[cols].to_numpy(np.float64)
+    cols, X, lab, observed = build_label_matrices(num)
     n, C = X.shape
-    lab = np.where(np.isin(X, list(REF)), 0, np.where(np.isin(X, list(DK)), 1,
-                  np.where(np.isin(X, list(NAP)), 2, -1))).astype(int)
-    observed = (~np.isnan(X)) & (~np.isin(X, list(SENT)))
     plainmiss = np.isnan(X)
     mu = np.nanmean(np.where(observed, X, np.nan), 0); sd = np.nanstd(np.where(observed, X, np.nan), 0)
     sd = np.where(sd > 0, sd, 1.0); Vz = np.where(observed, (X - mu) / sd, 0.0).astype(np.float32)

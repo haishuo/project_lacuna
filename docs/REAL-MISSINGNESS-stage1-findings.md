@@ -1,4 +1,15 @@
-# Real-Missingness Stage 1 — Findings (the cat argument, tested on real labels)
+# Real-Missingness Stage 1/2 — Findings (the cat argument, tested on real labels)
+
+> **RIG-REPAIR (2026-06-12, post-first-run; documented per discipline).** The first-run curation
+> contained a second variant of the age-77 trap: ESS sentinel codes are FIELD-WIDTH based, so on
+> 0–10 scale items the valid answers 7/8/9 were being counted as refusal/DK/no-answer (e.g.
+> `happy`=7 → "refusal"). Fixed by `lacuna/survey/ess_codes.py` (width-correct per-column
+> resolution: wide codes present ⇒ wide-only sentinels; single-digit sentinels only for true
+> 1-digit fields; ambiguous columns REJECTED; 12 unit tests). Corrected corpus: 349 items, 45,057
+> true refusals (was 333k inflated); top refusal items now face-valid (party-voted-for 16–26%,
+> religion — the canonical sensitive items). **All numbers below are from the corrected re-run;
+> first-run (contaminated) numbers are shown struck for the record. The verdict direction is
+> unchanged by the repair.**
 
 *Stage 1 of `docs/PROPOSAL-real-missingness-showdown-and-learned-generator.md`. Runs 2026-06-12.
 Read alongside `docs/T-review-findings.md` — this is the real-data test the synthetic T-review
@@ -35,7 +46,8 @@ no-answer / 2.48M not-applicable, including the sensitive-item gold (`hinctnta` 
 
 **Leave-country-out transfer** (5 folds over 30 ESS countries; held-out populations/languages/
 modes; column stats train-countries only; genuine-signal features, no base-rate shortcut),
-refusal-vs-DK, GBM: per-fold 0.752 / 0.784 / 0.781 / 0.756 / 0.763 ⇒ **pooled OOF AUC 0.767**.
+refusal-vs-DK, GBM: **pooled OOF AUC 0.897** (corrected labels; first-run contaminated value was
+~~0.767~~ — label noise was *diluting* the signal).
 
 ## Reading (precise, and bounded)
 
@@ -76,14 +88,16 @@ genuine-signal features. Network: permutation-invariant DeepSets row encoder —
 = masked mean over non-target tokens; the network sees the **full raw respondent row** (strictly
 more information than the 10 features). Bar: network (mean−SE) − GBM ≥ +0.05.
 
-| arm | pooled leave-country-out OOF AUC |
+| arm | pooled leave-country-out OOF AUC (corrected labels) |
 |---|---|
-| GBM feature null | **0.764** |
-| network seed 2026 / 7 / 99 / 13 / 41 | 0.751 / 0.753 / 0.752 / 0.751 / 0.750 |
-| network mean − SE | **0.751** |
+| GBM feature null | **0.901** |
+| network seed 2026 / 7 / 99 / 13 / 41 | 0.877 / 0.881 / 0.875 / 0.882 / 0.880 |
+| network mean − SE | **0.878** |
 
-**Margin = −0.014 (bar +0.05) ⇒ network NOT load-bearing.** It trails the shallow null despite
-more information; seeds tight (no degenerate seeds, not an optimization artifact).
+**Margin = −0.023 (bar +0.05) ⇒ network NOT load-bearing.** It trails the shallow null despite
+more information; seeds tight (no degenerate seeds, not an optimization artifact). First-run
+(contaminated) values for the record: GBM ~~0.764~~, network ~~0.751~~, margin ~~−0.014~~ — the
+repair strengthened both arms and left the verdict unchanged.
 
 ## Verdict of the real-data test
 
