@@ -84,9 +84,17 @@ former) is the whole honesty argument and must be stated explicitly wherever gen
 
 A generator family is admissible for certification only if it passes, per layer:
 
-1. **L1 footprint gate.** Discriminator AUC distinguishing generated vs held-out-real masks ≤
-   threshold (near 0.5); a panel of footprint statistics (per-column rates, co-missingness
-   correlations, block-size distribution, run lengths) within tolerance of held-out-real.
+1. **L1 footprint gate = a Classifier Two-Sample Test (C2ST).** Not a bespoke check: the
+   "discriminator near chance" gate IS the C2ST (Lopez-Paz & Oquab 2016) — train a classifier to
+   distinguish generated vs held-out-real masks; near-chance accuracy ⇒ distributions match, and
+   the classifier *localizes which features are unrealistic* (actionable for fixing generators).
+   Make it finite-sample rigorous via the **conformal C2ST** (Hu & Lei; Bansal et al. 2025), which
+   converts any classifier's scores — even a weak one — into exact finite-sample p-values with
+   Type-I control (bonus: ties the realism gate to the SAME conformal machinery as the coverage
+   layer §3). Alongside C2ST, a footprint-statistic panel mapped to the recognized fidelity
+   taxonomy — attribute / bivariate / population / application fidelity (Dankar 2022) — plus an
+   **authenticity** check (Alaa et al. 2021) guarding against the generator merely memorizing real
+   masks. See `docs/LITERATURE-REVIEW.md` §4 for citations.
 2. **L2 conditional gate.** The conditional missingness model (missingness | other observed cols)
    matches the real conditional refusal model (the 0.90-predictable structure) on held-out
    instruments.
