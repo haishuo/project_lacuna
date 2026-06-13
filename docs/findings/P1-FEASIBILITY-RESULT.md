@@ -1,7 +1,7 @@
 # P1 Feasibility — Consolidated Result (GATE PASSED, scoped)
 
 *The single authoritative record of the P1 feasibility arc. Governed by `docs/NORTH-STAR.md`
-(esp. §4.9) and `docs/PROPOSAL-survey-rewrite.md` §6. Supersedes the individual run-findings docs as
+(esp. §4.9) and `docs/proposals/PROPOSAL-survey-rewrite.md` §6. Supersedes the individual run-findings docs as
 the summary of record; those remain as primary sources. Milestone frozen at git tag
 `p1-feasibility-passed`.*
 
@@ -147,8 +147,8 @@ identifiability or architecture wall.
    **Var(z_t | observed predictors)** — but the signal collapses toward chance only as ρ_a→1
    (Var→0); the substantive regimes survive a strong proxy up to ρ_a≈0.9. **P1 survives; not a
    foundational revision.** Outcome: proceed to P2 with **proxy-aware abstention keyed on
-   Var(z_t|observed)** as a now-justified core feature. See `docs/feasibility-p1ra-findings.md`,
-   `docs/feasibility-p1rc-findings.md`. (Link-family / per-replicate-GLRT NOT run — judged
+   Var(z_t|observed)** as a now-justified core feature. See `docs/findings/feasibility-p1ra-findings.md`,
+   `docs/findings/feasibility-p1rc-findings.md`. (Link-family / per-replicate-GLRT NOT run — judged
    non-decision-relevant after P1R-A/C; oracle expansion stopped here per plan.)
 2. **Real-survey-X** — profiled oracle + model arm on fitted-X survey columns (with the fitted-X-model
    assumption stated), to check transfer off synthetic X.
@@ -167,5 +167,5 @@ Run dirs under `/mnt/artifacts/project_lacuna/feasibility/`: `oracle_20260603_08
 `profiled_20260603_100549`, `modelarm_pilot_20260603_190551`, `modelarm_multiseed_20260603_200653`,
 `boundary_stab_20260603_230213` — each with a validated `manifest.json`, results, and summary. Code:
 `lacuna/feasibility/` (tested package) + `scripts/run_feasibility_*.py`. Primary-source findings docs:
-`docs/feasibility-oracle-run1-findings.md`, `docs/feasibility-oracle-run2-profiled-findings.md`,
-`docs/feasibility-model-arm-pilot-findings.md`, `docs/feasibility-boundary-stabilization-findings.md`.
+`docs/findings/feasibility-oracle-run1-findings.md`, `docs/findings/feasibility-oracle-run2-profiled-findings.md`,
+`docs/findings/feasibility-model-arm-pilot-findings.md`, `docs/findings/feasibility-boundary-stabilization-findings.md`.

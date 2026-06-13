@@ -2,7 +2,7 @@
 
 *Branch `p2/delta-prior-rearchitecture` (off the P1R tip; carries the validated backbone, the
 `lacuna/feasibility/` package, and the P1R governance result). Governed by `docs/NORTH-STAR.md` and
-`docs/PROPOSAL-survey-rewrite.md`. **SPEC ONLY — no code, no training, no oracle runs until approved.***
+`docs/proposals/PROPOSAL-survey-rewrite.md`. **SPEC ONLY — no code, no training, no oracle runs until approved.***
 
 ## 0. What P2 is (and is not)
 

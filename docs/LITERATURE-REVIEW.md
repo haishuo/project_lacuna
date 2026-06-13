@@ -1,7 +1,7 @@
 # Literature Review — Lacuna (Recoverability Reformulation)
 
 *Conducted 2026-06-13, before the generator body of work, to position every limb of the
-reformulated design (`docs/PROPOSAL-recoverability-reformulation.md`) against the state of the
+reformulated design (`docs/proposals/PROPOSAL-recoverability-reformulation.md`) against the state of the
 art. Searches via Consensus (peer-reviewed corpus) + web. Organized by design limb: for each,
 what the field does, where Lacuna sits, and the gap we fill. Citations are traceable links;
 DOIs to be finalized for the dissertation.*

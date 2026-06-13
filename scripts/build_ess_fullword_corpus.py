@@ -2,7 +2,7 @@
 scripts/build_ess_fullword_corpus.py
 
 Upgrade the ESS text corpus with FULL question wording from the ESS Round 11 Source Questionnaire
-PDF (ESS ERIC; see docs/DATA-CITATIONS.md). The questionnaire indexes items by question number
+PDF (ESS ERIC; see docs/data/DATA-CITATIONS.md). The questionnaire indexes items by question number
 (e.g. C11), not variable name, so questions are matched to corpus items by token-overlap between
 the .dta variable label and the question wording. Conservative: a match below the overlap floor
 keeps the short label only (full_text empty) — never guess.

@@ -1,8 +1,8 @@
 # P2.2b — δ-Prior Learnability Ladder — Implementation Audit / Spec
 
 *Branch `p2/delta-prior-rearchitecture` (continues from P2.2; implementation `8d4210e`, pilot
-findings `5bfc0df`). Governed by `docs/PROPOSAL-P2-delta-prior-rearchitecture.md`,
-`docs/PROPOSAL-P2.2-model-loss-audit.md`, `docs/NORTH-STAR.md`, project `CLAUDE.md`.
+findings `5bfc0df`). Governed by `docs/proposals/PROPOSAL-P2-delta-prior-rearchitecture.md`,
+`docs/proposals/PROPOSAL-P2.2-model-loss-audit.md`, `docs/NORTH-STAR.md`, project `CLAUDE.md`.
 **SPEC ONLY — no code, no training until approved.***
 
 ## 0. Why P2.2b exists

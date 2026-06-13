@@ -1,7 +1,7 @@
 # Lacuna — Changelog
 
 Append-only ledger of substantive changes, so drift is visible in history. Governed by
-`docs/NORTH-STAR.md` (charter) and `docs/PROPOSAL-survey-rewrite.md` (engineering plan). Newest first.
+`docs/NORTH-STAR.md` (charter) and `docs/proposals/PROPOSAL-survey-rewrite.md` (engineering plan). Newest first.
 Format loosely follows Keep-a-Changelog. Each entry: date, type, what, why, and the charter/proposal
 clause it serves.
 
@@ -9,7 +9,7 @@ clause it serves.
 
 ## 2026-06-03 — P1 FEASIBILITY GATE PASSED (milestone; tag `p1-feasibility-passed`)
 
-Consolidated in `docs/P1-FEASIBILITY-RESULT.md`. Five runs, all manifests validated, leakage controls
+Consolidated in `docs/findings/P1-FEASIBILITY-RESULT.md`. Five runs, all manifests validated, leakage controls
 clean throughout (null=0.500, rates matched ~0.10, no negative gaps, no checkpoint/frozen layers):
 - Point-null oracle (`oracle_20260603_084703`): ρ "helps" — flagged as the wrong (fixed-MAR) question.
 - β₁′-profiled oracle (`profiled_20260603_100549`): the ρ-help is largely refittable MAR slope
@@ -35,10 +35,10 @@ multi-axis δ, the re-architecture) deferred until this consolidation is reviewe
   manifold, with abstention. Pins: identification line (Molenberghs), reframed estimand, manifold
   hypothesis (M1/M2/M3), scope=survey-only, human-parity law (§4.8), estimand-at-reporting-layer
   (§3¾), guardrails, success metrics, coverage boundary, falsification condition.
-- `docs/v1.0-generator-mechanism.md` — how the v1.0 generators fundamentally work (the
+- `docs/v1.0/v1.0-generator-mechanism.md` — how the v1.0 generators fundamentally work (the
   `apply_to(X,rng)->R` contract, z-scored predictor view, MCAR/MAR/MNAR decision rules, registry).
-- `docs/v1.0-realism-critique.md` — first-principles critique of the abandoned "mixed" hole-punching.
-- `docs/PROPOSAL-survey-rewrite.md` — engineering governing doc: target architecture (wishlist),
+- `docs/v1.0/v1.0-realism-critique.md` — first-principles critique of the abandoned "mixed" hole-punching.
+- `docs/proposals/PROPOSAL-survey-rewrite.md` — engineering governing doc: target architecture (wishlist),
   as-is codebase audit (5-subsystem salvage map), delta, and rewrite-scope verdict.
 
 ### Verified (not changed)
@@ -66,7 +66,7 @@ multi-axis δ, the re-architecture) deferred until this consolidation is reviewe
   was wrong and is retracted.
 
 ### Added (P1 spec)
-- `docs/PROPOSAL-P1-implementation-audit.md` — implementation audit for the P1 self-censoring
+- `docs/proposals/PROPOSAL-P1-implementation-audit.md` — implementation audit for the P1 self-censoring
   feasibility probe (SPEC ONLY; no code, nothing run). Covers all 11 required items: generator path,
   δ formula (δ≡β₂), β₀ rate-matching solver, β₁/δ/rate/ρ/n sweep grid, pluggable X-model interface,
   analytic Bayes-oracle calculation (LLR + KL/Chernoff + n-sample error), model target/loss (current

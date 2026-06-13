@@ -2,7 +2,7 @@
 scripts/build_ess_text_corpus.py
 
 Build the ESS item-TEXT -> missingness-BEHAVIOR corpus: join ESS11 variable label text (from the
-.dta, ESS ERIC 2026, doi:10.21338/ess11e04_1 — see docs/DATA-CITATIONS.md) to the per-item
+.dta, ESS ERIC 2026, doi:10.21338/ess11e04_1 — see docs/data/DATA-CITATIONS.md) to the per-item
 documented nonresponse counts (refusal/DK/no-answer/not-applicable sentinel families) computed
 from the coded CSV (same edition 4.1). Columns admitted by the same conservative out-of-range
 sentinel filter as the Stage-1/2 showdown (age-77 trap guard).

@@ -1,6 +1,6 @@
 # P2.2b — Rung 3b — High-Row Real-X Diagnostic — Findings
 
-*Branch `p2/delta-prior-rearchitecture`. Pre-run note: `docs/feasibility-p2p2b-rung3b-note.md`.
+*Branch `p2/delta-prior-rearchitecture`. Pre-run note: `docs/findings/feasibility-p2p2b-rung3b-note.md`.
 Read with rung 1 (pass) and rung 3 (fail). Stop-for-review per the approved plan.*
 
 ## Result: FLOOR — real-X does NOT learn even at rung-1-like row evidence ⇒ the bottleneck is real-X GEOMETRY, not scale

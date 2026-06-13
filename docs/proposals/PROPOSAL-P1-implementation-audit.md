@@ -1,7 +1,7 @@
 # P1 Feasibility — Implementation Audit (for approval BEFORE any coding)
 
 *Governed by `docs/NORTH-STAR.md` (esp. §4.9 no-weak-proxy-kills, §2 identification line) and
-`docs/PROPOSAL-survey-rewrite.md` (§5.1 DECISION, §6 P1). This document specifies exactly what the P1
+`docs/proposals/PROPOSAL-survey-rewrite.md` (§5.1 DECISION, §6 P1). This document specifies exactly what the P1
 feasibility experiment will do. **Status: SPEC ONLY. No code exists yet. No training will run until
 this audit is approved.***
 

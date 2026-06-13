@@ -1,6 +1,6 @@
 # PROPOSAL — The Semantic-Channel Pivot (pre-registration-shaped; spec only, no code)
 
-*Companion to `docs/T-review-findings.md`. Status: PROPOSAL for PI/advisor decision. Nothing
+*Companion to `docs/findings/T-review-findings.md`. Status: PROPOSAL for PI/advisor decision. Nothing
 here is built, downloaded, or run. If adopted, the locked sections below become a
 pre-registration in the same discipline as `7714f0c` (frozen bars, frozen nulls,
 implementation-before-results, honest failure branches).*

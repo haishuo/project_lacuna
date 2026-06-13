@@ -1,8 +1,8 @@
 # P2.2b — Learnability Ladder — RUNG 3 Findings
 
-*Branch `p2/delta-prior-rearchitecture`. Spec: `docs/PROPOSAL-P2.2b-learnability-ladder-audit.md`.
+*Branch `p2/delta-prior-rearchitecture`. Spec: `docs/proposals/PROPOSAL-P2.2b-learnability-ladder-audit.md`.
 Rung 3 only — stop-for-review per the approved plan. Read with the rung-1 pass
-(`docs/feasibility-p2p2b-rung1-findings.md`).*
+(`docs/findings/feasibility-p2p2b-rung1-findings.md`).*
 
 ## Result: RUNG 3 FAILS — head-side target conditioning does NOT rescue real-X
 

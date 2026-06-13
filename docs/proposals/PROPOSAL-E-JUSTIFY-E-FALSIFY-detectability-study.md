@@ -151,7 +151,7 @@ verdict + a findings doc, **not** a metric improvement.
    per-column coverage (locks P1 numerically). **Run before any training.**
 2. `scripts/run_detectability_study.py` — trains the leave-domain-out subjects (frozen recipe), computes
    per-cell `I_oracle` / `I_gain` / `I_probe` / gate state, evaluates §4 metrics, prints the §7 verdict row.
-3. `docs/E-JUSTIFY-E-FALSIFY-findings.md` — results against every locked criterion, honest caveats, the
+3. `docs/findings/E-JUSTIFY-E-FALSIFY-findings.md` — results against every locked criterion, honest caveats, the
    architectural verdict on the Stage-2 head. Stop for PI review.
 
 Estimated scope: ~16 model trainings (2 held-out domains × 8 seeds; CPU, D3-scale) + oracle sweeps over

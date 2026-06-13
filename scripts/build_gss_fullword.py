@@ -2,7 +2,7 @@
 scripts/build_gss_fullword.py
 
 Upgrade the GSS text corpus with FULL question wording from the GSS 2024 Codebook PDF (NORC;
-docs/DATA-CITATIONS.md). The codebook's INDEX OF VARIABLES lists entries as
+docs/data/DATA-CITATIONS.md). The codebook's INDEX OF VARIABLES lists entries as
 "VARNAME <section-number> <question text...>"; we split the concatenated PDF text on that
 pattern and map varname -> wording. Conservative: items keep their short label when no entry is
 found (full_text empty), never guessed. Kills the REGISTER confound (GSS telegraphic labels vs

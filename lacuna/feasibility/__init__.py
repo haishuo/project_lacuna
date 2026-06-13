@@ -2,7 +2,7 @@
 lacuna.feasibility
 
 Isolated feasibility-probe package for the P1 own-value self-censoring experiment
-(docs/PROPOSAL-P1-implementation-audit.md). This package does NOT modify or import
+(docs/proposals/PROPOSAL-P1-implementation-audit.md). This package does NOT modify or import
 the production generator registry or model heads — it is a self-contained probe.
 
 Modules:

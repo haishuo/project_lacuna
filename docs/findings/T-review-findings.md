@@ -1,6 +1,6 @@
 # Network Load-Bearing Review — Findings (T1 / T2 / T3) and Verdict
 
-*Findings for the pre-registered review `docs/PREREGISTRATION-network-load-bearing-review.md`
+*Findings for the pre-registered review `docs/proposals/PREREGISTRATION-network-load-bearing-review.md`
 (locked at commit `7714f0c`, PI-authorized 2026-06-11). All thresholds, feature lists,
 architectures, and the verdict table were frozen before any result existed. Implementations were
 committed before results (T1 `fd87151`, T3 `31be57d`, T2 `0a7e394`). This document reports every
@@ -246,7 +246,7 @@ is captured by enumerable statistics (§§1–3). The information that drives th
 lives in the *semantics of the item* ("income is sensitive"), a channel this entire review —
 by deliberate construction ("strip the column names") — never gave any model. That measured
 decomposition is the empirical basis for the companion proposal
-(`docs/PROPOSAL-semantic-channel-pivot.md`): the load-bearing-ML question moves to the channel
+(`docs/proposals/PROPOSAL-semantic-channel-pivot.md`): the load-bearing-ML question moves to the channel
 where the information demonstrably lives.
 
 *Verdict row computed mechanically from locked bars; no threshold, feature list, or architecture

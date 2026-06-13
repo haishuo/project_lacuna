@@ -6,7 +6,7 @@ P2.2b — RUNG 3b: high-row real-X diagnostic (separates evidence SCALE from rea
 In-distribution (like the rung-1 pass) on LARGE NARROW real survey datasets, max_rows=1024, 7
 δ-bins, target-conditioned head. Reuses the existing path — NO model/tokenization changes. If real-X
 learns here it was a scale problem; if it floors it is real-X geometry. See
-docs/feasibility-p2p2b-rung3b-note.md.  Run:  python -u scripts/run_p2p2b_rung3b.py
+docs/findings/feasibility-p2p2b-rung3b-note.md.  Run:  python -u scripts/run_p2p2b_rung3b.py
 """
 
 import subprocess

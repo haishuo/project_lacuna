@@ -1,6 +1,6 @@
 # PROPOSAL — The Real-Missingness Showdown + The Learned Generator (close-the-book spec)
 
-*Companion to `docs/T-review-findings.md` and `docs/PROPOSAL-semantic-channel-pivot.md`. Status:
+*Companion to `docs/findings/T-review-findings.md` and `docs/proposals/PROPOSAL-semantic-channel-pivot.md`. Status:
 SPEC ONLY — nothing built, downloaded, or run. Purpose: settle, on REAL documented missingness
 (not our generators), the one question the synthetic T-review could not — does a trained network
 beat enumerable statistics where the complexity is real and we did not author it — and specify the

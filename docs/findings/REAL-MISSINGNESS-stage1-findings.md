@@ -11,8 +11,8 @@
 > first-run (contaminated) numbers are shown struck for the record. The verdict direction is
 > unchanged by the repair.**
 
-*Stage 1 of `docs/PROPOSAL-real-missingness-showdown-and-learned-generator.md`. Runs 2026-06-12.
-Read alongside `docs/T-review-findings.md` — this is the real-data test the synthetic T-review
+*Stage 1 of `docs/proposals/PROPOSAL-real-missingness-showdown-and-learned-generator.md`. Runs 2026-06-12.
+Read alongside `docs/findings/T-review-findings.md` — this is the real-data test the synthetic T-review
 could not run. Scripts: `scripts/run_real_missingness_feasibility.py`,
 `scripts/run_real_missingness_transfer.py`. Artifacts: `runs/real_missingness_*.json`.*
 

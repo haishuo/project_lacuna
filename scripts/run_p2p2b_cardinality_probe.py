@@ -3,7 +3,7 @@ scripts/run_p2p2b_cardinality_probe.py
 
 P2.2b — cardinality / strong-δ probe. Separates "δ signal present but not represented" from
 "intrinsically near-absent on real survey columns" (the last cheap diagnostic before any
-representation change). See docs/feasibility-p2p2b-cardinality-probe-note.md.
+representation change). See docs/findings/feasibility-p2p2b-cardinality-probe-note.md.
 
 Safeguard first (cardinality distribution + strata). Part A: cardinality-stratified 7-bin δ-prior
 (does high-cardinality/continuous recover δ while low-card floors?). Part B: strong-δ-only contrast

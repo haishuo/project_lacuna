@@ -1,7 +1,7 @@
 # P2.2 — δ-Prior Model + Loss — Implementation Audit / Spec
 
 *Branch `p2/delta-prior-rearchitecture` (continues from P2.1, commit `f3a5fad`). Governed by
-`docs/PROPOSAL-P2-delta-prior-rearchitecture.md`, `docs/NORTH-STAR.md`, and the project
+`docs/proposals/PROPOSAL-P2-delta-prior-rearchitecture.md`, `docs/NORTH-STAR.md`, and the project
 `CLAUDE.md`. **SPEC ONLY — no code, no training, no metrics until approved.***
 
 ## 0. Scope (what P2.2 is / is not)

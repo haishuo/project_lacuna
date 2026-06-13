@@ -13,7 +13,7 @@ Research. https://doi.org/10.21338/ess11e04_1
   `/mnt/data/lacuna/rejected/ESS11e04_1.csv` (coded values; same edition 4.1)
 - Role: real documented item-nonresponse labels (refusal 77-family / don't-know 88-family /
   no-answer 99-family / not-applicable 66-family) + variable label text. Used in the
-  real-missingness Stage 1/2 showdown (`docs/REAL-MISSINGNESS-stage1-findings.md`) and the
+  real-missingness Stage 1/2 showdown (`docs/findings/REAL-MISSINGNESS-stage1-findings.md`) and the
   semantic text→behavior corpus.
 
 ## NHANES 2017–2018 (cycle J)
@@ -34,7 +34,7 @@ Board of Governors of the Federal Reserve System. *2022 Survey of Consumer Finan
 Extract Public Data*. https://www.federalreserve.gov/econres/scfindex.htm
 
 - On disk: `/mnt/data/lacuna/incoming/scf2022_summary/rscfp2022.dta` (sha256 3bb4d890…, see
-  `docs/PROPOSAL-SCF-wealth-acquisition-plan.md`)
+  `docs/proposals/PROPOSAL-SCF-wealth-acquisition-plan.md`)
 - Role: role-B wealth base `rb_scf2022_wealth_cont` (implicate 1 only; role-B-only — public file
   imputes item nonresponse).
 
@@ -65,4 +65,4 @@ data files*. https://www.oecd.org/pisa/data/
 The `survey_*` bases under `/mnt/data/lacuna/raw/` derive from public R package datasets
 (AER/Ecdat: PSID 1976/7682, CPS 1985/1988, HMDA, working hours; psych: bfi; carData: Chile;
 plus yrbss, GSS vocab extracts). Cite the originating packages/studies in any publication that
-uses them; provenance recorded in `lacuna_survey/` and `docs/DATA-INVENTORY-ground-truth.md`.
+uses them; provenance recorded in `lacuna_survey/` and `docs/data/DATA-INVENTORY-ground-truth.md`.

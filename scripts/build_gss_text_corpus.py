@@ -2,7 +2,7 @@
 scripts/build_gss_text_corpus.py
 
 Build the GSS item-TEXT -> missingness-BEHAVIOR corpus from the GSS 1972-2024 cumulative file
-(NORC; see docs/DATA-CITATIONS.md). GSS is the CLEANEST label source: refusal/DK/no-answer/skip
+(NORC; see docs/data/DATA-CITATIONS.md). GSS is the CLEANEST label source: refusal/DK/no-answer/skip
 are EXPLICITLY TYPED Stata extended-missing codes (.r/.d/.n/.i/.s) — no sentinel inference, no
 width heuristics, the age-77 trap is impossible by construction.
 

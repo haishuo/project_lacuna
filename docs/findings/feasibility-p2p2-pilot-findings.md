@@ -1,7 +1,7 @@
 # P2.2 — δ-Prior Model + Loss — First Pilot Findings
 
 *Branch `p2/delta-prior-rearchitecture`. Implementation commit `8d4210e`; this doc reports the
-first pilot runs. Governed by `docs/PROPOSAL-P2.2-model-loss-audit.md`,
+first pilot runs. Governed by `docs/proposals/PROPOSAL-P2.2-model-loss-audit.md`,
 `docs/NORTH-STAR.md`. **Honest first result — not a success claim.***
 
 ## TL;DR

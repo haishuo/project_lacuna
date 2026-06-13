@@ -1,6 +1,6 @@
 # P2.2b — Learnability Ladder — RUNG 1 Findings
 
-*Branch `p2/delta-prior-rearchitecture`. Spec: `docs/PROPOSAL-P2.2b-learnability-ladder-audit.md`.
+*Branch `p2/delta-prior-rearchitecture`. Spec: `docs/proposals/PROPOSAL-P2.2b-learnability-ladder-audit.md`.
 Rung 1 only — stop-for-review per the approved plan.*
 
 ## Result: RUNG 1 PASSES — the δ-bin head + RPS loss learns ordered δ in the clean setting

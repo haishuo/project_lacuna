@@ -1,7 +1,7 @@
 # PROPOSAL — Lacuna Reformulated: Recoverability, Functional Bounds, and Certified Coverage
 
-*Capstone of the 2026-06-12 session. Synthesizes: the T-review verdict (`docs/T-review-findings.md`),
-the real-missingness showdown (`docs/REAL-MISSINGNESS-stage1-findings.md`), the semantic-channel
+*Capstone of the 2026-06-12 session. Synthesizes: the T-review verdict (`docs/findings/T-review-findings.md`),
+the real-missingness showdown (`docs/findings/REAL-MISSINGNESS-stage1-findings.md`), the semantic-channel
 results (Arm-3 first-cut, commit dcdf90b), and the PI's operational reframing developed in
 conversation. Status: PROPOSAL for PI/advisor decision. No code, no runs. If adopted, each
 experimental component gets its own pre-registration in the 7714f0c discipline.*
@@ -112,7 +112,7 @@ proportion to B, and B is computable.
 
 1. **Text → nonresponse behavior (measured, learnable).** The trained encoder is an empirical
    regression of MEASURED refusal/DK behavior on question semantics over a cited corpus (ESS +
-   NHANES + GSS; 6,700+ items; `docs/DATA-CITATIONS.md`). It replaces "intuition/experience"
+   NHANES + GSS; 6,700+ items; `docs/data/DATA-CITATIONS.md`). It replaces "intuition/experience"
    with an auditable artifact: corpus enumerable, mapping a checkpoint, calibration published,
    nearest measured neighbors printable. Arm-3 first-cut: training beats frozen on refusal
    transfer (all 3 LOIO legs), frozen suffices for DK — sensitivity cuts across topic; topic is

@@ -1,7 +1,7 @@
 """
 scripts/illustrative_pooling_probe.py  —  ILLUSTRATIVE ONLY (NOT a Lacuna training run).
 
-Supports docs/ARCHITECTURE-FITNESS-delta-estimation.md §3. Question: can the encoder's actual
+Supports docs/architecture/ARCHITECTURE-FITNESS-delta-estimation.md §3. Question: can the encoder's actual
 pooling primitive (lacuna.models.encoder.AttentionPooling) — a content-weighted MEAN over set
 elements — learn to output an ORDER STATISTIC of a set (the 90th percentile / the max), the kind of
 function the δ footprint lives in, versus the MEAN (the function pooling is biased toward)?
