@@ -8,11 +8,23 @@ substrate (``generator.apply_to``), then score the resulting masks against the
 real masks with the C2ST (the gate) and the fidelity + authenticity panel
 (context), and render a verdict.
 
-Verdict policy (charter §6.1 — "discriminator near chance"): the practical gate
-is the C2ST effect size, because with tens of thousands of rows any real
-difference is statistically significant (the p-value is reported, not gated).
-``PASS`` (realistic) iff pooled OOF AUC < ``auc_pass``; otherwise ``FAIL``. A
-generator failing is a *finding*, reported, never tuned away.
+Verdict policy (charter §6.1 — the gate IS the panel, C2ST + fidelity, not the
+C2ST alone). With tens of thousands of rows any real difference is statistically
+significant, so the p-value is reported, not gated; the practical gate combines
+the C2ST effect size with the Dankar attribute + bivariate fidelity tolerances.
+``PASS`` (not falsified as unrealistic at this power) iff
+
+    pooled OOF AUC < ``auc_pass``  AND  attribute gap <= ``attr_tol``
+                                   AND  bivariate gap <= ``bivar_tol``.
+
+The conjunction matters: a generator that injects almost no missingness can slide
+under an AUC threshold (especially without block-aware folds) while badly missing
+the real per-column rates and co-missingness structure — the fidelity tolerances
+catch that degeneracy. ``PASS`` is the *falsification* verdict (the C2ST certifies
+realism only in the falsification direction — a near-chance result fails to refute
+realism at the achieved power, it does not certify it; see
+``docs/findings/LITREVIEW-conformal-under-shift.md``). A generator failing is a
+*finding*, reported, never tuned away.
 
 Fail loud (Coding Bible §1) on a degenerate generator output (wrong shape/dtype).
 Deterministic given ``seed``.
@@ -46,6 +58,8 @@ class RealismGateResult:
     c2st: C2STResult
     fidelity: FidelityResult
     auc_pass: float
+    attr_tol: float
+    bivar_tol: float
     verdict: str
 
     @property
@@ -79,6 +93,8 @@ def run_realism_gate(
     *,
     seed: int = 2026,
     auc_pass: float = 0.60,
+    attr_tol: float = 0.05,
+    bivar_tol: float = 0.30,
     n_splits: int = 5,
 ) -> RealismGateResult:
     """Run the full realism gate for one generator against one corpus.
@@ -87,7 +103,9 @@ def run_realism_gate(
         generator: a Lacuna generator (must implement ``apply_to``).
         corpus: a ``MaskCorpus`` (real masks + complete-X substrate).
         seed: deterministic seed for generation, balancing, and authenticity.
-        auc_pass: C2ST AUC below which the generator is judged realistic.
+        auc_pass: C2ST AUC below which the generator is not falsified by the C2ST.
+        attr_tol: max per-column missing-rate gap allowed (attribute fidelity).
+        bivar_tol: max pairwise co-missingness gap allowed (bivariate fidelity).
         n_splits: C2ST cross-validation folds.
 
     Raises:
@@ -101,7 +119,11 @@ def run_realism_gate(
         seed=seed, n_splits=n_splits,
     )
     fidelity = run_fidelity(corpus.M_real, M_gen, seed=seed)
-    verdict = VERDICT_PASS if c2st.auc < auc_pass else VERDICT_FAIL
+    passed = (
+        c2st.auc < auc_pass
+        and fidelity.attr_max_gap <= attr_tol
+        and fidelity.bivar_max_gap <= bivar_tol
+    )
     return RealismGateResult(
         generator_id=generator.generator_id,
         generator_name=generator.name,
@@ -110,7 +132,9 @@ def run_realism_gate(
         c2st=c2st,
         fidelity=fidelity,
         auc_pass=auc_pass,
-        verdict=verdict,
+        attr_tol=attr_tol,
+        bivar_tol=bivar_tol,
+        verdict=VERDICT_PASS if passed else VERDICT_FAIL,
     )
 
 
@@ -134,6 +158,10 @@ def format_gate_table(results: List[RealismGateResult]) -> str:
             f"{f.attr_max_gap:>7.3f}  {f.bivar_max_gap:>6.3f}  {r.verdict:<7}"
         )
     n_pass = sum(1 for r in results if r.verdict == VERDICT_PASS)
+    r0 = results[0]
     lines.append("-" * len(header))
-    lines.append(f"PASS {n_pass} / {len(results)}  (realistic = AUC < {results[0].auc_pass})")
+    lines.append(
+        f"PASS {n_pass} / {len(results)}  (not-falsified = AUC < {r0.auc_pass} "
+        f"AND attrGap <= {r0.attr_tol} AND biGap <= {r0.bivar_tol})"
+    )
     return "\n".join(lines)

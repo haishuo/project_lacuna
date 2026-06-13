@@ -40,6 +40,8 @@ def _result_to_dict(r) -> dict:
         "d": r.d,
         "verdict": r.verdict,
         "auc_pass": r.auc_pass,
+        "attr_tol": r.attr_tol,
+        "bivar_tol": r.bivar_tol,
         "c2st": dataclasses.asdict(r.c2st),
         "fidelity": dataclasses.asdict(r.fidelity),
     }
